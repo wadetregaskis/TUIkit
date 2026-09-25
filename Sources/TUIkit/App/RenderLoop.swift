@@ -1205,9 +1205,8 @@ extension RenderLoop {
         // The same instant, for the render cache, read as the views read it: a
         // spinner or a bar indexes the frame's own timestamp, and a focus breath or
         // a caret the cursor timer's focus clock, 0 without a timer. The cache stamps
-        // what it stores with it, and serves a stored buffer as stored only while its
-        // animated cells would show the same frames now, and otherwise with the
-        // frames they show now put in, where it can — see `RenderCache.frameInstant`.
+        // what it stores with it, and serves a stored buffer only while its animated
+        // cells would show the same frames now — see `RenderCache.frameInstant`.
         tuiContext.renderCache.frameInstant = AnimationInstant(
             content: Double(frameNowNanos) / 1_000_000_000,
             cursor: cursorTimer?.elapsed(for: .cursor) ?? 0)

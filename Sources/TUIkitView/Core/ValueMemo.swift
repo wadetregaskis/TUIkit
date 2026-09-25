@@ -104,19 +104,14 @@ func renderValueMemoized<Key: Equatable>(
         // One row of `megalist` against one row of `table`, in a number: a
         // served subtree is a row a control did not have to compose.
         cache.rowWork.served += 1
-        // What is served: the stored buffer, or — where its animated cells have
-        // moved on since it was stored — the stored buffer with the frames they
-        // show now, which is the render this hit stands in for. A measure takes
-        // it as stored; a frame changes no cell's width.
-        let served = context.isMeasuring ? entry.buffer : cache.servedBuffer(of: entry)
         if RenderCache.verifiesRenderMemo {
-            return verifyServe(entry, served: served, viewType: viewType, context: context, cache: cache, render: render)
+            return verifyServe(entry, viewType: viewType, context: context, cache: cache, render: render)
         } else if !entry.effects.isEmpty, !context.isMeasuring {
             // A measure pass registers nothing when it renders, so it replays
             // nothing when it is served.
             replayEffects(entry.effects, context: context, cache: cache)
         }
-        return served
+        return entry.buffer
     }
 
     // Miss: render under a volatile-read tracker (reusing an ancestor's, so
@@ -133,9 +128,7 @@ func renderValueMemoized<Key: Equatable>(
     //     equal — a cached Spinner would freeze, issue #1). A subtree whose
     //     motion is all in animated cell runs IS stored: the loop moves the runs
     //     on without it. Its buffer shows each run at the instant it was drawn,
-    //     though, so once any run shows something else the lookup above misses,
-    //     or — for a buffer whose runs' frames can be put back into its lines as
-    //     a render would put them, a spinner's — is served stamped with them;
+    //     though, so the lookup above misses once any run shows something else;
     //   • never a subtree that made a per-frame registration this memo cannot
     //     make again. One it CAN (`recordReplayableEffect`) was recorded in the
     //     effect journal while this render ran, and is stored with the buffer.
@@ -228,8 +221,7 @@ private func replayEffects(_ effects: [EffectJournal.Entry], context: RenderCont
 }
 
 /// A hit under `TUIKIT_VERIFY_RENDER_MEMO`: renders the subtree fresh,
-/// compares it with what the hit would have served (`served`: the stored buffer,
-/// or it stamped with its runs' frames for now), and returns the FRESH render.
+/// compares it with what was stored, and returns the FRESH render.
 ///
 /// The fresh render registers for real, so the stored registrations are NOT
 /// replayed here, or every handler would be there twice. Instead the fresh
@@ -244,7 +236,7 @@ private func replayEffects(_ effects: [EffectJournal.Entry], context: RenderCont
 /// and every difference it draws, it also reports.
 @MainActor
 private func verifyServe(
-    _ entry: RenderCache.CacheEntry, served: FrameBuffer, viewType: () -> Any.Type, context: RenderContext,
+    _ entry: RenderCache.CacheEntry, viewType: () -> Any.Type, context: RenderContext,
     cache: RenderCache, render: (RenderContext) -> FrameBuffer
 ) -> FrameBuffer {
     let journal = cache.effectJournal
@@ -253,9 +245,9 @@ private func verifyServe(
     let tracker = context.environment.volatileReadTracker
     let unreplayableBefore = tracker?.unreplayableCount ?? 0
     let fresh = render(context)
-    if fresh.lines != served.lines {
+    if fresh.lines != entry.buffer.lines {
         cache.noteRenderMemoMismatch(
-            viewType: String(describing: viewType()), served: served,
+            viewType: String(describing: viewType()), served: entry.buffer,
             fresh: fresh, identity: context.identity.path)
     }
     guard !context.isMeasuring else { return fresh }
