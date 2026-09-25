@@ -147,7 +147,11 @@ extension FrameBuffer {
                     character: " ", style: lastSourceCell?.style ?? SGRState(),
                     foreground: lastSourceCell?.foreground,
                     background: lastSourceCell?.background,
-                    isReversed: lastSourceCell?.isReversed ?? false)
+                    isReversed: lastSourceCell?.isReversed ?? false,
+                    // The character's whole field, including whether it states
+                    // the terminal's own: a wide glyph's second column read the
+                    // ground where the first read the record under a stated 49.
+                    statesTerminalField: lastSourceCell?.statesTerminalField ?? false)
             if sourceCells[column] != nil { lastSourceCell = cell }
             if cell.background == nil,
                 let field = (cell.statesTerminalField ? statedDefaultFieldCells : fieldCells)?[column]?.background
