@@ -87,6 +87,11 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
     /// window (or re-read by the compose pass) is built — and rendered — once.
     private var materialized: [Int: SelectableListRow<SelectionValue>] = [:]
 
+    /// Content boxes ``content(at:)`` built for a question that needed no row
+    /// type, until ``row(at:)`` promotes one into ``materialized``. Empty on
+    /// every frame that asks no such question.
+    private var materializedContent: [Int: LazyListRowContent] = [:]
+
     /// The ramp a `.gradientExtent(.subtree)` gradient runs down these rows —
     /// see ``ListRowRamp`` and ``_ListCore/settleRowRamp(_:context:)``. Inert
     /// (`frame` nil) unless a gradient actually spans this list.
@@ -170,14 +175,44 @@ private final class RowSource<SelectionValue: Hashable & Sendable> {
 
     /// The fully-formed row at `index`, materialising (and memoising) its content
     /// box on first access. Reading the row's `.buffer` renders it once (cached).
+    ///
+    /// This resolves the row's TYPE as well — its selection value, which for a
+    /// tagged `ForEach` row means building the row to read the tag. A question
+    /// about the content alone (a width, a height) asks ``content(at:)``.
     func row(at index: Int) -> SelectableListRow<SelectionValue> {
         if let existing = materialized[index] { return existing }
-        let content = make(index)
-        content.gradientRamp = gradientRamp
-        content.rowIndex = index
+        // A box ``content(at:)`` already built is promoted rather than built
+        // again: it may have rendered, and the render is what the box memoises.
+        let content =
+            (materializedContent.isEmpty ? nil : materializedContent.removeValue(forKey: index))
+            ?? makeContent(at: index)
         let row = SelectableListRow(type: typeAt(index), content: content)
         materialized[index] = row
         return row
+    }
+
+    /// The content box of the row at `index`, WITHOUT its type — what a
+    /// question about the row's cells asks, so it resolves no selection value.
+    ///
+    /// `row(at:)` resolves both, and the hug walk asks every row's width: a
+    /// `NavigationSplitView` sidebar of tagged `ForEach` rows built every row a
+    /// second time per frame to read a tag the width never looks at. Memoised
+    /// with the rows, so a box built here is the box `row(at:)` hands out later.
+    func content(at index: Int) -> LazyListRowContent {
+        if let existing = materialized[index] { return existing.content }
+        if let existing = materializedContent[index] { return existing }
+        let content = makeContent(at: index)
+        materializedContent[index] = content
+        return content
+    }
+
+    /// Builds the content box for the row at `index`, placed in this source's
+    /// ramp.
+    private func makeContent(at index: Int) -> LazyListRowContent {
+        let content = make(index)
+        content.gradientRamp = gradientRamp
+        content.rowIndex = index
+        return content
     }
 }
 
@@ -362,7 +397,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
         let unsafeBefore = tracker.cacheUnsafeCount
         let widest = (0..<source.count).map { index in
-            let row = source.row(at: index)
+            // The content alone: a width needs no selection value, and the
+            // row's type is asked below only of a row showing a badge.
+            let content = source.content(at: index)
             // A badge is composed OUTSIDE the row's own buffer
             // (`renderLineWithBadge`: content, ≥1 fill, badge), so the hugged
             // width must reserve its cells too — in SwiftUI a badge is an
@@ -375,12 +412,14 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // and rendering two thousand rows to answer was 93% of a frame,
             // in a measure pass the row memo cannot serve. The size memo can.
             let badgeCells: Int =
-                if let badge = row.badgeWithoutRendering, !badge.isHidden, row.isSelectable {
+                if content.carriesBadge, let badge = content.badge, !badge.isHidden,
+                    case .content = source.type(at: index)
+                {
                     badge.displayText.strippedLength + 1
                 } else {
                     0
                 }
-            return (row.widthWithoutRendering ?? row.buffer.width) + badgeCells
+            return (content.widthWithoutRendering ?? content.buffer.width) + badgeCells
         }.max() ?? 0
         if let memo, tracker.cacheUnsafeCount == unsafeBefore,
             !walkContext.environment.hasUncomparableEnvironmentValue
@@ -648,7 +687,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// the ramp — the same rule the stacks follow.
     private func settleRowRamp(_ source: RowSource<SelectionValue>, context: RenderContext) {
         guard context.gradientFrame != nil, !source.isEmpty else { return }
-        let pitch = max(1, source.row(at: 0).content.heightWithoutRendering)
+        let pitch = max(1, source.content(at: 0).heightWithoutRendering)
         source.gradientRamp.pitch = pitch
         source.gradientRamp.frame = context.gradientContentFrame(
             width: context.availableWidth, height: source.count * pitch)
@@ -743,7 +782,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             contentHeight: rowBudget, topClip: handler.scrollTopClipLines,
             drawsTextIndicators: handler.drawsScrollIndicators,
             alwaysDrawsIndicators: context.environment.alwaysShowsVerticalTextIndicators,
-            height: { source.row(at: $0).buffer.height })
+            height: { source.content(at: $0).buffer.height })
         // Where this frame is DRAWN from: the window may have absorbed a top clip
         // (or a whole first row) an indicator would have cost more to announce
         // than it hides. Threaded through every consumer — the indicators, the
@@ -952,7 +991,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         if source.count + plusLines > targetContentHeight { return true }
         var totalRowLines = plusLines
         for index in 0..<source.count {
-            totalRowLines += source.row(at: index).buffer.height
+            // Heights only: the rows' types are no part of the answer.
+            totalRowLines += source.content(at: index).buffer.height
             if totalRowLines > targetContentHeight { return true }
         }
         return false
@@ -1008,7 +1048,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler: ItemListHandler<SelectionValue>
     ) -> Bool {
         for index in handler.visibleRange where index < source.count {
-            if let identity = source.row(at: index).rowIdentity,
+            if let identity = source.content(at: index).rowIdentity,
                 session.isDragSource(within: identity)
             {
                 return true
@@ -1142,7 +1182,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             environment: context.environment,
             reorderFeedback: context.environment.rowReorderFeedback,
             keyboardMoveIsLive: false,
-            rowHeight: { source.row(at: $0).buffer.height })
+            rowHeight: { source.content(at: $0).buffer.height })
         // §1.5: how far past its edges this view may be pushed, re-resolved
         // every frame (a `.viewport`-relative allowance moves with the
         // terminal) and pulling any existing excursion back inside it.
@@ -1187,7 +1227,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         handler.settleScrollPosition(
             measuring: context.isMeasuring, overflowing: overflowing,
             drawsTextIndicators: indicators.text,
-            firstRowHeight: source.row(at: 0).buffer.height)
+            firstRowHeight: source.content(at: 0).buffer.height)
         handler.singleSelection = singleSelection
         handler.multiSelection = multiSelection
         // A hierarchical list's rows come from an `OutlineGroup`, which is what
@@ -1613,7 +1653,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 visible: visible, count: source.count, topClip: origin.topClip,
                 precision: context.environment.scrollExtentPrecision,
                 cached: cachedProfile,
-                height: { onScreen[$0] ?? source.row(at: $0).buffer.height })
+                height: { onScreen[$0] ?? source.content(at: $0).buffer.height })
             if !context.isMeasuring, let profile = metrics.profile {
                 handler.extentProfileCache = (signature: signature, profile: profile)
             }
