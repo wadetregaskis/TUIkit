@@ -492,7 +492,7 @@ extension Section: ListRowExtractor {
             // same step.)
             var rows: [ListRow<RowID>] = []
             let children = resolveChildViews(from: content, context: context)
-            var rowIDs = FlattenedRowIDs<RowID>(content: content, children: children)
+            let rowIDs = FlattenedRowIDs<RowID>(content: content, children: children)
             for (index, child) in children.enumerated() where !child.isSpacer {
                 // A looped row by its own `ForEach`'s rule, any other row by
                 // its own `.tag(_:)`, else its index — through the same

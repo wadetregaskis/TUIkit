@@ -3023,7 +3023,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let resolved = resolveChildViews(from: content, context: context)
         // Asked by each child's place among ALL the children, spacers
         // included: the place is what matches a looped row to its `ForEach`.
-        var rowIDs = FlattenedRowIDs<SelectionValue>(content: content, children: resolved)
+        let rowIDs = FlattenedRowIDs<SelectionValue>(content: content, children: resolved)
         let childIndices = resolved.indices.filter { !resolved[$0].isSpacer }
         let children = childIndices.map { resolved[$0] }
         var gradientFrame: GradientFrame?
