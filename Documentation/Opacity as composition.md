@@ -6323,6 +6323,9 @@ surface with it, in the same list as its content's, and the compositor cannot te
 apart; so a label faded inside an anchored layer that paints no surface of its own (a menu,
 a drop-down, a toast) still fades that surface toward what is behind the layer — a limit,
 held as a known issue. A popover paints its own, with a `.background`, and is §96's case.
+(Re-measured on 2026-09-25, §103: no built-in anchored layer brings a fade of its content to the
+compositor — a menu's and a drop-down's rows spend theirs at their own painters — so the limit is
+a hand-built layer's.)
 
 `FadeInsideAPainterTests`: a label at 0.3 in a centred modal layer over a page, on a palette
 whose backdrop wash is red — on the surface, its ink 30% of the way from it (before, the page's
@@ -6880,3 +6883,42 @@ the tick and the fade restate it (§100, §101). The dim flatten behind a modal 
 reversed nor breathing: before, 81 issues across the three pairs and three fades, e.g. `faint,
 terminalPage, none: frame 1 over frame 0, column 8: replayed '⠙' in the terminal's foreground on
 the terminal's background, rendered … [2]`.
+
+## 103. The limits §96 left, re-measured (2026-09-25)
+
+§96 left two shapes as they were. Each is re-measured here in a shape an app builds with the
+public API, truecolor, to say which draw wrong, and what each fix costs where it is not made. (A
+third, a fade inside a row that reverses, is spent at the row already: §86.1.)
+
+**An anchored layer with no surface of its own** (§96.2): does not draw wrong in any public shape
+found. The limit is real for a layer that reaches the compositor carrying a fade of its content,
+and no built-in one does. A `Menu` and a `Picker`'s drop-down, each over a page of `#` on red with
+a row's label faded to 0.3 — the focused row and an unfocused one — reach the compositor with no
+opacity region at all: the focused row's bar (§96.3) and the popup's own surface painter have spent
+them, and every faded label is on the surface with its glyphs, nothing of the page through it. A
+toast's content is strings; a tooltip's, text. A lifted drag preview is built from its rows' LINES
+(`_ListCore`, `FrameBuffer(lines:)`) and carries no region at all — which is a finding of its own,
+outside this section's: a label faded in a row that is dragged is lifted at full strength. The
+known issue in `FadeInsideAPainterTests` stays as the pin for a hand-built layer.
+
+**A fade inside a translucent fill** (§22, §96): draws wrong. `HStack(spacing: 0) { Text("ab")
+.opacity(0.3); Text("cd") }.padding(.horizontal, 1).background(Color.rgb(0, 0, 200).opacity(0.5))`
+on the default page draws the fill under `ab` as `rgb(4, 9, 34)` beside `rgb(2, 5, 103)` under
+the rest — a dark patch the size of the faded label (`rgb(3, 7, 64)` at 0.6). The fill's own claim
+and the label's layer fade reach the root over one cell, and the fold multiplies the layer's alpha
+into the field it scales the ink by. Not fixed, because the fix is a choice between two answers:
+- *Spend at the fill against its opaque colour*, and carry only the fill's claim up. About forty
+  lines in `BackgroundModifier`'s translucent arms, and the patch is gone. The price is paid in the
+  label instead: its ink is mixed toward the fill's OPAQUE colour rather than the fill as it lands
+  (off by `(1 − α)(1 − f)` of the fill-to-backdrop difference: 35% at a label of 0.3 in a fill of
+  0.5), and its glyph contest is decided against the fill's own blank rather than against what the
+  translucent fill lets through — a label at 0.3 over text in a `ZStack` would draw where it
+  should yield.
+- *Carry both, and say which is above which.* A region learns that its fade is ABOVE a translucent
+  field of its painter's (a stored flag on `OpacityRegion`, set by the translucent arms), the cell's
+  alpha carries it, and the blend then scales the ink and decides the glyph by the layer alpha while
+  the field keeps only its own — with the ink's layer step taken toward the cell's composited field
+  rather than the destination's ink where no glyph contests it. Exact, and a revision of §22's
+  decision: a stored property on the region type every shift, punch, scale and memo key touches,
+  the fold's rule for whose flag holds where two regions cover a cell, and the blend's ink step —
+  priced at one to two days with its tests, and a clean build.

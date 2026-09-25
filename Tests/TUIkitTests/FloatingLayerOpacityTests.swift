@@ -469,4 +469,50 @@ struct FloatingLayerOpacityTests {
             columns: placed.x..<(placed.x + placed.content.width))
         #expect(leaks.isEmpty, "a 50% popover let the page through unblended at \(leaks.map(\.1))")
     }
+
+    // MARK: - A fade inside a popup
+
+    /// A `Menu`'s popup and a `Picker`'s drop-down are anchored layers, which the
+    /// compositor cannot spend a fade inside against its surface (it may carry the
+    /// presenter's fade in the same list: `Opacity as composition` §96.2). Neither
+    /// brings one there: the focused row's bar and the popup's own surface spend the
+    /// rows' fades where they paint. So a row's label faded to 0.3 is on the surface
+    /// with its glyphs, and nothing of a page of `#` behind the popup shows — the
+    /// limit is a hand-built layer's (§103).
+    @Test("A label faded in a menu's or a drop-down's rows stays on the popup", arguments: [false, true])
+    func aFadedLabelInAPopup(dropDown: Bool) throws {
+        let (tui, context) = harness(width: 40, height: 12)
+        func label(_ text: String) -> some View {
+            HStack(spacing: 0) { Text(text).opacity(0.3); Text(" z") }
+        }
+        let hashes = VStack(spacing: 0) {
+            ForEach(0..<10, id: \.self) { _ in Text(String(repeating: "#", count: 40)) }
+        }
+        let view = ZStack(alignment: .topLeading) {
+            hashes
+            if dropDown {
+                Picker("Choose", selection: Binding<Int>.constant(0)) {
+                    label("dim").tag(0)
+                    label("oth").tag(1)
+                }
+            } else {
+                Menu("Actions") {
+                    Button(action: {}, label: { label("dim") })
+                    Button(action: {}, label: { label("oth") })
+                }
+            }
+        }
+        let trigger = dropDown ? 10 : 2
+        _ = frame(view, tui: tui, context: context)
+        _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .pressed, x: trigger, y: 0))
+        _ = tui.mouseEventDispatcher.dispatch(MouseEvent(button: .left, phase: .released, x: trigger, y: 0))
+        let (pending, composited) = frame(view, tui: tui, context: context)
+        let layer = try #require(pending.overlays.first, "the popup did not open")
+        #expect(layer.content.opacityRegions.isEmpty, "the popup carries \(layer.content.opacityRegions.count) fades")
+        let placed = layer.placed(maxWidth: context.availableWidth, maxHeight: context.availableHeight)
+        let rows = (placed.y..<(placed.y + placed.content.height)).map { composited.lines[$0].stripped }
+        let footprint = rows.map { String($0.dropFirst(placed.x).prefix(placed.content.width)) }
+        #expect(!footprint.joined().contains("#"), "the page shows through the popup: \(footprint)")
+        #expect(footprint.contains { $0.contains("dim z") } && footprint.contains { $0.contains("oth z") })
+    }
 }
