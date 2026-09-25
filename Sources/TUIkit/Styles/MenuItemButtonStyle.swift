@@ -148,8 +148,13 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
             buffer.paintRunGrounds { _, ground in painted(ground, now) }
             // A still cycle (`.selectionIndicatorStyle(.none)`, or a blink at rest)
             // was already drawn above; replaying it would emit bytes per tick to
-            // change nothing. Measuring passes leave no runs at all.
-            guard cycle.isAnimating, !context.isMeasuring else { break }
+            // change nothing. Nor do two equal ends breathe (an accent the page's
+            // own colour, a fully transparent one), however many frames the cycle
+            // has — the question the List's cursor row asks, and asked here the
+            // same way: asked only of `isAnimating`, such a bar dropped the label's
+            // runs and then drew none of its own, so the spinner moved by a full
+            // render at every step. Measuring passes leave no runs at all.
+            guard cycle.isAnimating(dim: dim, bright: bright), !context.isMeasuring else { break }
             // The bar's runs repaint the WHOLE row every tick, over the label as it
             // was drawn, so a run the label left — a spinner beside its text — is a
             // second animation claiming cells the bar's already claims, and the
