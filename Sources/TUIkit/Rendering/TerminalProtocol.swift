@@ -93,3 +93,24 @@ public protocol TerminalProtocol: AnyObject, Sendable {
     /// Exits the alternate screen buffer.
     func exitAlternateScreen()
 }
+
+// MARK: - Cell Geometry
+
+/// A terminal that can say how big its cells are in pixels.
+///
+/// A capability of its own rather than a requirement of ``TerminalProtocol``:
+/// reporting the cell's pixel size is something a real terminal does through
+/// `TIOCGWINSZ`, not something every host must implement. The render loop asks
+/// for it by conformance rather than by casting to the concrete `Terminal`, so
+/// a test's terminal can report a geometry, and change it between frames as a
+/// font change does, and the loop publishes it as it publishes a real one.
+@MainActor
+protocol CellGeometryReporting: AnyObject {
+    /// The cell's height-to-width ratio, or `nil` where it is not reported.
+    func cellPixelAspect() -> Double?
+
+    /// The cell's size in pixels, or `nil` where it is not reported.
+    func cellPixelSize() -> TerminalCellPixels?
+}
+
+extension Terminal: CellGeometryReporting {}

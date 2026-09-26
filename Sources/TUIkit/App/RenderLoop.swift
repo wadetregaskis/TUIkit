@@ -695,14 +695,15 @@ extension RenderLoop {
         // Auto-detect the terminal cell's pixel aspect for undistorted images;
         // terminals that don't report their pixel size keep the 2.0 default (or
         // a `.imageCellAspect(_:)` override deeper in the tree).
-        // Concrete-only: reporting the cell's pixel size is a real-terminal
-        // capability, not part of the protocol every host must implement.
-        if let cellAspect = (terminal as? Terminal)?.cellPixelAspect() {
+        // A capability, not part of the protocol every host must implement:
+        // see `CellGeometryReporting`.
+        let geometry = terminal as? any CellGeometryReporting
+        if let cellAspect = geometry?.cellPixelAspect() {
             environment.imageCellAspect = cellAspect
         }
         // …and the undivided version, which is what an image transmitted to
         // the terminal's own graphics protocol is resampled to.
-        if let cellPixels = (terminal as? Terminal)?.cellPixelSize() {
+        if let cellPixels = geometry?.cellPixelSize() {
             environment.imageCellPixels = cellPixels
         }
         // Determine header height. On the first frame, we perform a measurement
