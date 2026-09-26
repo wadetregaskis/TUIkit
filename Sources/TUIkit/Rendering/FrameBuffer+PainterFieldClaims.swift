@@ -94,35 +94,47 @@ extension FrameBuffer {
         }
     }
 
-    /// `claim` cut into rectangles of one kind each, row by row, and rows cut alike
-    /// joined again.
+    /// `claim` cut into rectangles of one kind each: shown where the content leaves
+    /// the painter the field, and beneath the painter's colour where it states one.
     private func cut(
         _ claim: OpacityRegion, mask: (Int) -> [Bool]?, fill: (Int, Int) -> String
     ) -> [OpacityRegion] {
-        var pieces: [OpacityRegion] = []
+        Self.cutting(claim) { row, column -> FieldUnderContent in
+            mask(row)?[column] ?? true ? .shown : .beneath(fill(row, column))
+        }.map { piece, kind in
+            var told = piece
+            told.fieldUnderContent = kind
+            return told
+        }
+    }
+
+    /// `claim` cut into rectangles over which `kind` answers alike, row by row, and
+    /// rows cut alike joined again — each piece keeping the claim's alphas and cycle.
+    ///
+    /// - Parameters:
+    ///   - claim: The claim to cut.
+    ///   - kind: What a cell of the claim, `(row, column)`, is.
+    /// - Returns: The pieces, each with what its cells are.
+    static func cutting<Kind: Hashable>(
+        _ claim: OpacityRegion, by kind: (_ row: Int, _ column: Int) -> Kind
+    ) -> [(piece: OpacityRegion, kind: Kind)] {
+        var pieces: [(piece: OpacityRegion, kind: Kind)] = []
         // The pieces the row above ended with, by extent and kind: a piece this row
         // repeats extends one of them instead of starting a rectangle of its own.
-        var open: [PieceKey: Int] = [:]
+        var open: [PieceKey<Kind>: Int] = [:]
         let left = max(0, claim.offsetX)
         let right = claim.offsetX + claim.width
         for row in claim.offsetY..<(claim.offsetY + claim.height) {
-            let shows = mask(row)
-            var extended: [PieceKey: Int] = [:]
+            var extended: [PieceKey<Kind>: Int] = [:]
             var column = left
             while column < right {
                 let start = column
-                let kind: FieldUnderContent
-                if shows?[column] ?? true {
-                    kind = .shown
-                    while column < right, shows?[column] ?? true { column += 1 }
-                } else {
-                    let escape = fill(row, column)
-                    kind = .beneath(escape)
-                    while column < right, !(shows?[column] ?? true), fill(row, column) == escape { column += 1 }
-                }
-                let key = PieceKey(offsetX: start, width: column - start, kind: kind)
+                let here = kind(row, column)
+                column += 1
+                while column < right, kind(row, column) == here { column += 1 }
+                let key = PieceKey(offsetX: start, width: column - start, kind: here)
                 if let index = open[key] {
-                    pieces[index].height += 1
+                    pieces[index].piece.height += 1
                     extended[key] = index
                 } else {
                     var piece = claim
@@ -130,9 +142,8 @@ extension FrameBuffer {
                     piece.offsetY = row
                     piece.width = column - start
                     piece.height = 1
-                    piece.fieldUnderContent = kind
                     extended[key] = pieces.count
-                    pieces.append(piece)
+                    pieces.append((piece, here))
                 }
             }
             open = extended
@@ -140,10 +151,10 @@ extension FrameBuffer {
         return pieces
     }
 
-    /// A piece's extent across a row and what it is about.
-    private struct PieceKey: Hashable {
+    /// A piece's extent across a row and what it is.
+    private struct PieceKey<Kind: Hashable>: Hashable {
         let offsetX: Int
         let width: Int
-        let kind: FieldUnderContent
+        let kind: Kind
     }
 }
