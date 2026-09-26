@@ -531,7 +531,30 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 // Held only until a row's timeline moves, and what measures
                 // above the list must not hold it longer.
                 context.environment.volatileReadTracker?.recordServedHold(lapsingAt: lapsesAt)
-                return cached.width
+                guard RenderCache.verifiesMeasureMemo else { return cached.width }
+                // Walked again and compared, and the fresh width is the one
+                // laid out: the same check the value memo's sizes get. Over
+                // rows extracted afresh in the check's context, not `source`:
+                // those carry the live pass's tracker, and the check runs on a
+                // throwaway one so that what it reads cannot decide what the
+                // live pass stores.
+                //
+                // And extracted as the list extracts them, with the hug's
+                // `fixedSizeWidth` cleared (`allRowsContentWidth`,
+                // `buildPopulatedContent`). The render path asks with the
+                // list's own context, where it is still set, and a row holding
+                // a list of its own — the one reader of the flag — hugged in
+                // the check and filled in every frame: a false "(cross-frame)"
+                // report, and a fresh width, the one handed back, taken over
+                // rows no frame draws.
+                return verifyServedSize(
+                    cached, label: "\(Self.self) widest row",
+                    proposal: ProposedSize(width: context.availableWidth, height: nil), context: context
+                ) { checkContext in
+                    var rowContext = checkContext
+                    rowContext.environment.fixedSizeWidth = false
+                    return ViewSize.fixed(walkForWidestRow(extractRows(from: content, context: rowContext)), 0)
+                }.width
             }
         }
         let existingTracker = context.environment.volatileReadTracker

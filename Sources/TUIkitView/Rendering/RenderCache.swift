@@ -928,8 +928,12 @@ extension RenderCache {
     /// The memoized measurement for `key`, or `nil` when there is none or the
     /// view value has changed.
     ///
-    /// One caller: `measureValueMemoized`, which both ``EquatableView`` and
-    /// `_MemoizedRow` reach — they were the same code written twice.
+    /// Three callers: `measureValueMemoized`, which both ``EquatableView`` and
+    /// `_MemoizedRow` reach — they were the same code written twice — and two
+    /// containers that keep a width of their own here, a hugging `List`'s widest
+    /// row (through ``lookupHeldSize(key:view:)``, for its lapse) and a
+    /// `Table`'s `.fit` column. Each checks what it is served under
+    /// ``verifiesMeasureMemo`` (`verifyServedSize`), since nothing here can.
     ///
     /// The measure-side counterpart to ``lookup(identity:view:contextWidth:contextHeight:gradientFrame:surfaceBackground:)``.
     /// Both the key and the value are checked: `key` covers the identity and

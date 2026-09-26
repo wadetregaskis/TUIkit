@@ -3431,7 +3431,14 @@ where Value.ID: Hashable {
             // The table is not a memoising view, so nothing else marks it.
             memo.cache.markActive(context.identity)
             if let cached = memo.cache.lookupSize(key: key, view: memo.signature) {
-                return cached.width
+                guard RenderCache.verifiesMeasureMemo else { return cached.width }
+                // Scanned again, on the check's own tracker, and the fresh
+                // width is the one laid out: the check the value memo's sizes
+                // get, for the size this table keeps in the same store.
+                return verifyServedSize(
+                    cached, label: "\(Self.self) column \(index) fit width",
+                    proposal: ProposedSize(width: cap, height: nil), context: context
+                ) { ViewSize.fixed(scanForFitWidth(of: column, cappedAt: cap, context: $0), 0) }.width
             }
         }
 

@@ -758,7 +758,9 @@ TUIKIT_VERIFY_RENDER_MEMO=/tmp/memo.log TUIKIT_VERIFY_MEASURE_MEMO=/tmp/memo.log
 ```
 
 With them on, every buffer and size the cache serves is rendered or measured
-again, and the fresh result is what is drawn. So:
+again, and the fresh result is what is drawn — the sizes kept across frames
+included: an `.equatable()` view's or a `ForEach` row's, a hugging `List`'s
+widest row, a `Table`'s `.fit` column width. So:
 
 - **The view updates with them on.** The cache was serving it stale, and the
   log names the view's type and where it sits in the tree, with the first line
