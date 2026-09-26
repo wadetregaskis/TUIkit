@@ -6630,7 +6630,9 @@ in the blend, carried into the compositor's painter (`String.paintedOver(fields:
 kind of field beside none, the terminal's own and a colour, and the split telling the painter
 which columns take it). Priced at a day with its tests; it costs nothing where no base column is
 reversed onto the terminal's own ink, which the split can say. There the background slot stands,
-as before: the overlay cell is on the reversal's INK, the terminal's own background.
+as before: the overlay cell is on the reversal's INK, the terminal's own background. (Done
+2026-09-26, §107: the cell is drawn reversed, or on the foreground's RGB where the terminal has
+reported it.)
 
 `CompositedFieldPerColumnTests` pins the label over the reversed cursor row (before, on the
 terminal's own field where the row shows `rgb(220, 220, 220)`) and a label over an `.inverted()`
@@ -7117,3 +7119,79 @@ them at their opaque spelling.
 `.draggable` hands it over, each with `ab` faded to 0.3 over a page of `#` — the letters on the card,
 in their ink 30% of the way from it. Before, the row's letters were at full strength, and the view's
 were the page's `#`.
+
+## 107. A cell over a reversal of the terminal's own ink is drawn on that ink (2026-09-26)
+
+§99.2's limit. A cell reversed on the terminal's own ink — `ESC[7;39…m`: `Text.inverted()` on a
+palette whose ink is the terminal's own, a reversal of the terminal's unreported pair, the Example's
+Terminal palette's highlight — shows the terminal's FOREGROUND as its field. The compositor keeps
+the field an overlay cell lands on, and read this one off the background slot, which the reversal
+shows as ink: the overlay cell took the terminal's own BACKGROUND. Measured on this tree before the
+fix, truecolor, on `ReversedRowTerminalPairPalette` (the terminal's own pair, unreported):
+`ZStack(alignment: .leading) { Text("abcdef").inverted(); Text("xy").foregroundStyle(red) }` drew
+`xy` on the terminal's background in the middle of text on its foreground — the same in a custom
+`Layout` composited in place, per column beside a coloured field, and under a run in the overlay,
+whose render and replay agreed on it.
+
+§99.2 said no spelling exists, and for the background SLOT that holds: no background code names the
+terminal's foreground. Two spellings of the cell do:
+- **The cell reversed itself.** 39 in its foreground slot, which the 7 shows as the field — the
+  terminal's own foreground, exactly the field the base shows — and the cell's own ink moved to the
+  background slot, which the 7 shows as ink: a named ink as its background code (31 as 41, 93 as
+  103), an indexed or RGB one as itself. Exact at every depth. The one ink it cannot move is the
+  terminal's own foreground, which the background slot cannot spell either; but that ink on that
+  field is invisible, so the glyph is dropped with the attributes that ink a blank cell, as §85 drops
+  one in the blend, and the blank shows the field — a blank for each of its columns, so a wide
+  glyph keeps its width, as the blend keeps it (dropped into one blank, the row came out a column
+  short and everything after the overlay moved left).
+- **The foreground's RGB**, where the terminal has reported it (OSC 10) and the depth draws RGB as
+  it is: the field spelled as that colour, the cell unreversed and its ink where it was.
+
+The split now notes such a field as a kind of its own (`SGRState.Colour.terminalForegroundField`) —
+or as the reported RGB, asked of the caller (`terminalForeground`) only under such a cell — and the
+insert paints an overlay row that has one under it cell by cell (`String.paintedOver(
+fieldsReversing:)`): reversed over that field, and over every other as before. The split reads
+the field under the overlay's first column once, when it knows it is the last state before it,
+and each change inside the overlay only for a caller that notes them; so the caller is asked for
+the reported foreground once for the cell the overlay lands on, and once for each such change,
+where it was asked at every escape in front of the overlay while the reversal was in force. The main compositing
+paths — every `compositedResolvingOpacity` (a `ZStack`, an `.overlay`, a floating layer) and a custom
+`Layout`'s in-place composite — pass the reported foreground at truecolor; any other caller gets the
+reversed spelling, which is exact too.
+
+**A run in such an overlay.** No record can hold this field: a ground is read back as a field and a
+style (§100, §101), and a row that reverses on the terminal's own pair records the same bytes as a
+cell reversed to show this field would, meaning the opposite — a frame drawn IN a reversal has its
+own ink shown as the field, and a frame drawn on this field keeps it as ink. So where the field is
+under a run's cells the compositor draws the run's FRAMES over the fields as it draws the line, and
+the records keep every other field; the tick then takes those cells as the frames spell them.
+
+A run inside a painter of its own in the overlay (revised 2026-09-26): its frames are drawn first
+over what its own records say — the fields the painters inside the overlay put under its cells,
+as the line's cells have them — and only a cell no painter reached is laid on the reversal. Laid
+on it straight, `OverlayProbe().background(Color.rgb(0, 0, 200))` in the label over the inverted
+text replayed its cells reversed on the terminal's foreground, a frame with no ink of its own
+as a blank there, where the line has them on the blue; and the tick restated the blue in the
+background slot, which the 7 shows as ink.
+
+**What the host must paint for it.** This relies on SGR 7 exchanging the pair in force, and on 39 in
+the foreground slot being the terminal's own foreground under it — what the reversed rows already
+rely on (`Terminal-compatibility.md`, "Reverse video (SGR 7)"); `reverse_video_card.py` gains rows I
+and J for this spelling and its bold, unmeasured as the card's other rows are. No terminal limit is
+recorded: a spelling shows the right cell in every case.
+
+**What it costs where no such shape is present: nothing measurable.** The split asks one more
+question of a reversed cell's ink, the insert whether the field is under the overlay, and the caller
+is asked for the reported foreground only under such a cell. Counted with temporary counters over
+every `Stress --bench` scenario (10 frames): 2,640 inserts in `translucent` and 220 in
+`customlayout`, none over such a field, the caller never asked, no row repainted; checksums unchanged.
+
+`ReversedTerminalInkOverlayTests` pins it: a red label over the inverted text, in a `ZStack` and in a
+`Layout` composited in place, on the field the text shows in its red; a label in the terminal's own
+ink over it, the field, a wide glyph in it keeping both its columns (dropped into one blank, the
+text after it moved a column left: `ef ` where `def` is); a label over the inverted text and a colour, on each; over a reported
+foreground, on its RGB unreversed; and a run in the label, replayed frame over frame against renders.
+Before, all failed but the run's replays, which agreed with their renders, wrong alike; with the
+frames left undrawn, the replays failed (`'⠋' in rgb(230, 120, 40) on the terminal's background`
+where the render has it on the terminal's foreground). `ANSIOverlaySplitTests` reads the field such a
+cell shows as the new kind in its reference, beside the reported RGB.

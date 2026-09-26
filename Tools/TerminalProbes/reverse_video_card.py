@@ -30,6 +30,11 @@ Reading the card:
     reference is built from the host's own OSC 10/11 answer, spelled as 24-bit
     colour. With no answer (GNU screen, for one) those rows show no reference.
     A host without 24-bit colour quantises the reference, so compare with care.
+  * Rows I and J are the spelling TUIkit uses for a cell laid over a reversal of
+    the terminal's own ink (`Opacity as composition.md` §107): 39 in the
+    foreground slot, so the ground is the DEFAULT foreground, and the glyph's red
+    in the background slot. Their reference states that foreground as 24-bit
+    colour from OSC 10, so, as for A and C, no answer means no reference.
   * Warp: `appearance.text.enforce_minimum_contrast` defaults to
     `only_named_colors`, which lightens a foreground named as one of the
     sixteen when Warp judges it illegible. So under Warp a left/right mismatch
@@ -127,6 +132,11 @@ def main():
                 return None
             return ("1;" if bold else "") + "38;2;%d;%d;%d;48;2;%d;%d;%d" % (bg + fg)
 
+        def red_on_default_foreground(bold):
+            if fg is None:
+                return None
+            return ("1;" if bold else "") + "38;2;200;40;40;48;2;%d;%d;%d" % fg
+
         rows = [
             ("A", "ESC[7m  (default colours)", "7", swapped_default(False),
              "Ground in the default FOREGROUND colour, glyphs in the default BACKGROUND?"),
@@ -139,6 +149,11 @@ def main():
              "Left identical to right (the reference swaps the two 24-bit colours)?"),
             ("E", "extra: ESC[7;1;31;44m  (bold, named)", "7;1;31;44", "1;34;41",
              "Left identical to right? A difference is the host's bold treatment."),
+            ("I", "ESC[7;39;48;2;200;40;40m", "7;39;48;2;200;40;40", red_on_default_foreground(False),
+             "Ground in the default FOREGROUND colour, glyphs red, as the reference?"),
+            ("J", "extra: ESC[7;1;39;48;2;200;40;40m", "7;1;39;48;2;200;40;40",
+             red_on_default_foreground(True),
+             "Left identical to right? A difference is the host's bold treatment of its own ink."),
         ]
 
         emit(RESET + CSI + "?25h" + CSI + "H" + CSI + "2J")

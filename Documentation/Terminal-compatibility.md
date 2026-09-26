@@ -2563,7 +2563,10 @@ over the terminal's own defaults it would paint a full-strength bar of its
 foreground (§91). It is also in the output path's vocabulary
 ("SGR codes the output path emits", below), which never emits `27` and restates
 from `ESC[0m` instead. And, since 2026-09-15, for a highlight whose colours it
-cannot measure, below. So what each host paints for SGR 7 is now relied on.
+cannot measure, below. And, since 2026-09-26, for a cell composited over a
+reversal of the terminal's own ink, whose field only a 7 over 39 can show
+(`Opacity as composition` §107; card rows I and J). So what each host paints for
+SGR 7 is now relied on.
 
 **What the framework draws reversed.** A highlight is a tint of a palette role
 over the page, and where that tint or the page has no RGB — the terminal's own
@@ -2671,6 +2674,8 @@ terminal. Each row is a question the card asks, and it is answered by eye:
 | C `ESC[7;1m` | does bold change the ground, the glyphs, or neither? | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
 | D the 24-bit pair | the same cells as the pair exchanged? | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
 | E `ESC[7;1;31;44m` | the same cells as `ESC[1;34;41m`? | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+| I `ESC[7;39;48;2;200;40;40m` | ground in the default foreground, glyphs red, as the reference from OSC 10? (a cell over a reversal of the terminal's own ink, 2026-09-26) | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
+| J the same, bold | does bold change the ground, the glyphs, or neither? | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
 | F `ESC[K` while reversed | do the erased cells take the reversed ground? | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
 | G `ESC[27m` part way | reversed up to it, plain after? | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
 | H `ESC[0m` after a reversed pair | nothing left over? | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED | UNMEASURED |
@@ -4523,7 +4528,8 @@ shows its foreground as its field, and the compositor read the field slot: a
 label laid over a list's reversed cursor row (`ESC[7;<ink>;49m`) was drawn on
 the terminal's own field in the middle of the row's bar. The split now takes the
 ink as the field there, spelled for the background slot. A reversal of the
-terminal's own ink (`ESC[7;39…m`) has no such spelling and is left as it was.
+terminal's own ink (`ESC[7;39…m`) has no such spelling and is left as it was
+(until 2026-09-26, below).
 No built-in view composites over a reversed cell (measured through the suite
 and the Example on both of its palettes); an app's own `ZStack`, `.overlay` or
 `Layout` does. `Opacity as composition.md` §99.2.
@@ -4606,6 +4612,17 @@ so, faded alone, it kept its glyph while the line dropped it, and the tick drew
 it in the terminal's foreground between the transition's renders. A frame is now
 faded in the row's style, with a reversal's `39` kept as stated.
 `Opacity as composition.md` §101.1; `TransitionFadeRunTests`.
+**2026-09-26: a cell over a reversal of the terminal's own ink is drawn on that
+ink.** Such a reversal (`ESC[7;39…m`) shows the terminal's FOREGROUND as its
+field, which no background code spells, and an overlay cell over it took the
+background slot, the terminal's own background. The compositor now draws that
+cell reversed itself — `ESC[7;39;<its ink as a background>m`, the 7 showing 39 as
+the field and the moved ink as ink — or, where the terminal has reported its
+foreground (OSC 10) and colour is 24-bit, on that RGB, unreversed. An ink that is
+the terminal's own foreground has no background spelling, and on that field is
+invisible: the glyph is dropped. This relies on the exchange the reversed rows
+rely on; `reverse_video_card.py` asks it as rows I and J (bold), UNMEASURED.
+`Opacity as composition.md` §107; `ReversedTerminalInkOverlayTests`.
 
 **2026-09-26: a fade inside a reversed row is spent against the row.** A label
 faded below one half in a reversed row (a focused list's cursor row, or a menu's

@@ -635,7 +635,23 @@ extension FrameBuffer {
             with: overlay.resolvingOpacity(
                 over: self, at: position, surface: surface ?? palette.background, palette: palette,
                 fillingStatedTerminalField: !overlayIsPainted, buildingRuns: true),
-            at: position, overlayIsPainted: overlayIsPainted)
+            at: position, overlayIsPainted: overlayIsPainted,
+            terminalForeground: { Self.reportedTerminalForegroundField })
+    }
+
+    /// The terminal's own foreground as an RGB field, where the terminal has reported
+    /// it (OSC 10) and the depth draws an RGB as it is: what an overlay cell laid over a
+    /// cell reversed on the terminal's own ink is drawn on (`Opacity as composition`
+    /// §107). `nil` otherwise, and the compositor draws such a cell reversed itself,
+    /// 39 in its foreground slot — exact too, and the one spelling there is without a
+    /// report; at a depth that quantises, the only exact one.
+    static var reportedTerminalForegroundField: SGRState.Colour? {
+        guard ColorDepth.current == .truecolor, let ink = Color.terminalForeground.rgbComponents
+        else { return nil }
+        // The terminal's own reported foreground, re-spelled for the state that holds
+        // fields: a measured colour, not ink this framework chose.
+        // swiftlint:disable:next framework_colour_literal
+        return .rgb(Int(ink.red), Int(ink.green), Int(ink.blue))
     }
 }
 

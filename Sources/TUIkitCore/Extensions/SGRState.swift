@@ -112,6 +112,14 @@ public struct SGRState: Sendable, Equatable {
         /// (`AnimatedCellRun.groundStyle`).
         package static let statedTerminalInk = Self.named(39)
 
+        /// The terminal's own FOREGROUND held as a field — what a cell reversed on the
+        /// terminal's own ink (`ESC[7;39…m`) shows under it — where a caller tracks the
+        /// field a cell shows. No background code spells it: only a 7 draws it, over
+        /// 39 in the foreground slot, so a field of this kind is painted by reversing
+        /// the cell drawn on it (``String/paintedOver(fieldsReversing:)``). 39 is a
+        /// foreground code and names no background, so as a field it is unambiguous.
+        package static let terminalForegroundField = Self.named(39)
+
         /// This colour, held as an INK, as the background slot spells it: what a
         /// reversed cell shows as its field. `nil` where it has no such spelling —
         /// a named code outside the sixteen inks.

@@ -113,10 +113,11 @@ struct ANSIOverlaySplitTests {
 
     /// The ink a reversed `state` shows as its field, spelled for the background
     /// slot — spelled out here, not asked of the code under test — or `nil` where
-    /// the state is not reversed or its ink is the terminal's own, which has no
-    /// such spelling.
+    /// the state is not reversed or its ink has no such spelling. The terminal's own
+    /// ink has none either, and is a field of its own kind: one only a 7 draws.
     private static func reversedInk(_ state: SGRState) -> SGRState.Colour? {
-        guard state.reversesVideo, let ink = state.foregroundColour else { return nil }
+        guard state.reversesVideo else { return nil }
+        guard let ink = state.foregroundColour else { return .terminalForegroundField }
         switch ink {
         case .named(let code) where (30...37).contains(code) || (90...97).contains(code): return .named(code + 10)
         case .named: return nil
@@ -126,7 +127,8 @@ struct ANSIOverlaySplitTests {
 
     /// Under reverse video a cell shows its INK as its field, so that is the field
     /// the split notes — in the background slot's spelling. The terminal's own ink
-    /// has none, and there the slot stands.
+    /// has none, and is noted as a field of its own kind, which no escape spells —
+    /// or as the RGB the terminal reported for it, where the caller knows one.
     @Test("Under reverse video the field under an overlay is the ink, spelled as a field")
     func reversedFields() {
         let named = "\u{1B}[7;31mabc\u{1B}[27mdef".ansiOverlaySplit(prefixColumns: 1, suffixDropColumns: 5)
@@ -137,9 +139,38 @@ struct ANSIOverlaySplitTests {
         #expect(rgb.fieldsUnderOverlay.first == .rgb(1, 2, 3))
         #expect(rgb.backgroundUnderOverlay == "\u{1B}[48;2;1;2;3m")
         let unstated = "\u{1B}[7;44mabc".ansiOverlaySplit(prefixColumns: 0, suffixDropColumns: 2)
-        #expect(unstated.fieldsUnderOverlay.first == .named(44))
+        #expect(unstated.fieldsUnderOverlay.first == .terminalForegroundField)
+        #expect(unstated.backgroundUnderOverlay.isEmpty, "no escape spells the terminal's own ink as a field")
+        #expect(unstated.fieldsUnderOverlay.showsTerminalForeground)
+        let reported = "\u{1B}[7;44mabc".ansiOverlaySplit(
+            prefixColumns: 0, suffixDropColumns: 2, terminalForeground: { .rgb(171, 178, 191) })
+        #expect(reported.fieldsUnderOverlay.first == .rgb(171, 178, 191))
+        #expect(reported.backgroundUnderOverlay == "\u{1B}[48;2;171;178;191m")
         // And the suffix gets the line's own slots back, reversal and all.
         #expect(rgb.styleBeforeSuffix == "\u{1B}[7;38;2;1;2;3;44m")
+    }
+
+    /// The caller is asked for the terminal's foreground only for a cell under the
+    /// overlay that is reversed on the terminal's own ink: once for the field it lands
+    /// on, however many escapes before it the reversal is in force for, and once for
+    /// each change of field inside it that is noted. It was asked at every escape
+    /// before the overlay while such a reversal was in force, and at every one inside
+    /// it for a caller that noted none.
+    @Test("The terminal's foreground is asked for only under the overlay")
+    func theTerminalsForegroundIsAskedForUnderTheOverlay() {
+        let line = "\u{1B}[7mab\u{1B}[1mcd\u{1B}[22mef\u{1B}[4mgh\u{1B}[24mijkl"
+        for noting in [false, true] {
+            var asked = 0
+            let split = line.ansiOverlaySplit(
+                prefixColumns: 6, suffixDropColumns: 10, notingFields: noting,
+                terminalForeground: {
+                    asked += 1
+                    return .rgb(171, 178, 191)
+                })
+            // Not vacuous: the reversal is under the overlay, and answers.
+            #expect(split.fieldsUnderOverlay.first == .rgb(171, 178, 191))
+            #expect(asked == (noting ? 2 : 1), "asked \(asked) times, noting \(noting)")
+        }
     }
 
     /// What the insert restores where the suffix begins: the netted state there

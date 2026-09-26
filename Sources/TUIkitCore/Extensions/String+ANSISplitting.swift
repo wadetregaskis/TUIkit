@@ -824,7 +824,8 @@ extension String {
     /// - Returns: Everything ``FrameBuffer/insertOverlay(base:overlay:atColumn:overlayIsPainted:)``
     ///   needs from this line, in one scan — see ``ANSIOverlaySplit``.
     func ansiOverlaySplit(
-        prefixColumns: Int, suffixDropColumns: Int, notingFields: Bool = true
+        prefixColumns: Int, suffixDropColumns: Int, notingFields: Bool = true,
+        terminalForeground: () -> SGRState.Colour? = { nil }
     ) -> ANSIOverlaySplit {
         var prefix = ""
         var prefixWidth = 0
@@ -850,8 +851,16 @@ extension String {
         // compositing a `Layout`'s children quadratic in escapes all over again,
         // which is the very thing this one-scan split exists to have fixed.
         var field: SGRState.Colour?
-        // The field where the overlay LANDS: `field` at its column.
-        var fieldUnder: SGRState.Colour?
+        // The state where the overlay LANDS, with `field` at its column, and the
+        // field a cell there shows, read from it once, when first asked.
+        var stateUnder: (style: SGRState, field: SGRState.Colour?) = (SGRState(), nil)
+        var readUnder: SGRState.Colour??
+        func fieldUnder() -> SGRState.Colour? {
+            if let read = readUnder { return read }
+            let read = Self.shownField(of: stateUnder.style, slot: stateUnder.field, terminalForeground: terminalForeground)
+            readUnder = .some(read)
+            return read
+        }
         // And where that field CHANGES under the overlay: an escape between its
         // first and its last column moves the field under every cell after it.
         // `style` has just applied it, so noting one costs a comparison, and only
@@ -921,19 +930,20 @@ extension String {
                 case .colour: field = style.backgroundColour
                 case nil: break
                 }
-                // What a cell there SHOWS as its field: under reverse video, the
-                // ink the 7 exchanges it with — the colour a reversed row or
-                // caret is filled with — wherever that has a spelling as a field.
-                // Read off the background slot, an overlay over a list's reversed
-                // cursor row was drawn on the row's INK. The terminal's own
-                // foreground has no such spelling (only a 7 draws it as a field),
-                // and there the slot is what is left.
-                let shown =
-                    style.reversesVideo ? style.foregroundColour.flatMap(\.asFieldFromInk) ?? field : field
+                // What a cell there SHOWS as its field (`shownField`) — read only
+                // where a cell under the overlay is in it: the last state before the
+                // overlay's first column, read once it is known to be the last, and
+                // each change inside the span for a caller that notes them. Read at
+                // every escape before the overlay, and at every one inside it for a
+                // caller that notes none, it asked the caller for the terminal's
+                // foreground at each of them while a reversal in the terminal's own
+                // ink was in force, where only the last before the overlay is under it.
                 if total <= prefixColumns {
-                    fieldUnder = shown
+                    stateUnder = (style, field)
                 } else if notingFields {
-                    changes.note(shown, at: total, first: fieldUnder)
+                    changes.note(
+                        Self.shownField(of: style, slot: field, terminalForeground: terminalForeground), at: total,
+                        first: fieldUnder())
                 }
             } else {
                 suffixLink.note(text)
@@ -953,16 +963,46 @@ extension String {
         // 49 included: netted away, the cells after the overlay took the page.
         var restored = style
         if field == SGRState.Colour.statedTerminalField { restored.setBackground(field) }
+        let under = fieldUnder()
 
         return ANSIOverlaySplit(
             prefix: prefix, prefixWidth: prefixWidth, suffix: resumedSuffix,
             suffixWidth: suffixWidth,
             styleBeforeSuffix: restored.rendered,
-            backgroundUnderOverlay: fieldUnder.map { SGRState.backgroundEscape($0) } ?? "",
+            // No escape spells the terminal's own foreground as a field; a caller
+            // meets it in `fieldsUnderOverlay` and reverses the cells laid on it.
+            backgroundUnderOverlay: under.flatMap {
+                $0 == SGRState.Colour.terminalForegroundField ? nil : SGRState.backgroundEscape($0)
+            } ?? "",
             fieldsUnderOverlay: FieldsUnderOverlay(
-                column: prefixColumns, first: fieldUnder, changes: changes.changes),
+                column: prefixColumns, first: under, changes: changes.changes),
             totalWidth: total,
             suffixDropColumns: suffixDropColumns)
+    }
+}
+
+extension String {
+    /// The field a cell in `state` SHOWS, `slot` being what its background slot holds
+    /// as a row still to be written reads it: that, unless the cell is reversed.
+    ///
+    /// Under reverse video a cell shows the ink the 7 exchanges its field with — the
+    /// colour a reversed row or caret is filled with — wherever that has a spelling as
+    /// a field. Read off the background slot, an overlay over a list's reversed cursor
+    /// row was drawn on the row's INK. The terminal's own foreground has no such
+    /// spelling — only a 7 draws it as a field — so it is held as a field of its own
+    /// kind (``SGRState/Colour/terminalForegroundField``), which the painter draws by
+    /// reversing the cell laid on it, or as the RGB the terminal reported for it, where
+    /// the caller knows one (`terminalForeground`, asked only then). Read off the slot
+    /// there too, an overlay over it took the terminal's own background (`Opacity as
+    /// composition` §107).
+    fileprivate static func shownField(
+        of state: SGRState, slot: SGRState.Colour?, terminalForeground: () -> SGRState.Colour?
+    ) -> SGRState.Colour? {
+        guard state.reversesVideo else { return slot }
+        guard let ink = state.foregroundColour else {
+            return terminalForeground() ?? SGRState.Colour.terminalForegroundField
+        }
+        return ink.asFieldFromInk ?? slot
     }
 }
 

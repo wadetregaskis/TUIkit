@@ -57,6 +57,15 @@ struct FieldsUnderOverlay: Sendable, Equatable {
     /// Whether one field is under every column the overlay covers.
     var isUniform: Bool { changes.isEmpty }
 
+    /// Whether the terminal's own foreground is the field under any column the
+    /// overlay covers (``SGRState/Colour/terminalForegroundField``): what a cell
+    /// reversed on the terminal's own ink shows, which the painter can draw only by
+    /// reversing the cell laid on it (``String/paintedOver(fieldsReversing:)``).
+    var showsTerminalForeground: Bool {
+        first == SGRState.Colour.terminalForegroundField
+            || changes.contains { $0.field == SGRState.Colour.terminalForegroundField }
+    }
+
     /// The escape that puts ``first`` in force, `""` for none: what the one field
     /// under a uniform span is painted with.
     var firstEscape: String { first.map { SGRState.backgroundEscape($0) } ?? "" }
@@ -167,6 +176,108 @@ extension String {
     }
 }
 
+extension String {
+    /// This overlay line with every cell that states no field of its own, or states
+    /// `ESC[49m`, drawn over `under[k]` at its column `k`, where some of those fields
+    /// are the terminal's own foreground (``SGRState/Colour/terminalForegroundField``).
+    ///
+    /// No background code spells that field; only reverse video draws it, over 39 in
+    /// the foreground slot. So a cell laid on it is drawn REVERSED: the 7, 39 in its
+    /// foreground slot — the terminal's own foreground, shown as the field — and its
+    /// own ink moved to the background slot, where a reversal shows it as ink (a named
+    /// ink as its background code, an indexed or RGB one as itself). A cell whose ink
+    /// is the terminal's own foreground too has no spelling for its ink there, and is
+    /// that ink on that ink: its glyph cannot be seen, and is dropped with the
+    /// attributes that ink a blank cell, as a blend drops one (`Opacity as composition`
+    /// §85, §107). Every other cell is drawn over its field as
+    /// ``paintedOver(fieldsUnder:)`` draws it: a colour, the terminal's own background
+    /// (a stated 49, and a 49 of the cell's own over no field), or none.
+    ///
+    /// Rebuilt cell by cell from the state each is in, since a reversed cell's
+    /// foreground slot is no longer its own ink and the line's own statements cannot
+    /// pass through; everything that is not SGR stays where it was. Only for a line
+    /// with such a field under it: every other line is painted as it always was.
+    ///
+    /// - Parameter under: The field under each of the line's columns, `nil` for none.
+    /// - Returns: The line, painted.
+    func paintedOver(fieldsReversing under: [SGRState.Colour?]) -> String {
+        var own = SGRState()
+        // Whether the line's own field, where it names none, is a stated 49.
+        var statesDefault = false
+        // What the output has in force: the splice puts a reset in front of it.
+        var emitted = SGRState()
+        var column = 0
+        var result = ""
+        result.reserveCapacity(utf8.count + under.count * 8)
+        /// `glyph` drawn at `column` over the field under it, and the column moved past
+        /// what was drawn: the glyph, or the blank that stands for it where its ink is
+        /// that field.
+        func paint(_ glyph: Character) {
+            var desired = own
+            var drawn = glyph
+            if !own.namesBackground, column < under.count {
+                let field = under[column]
+                if field == SGRState.Colour.terminalForegroundField {
+                    // A cell reversed itself shows its own ink as its field, and
+                    // keeps it.
+                    if !own.reversesVideo {
+                        desired.apply("\u{1B}[7m")
+                        desired.setForeground(nil)
+                        if let ink = own.foregroundColour?.asFieldFromInk {
+                            desired.setBackground(ink)
+                        } else {
+                            // The terminal's own foreground, on itself.
+                            desired.setBackground(nil)
+                            if drawn != " " || own.paintsInkOnBlankCell {
+                                drawn = " "
+                                desired.apply("\u{1B}[24;25;29m")
+                            }
+                        }
+                    }
+                } else if let field {
+                    desired.setBackground(field)
+                } else {
+                    desired.setBackground(statesDefault ? SGRState.Colour.statedTerminalField : nil)
+                }
+            } else if statesDefault {
+                desired.setBackground(SGRState.Colour.statedTerminalField)
+            }
+            result += desired.rendered(changingFrom: emitted, resetRestoresAField: true)
+            result.append(drawn)
+            emitted = desired
+            column += drawn.terminalWidth
+        }
+        forEachANSISegment { segment in
+            switch segment {
+            case .ansi(let sequence, let isSGR):
+                guard isSGR else {
+                    result += sequence
+                    return true
+                }
+                if let statement = own.applyReportingBackground(sequence) {
+                    statesDefault = statement == .terminalDefault
+                }
+            case .visible(let character):
+                // A zero-width scalar belongs to the cell before it.
+                guard character.terminalWidth > 0 else {
+                    result.append(character)
+                    return true
+                }
+                let end = column + character.terminalWidth
+                paint(character)
+                // A dropped glyph is ONE blank, and a wide one covered more columns
+                // than that: each of the others is a blank of its own, on its own
+                // column's field. Advanced past them without drawing them, the row
+                // came out a column short for each, and everything after the overlay
+                // moved left.
+                while column < end { paint(" ") }
+            }
+            return true
+        }
+        return result
+    }
+}
+
 extension AnimatedCellRun {
     /// This run's records painted as compositing paints the overlay row it sits on,
     /// its first cell at base column `column`: each of its cells records the field
@@ -174,7 +285,34 @@ extension AnimatedCellRun {
     ///
     /// A run under no field at all is left unpainted, as it was when one field was
     /// read for the whole row and that one was none.
+    ///
+    /// Where the terminal's own foreground is under any of its cells, which only a
+    /// cell drawn reversed can show (``String/paintedOver(fieldsReversing:)``), its
+    /// FRAMES are drawn over the fields as the line is — no record can hold a field a
+    /// cell draws by reversing itself, and a tick that restated a 7 from one would
+    /// reverse the frame's own ink into the field — and its records hold every other
+    /// field, for the tick to take the frames as they are spelled there. Each frame is
+    /// first drawn over what the run's own records already say — the fields the
+    /// painters inside the overlay put under its cells, as the line's cells have them
+    /// — so only a cell no painter reached is laid on the base. Laid on it straight,
+    /// a spinner inside a `.background` in the overlay was drawn reversed on the
+    /// terminal's foreground, and the tick restated the background's colour in the
+    /// slot the reversal shows as ink, where the line has it on that colour.
     func paintingGround(over fields: FieldsUnderOverlay, atColumn column: Int) -> Self {
+        if fields.showsTerminalForeground {
+            let under = fields.fields(over: column..<(column + width))
+            if under.contains(SGRState.Colour.terminalForegroundField) {
+                let own = fieldsInAnUnbuiltRow()
+                let drawn = replacingFrames(
+                    frames.map { frame in
+                        let grounded = own.restateNothing ? frame : frame.paintedOver(fields: own, absentFieldIsUnstated: true)
+                        return grounded.paintedOver(fieldsReversing: under)
+                    }, alpha: alpha)
+                let recorded = under.map { $0 == SGRState.Colour.terminalForegroundField ? nil : $0 }
+                guard recorded.contains(where: { $0 != nil }) else { return drawn }
+                return drawn.paintingGround { $0.paintedOver(fieldsUnder: recorded) }
+            }
+        }
         if fields.isUniform {
             guard fields.first != nil else { return self }
             let escape = fields.firstEscape

@@ -761,7 +761,14 @@ extension FrameBuffer {
     /// cell it can still differ on is the surface's own `ESC[49m` on a palette whose
     /// page is the terminal's own: compositing reads a stated 49 as no field and
     /// fills it, so the surface took the field under it and showed it through.
-    package func composited(with overlay: Self, at position: (x: Int, y: Int), overlayIsPainted: Bool) -> Self {
+    ///
+    /// `terminalForeground` answers with the RGB the terminal reported for its own
+    /// foreground, where the caller knows one, as a field: what an overlay cell over a
+    /// cell reversed on the terminal's own ink is drawn on. Asked only under such a
+    /// cell. Without an answer such a cell is drawn reversed itself
+    /// (``String/paintedOver(fieldsReversing:)``), the one other spelling.
+    package func composited(
+        with overlay: Self, at position: (x: Int, y: Int), overlayIsPainted: Bool, terminalForeground: () -> SGRState.Colour? = { nil }) -> Self {
         guard !overlay.isEmpty else {
             // Nothing visible to draw, but the overlay may still carry its
             // own nested layers / hit-test regions that need to be
@@ -820,7 +827,8 @@ extension FrameBuffer {
                         base: baseLine,
                         overlay: overlayLine,
                         atColumn: position.x,
-                        overlayIsPainted: overlayIsPainted
+                        overlayIsPainted: overlayIsPainted,
+                        terminalForeground: terminalForeground
                     )
                     baseLine = inserted.line
                     fields?[overlayRow] = inserted.fields
@@ -883,6 +891,13 @@ extension FrameBuffer {
     /// lets the width bookkeeping stay incremental; otherwise it falls back to
     /// the copying path, so callers need not check.
     public mutating func composite(with overlay: Self, at position: (x: Int, y: Int)) {
+        composite(with: overlay, at: position, terminalForeground: { nil })
+    }
+
+    /// ``composite(with:at:)`` with the RGB the terminal reported for its own
+    /// foreground, where the caller knows one — see
+    /// ``composited(with:at:overlayIsPainted:terminalForeground:)``.
+    package mutating func composite(with overlay: Self, at position: (x: Int, y: Int), terminalForeground: () -> SGRState.Colour?) {
         guard !overlay.isEmpty else {
             // No visible cells, but nested layers and hit regions still lift.
             guard !overlay.overlays.isEmpty || !overlay.hitTestRegions.isEmpty
@@ -899,7 +914,8 @@ extension FrameBuffer {
             return
         }
         guard linesAreUniformWidth else {
-            self = composited(with: overlay, at: position)
+            self = composited(
+                with: overlay, at: position, overlayIsPainted: false, terminalForeground: terminalForeground)
             return
         }
 
@@ -938,7 +954,8 @@ extension FrameBuffer {
             let inserted = Self.insertOverlay(
                 base: storage[row].padToVisibleWidth(resultWidth),
                 overlay: overlayLine,
-                atColumn: position.x)
+                atColumn: position.x,
+                terminalForeground: terminalForeground)
             storage[row] = inserted.line
             fields?[overlayRow] = inserted.fields
         }
@@ -1382,7 +1399,8 @@ extension FrameBuffer {
         base: String,
         overlay: String,
         atColumn column: Int,
-        overlayIsPainted: Bool = false
+        overlayIsPainted: Bool = false,
+        terminalForeground: () -> SGRState.Colour? = { nil }
     ) -> (line: String, fields: FieldsUnderOverlay) {
         // An overlay starting LEFT of the base is cut to the part that is on it and
         // inserted at column 0 — the answer both composite twins already give a negative
@@ -1403,14 +1421,15 @@ extension FrameBuffer {
             guard column + overlay.strippedLength > 0 else { return (base, .none) }
             return insertOverlay(
                 base: base, overlay: overlay.ansiAwareCuttingLeadingColumns(-column), atColumn: 0,
-                overlayIsPainted: overlayIsPainted)
+                overlayIsPainted: overlayIsPainted, terminalForeground: terminalForeground)
         }
         let overlayVisibleWidth = overlay.strippedLength
 
         // Split the base into prefix (before overlay) and suffix (after overlay),
         // preserving all ANSI codes in both segments.
         let split = base.ansiOverlaySplit(
-            prefixColumns: column, suffixDropColumns: column + overlayVisibleWidth)
+            prefixColumns: column, suffixDropColumns: column + overlayVisibleWidth,
+            terminalForeground: terminalForeground)
         return (
             insertOverlay(split: split, overlay: overlay, atColumn: column, overlayIsPainted: overlayIsPainted),
             split.fieldsUnderOverlay
@@ -1491,6 +1510,10 @@ extension FrameBuffer {
         let overlay =
             if overlayIsPainted {
                 overlay
+            } else if split.fieldsUnderOverlay.showsTerminalForeground {
+                overlay.paintedOver(
+                    fieldsReversing: split.fieldsUnderOverlay.fields(
+                        over: split.fieldsUnderOverlay.column..<afterOverlayColumn))
             } else if split.fieldsUnderOverlay.isUniform {
                 overlay.paintedOver(background: split.backgroundUnderOverlay)
             } else {
