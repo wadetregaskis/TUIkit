@@ -40,6 +40,16 @@ private struct CaretApp: App {
                     field.padding(1).background(Color.rgb(90, 20, 120))
                 case .inAFade:
                     field.opacity(0.5)
+                case .overATranslucentColour:
+                    ZStack(alignment: .topLeading) {
+                        Color.rgb(90, 20, 120).opacity(0.5)
+                        field
+                    }
+                case .overTheTerminalsOwnFieldTranslucent:
+                    ZStack(alignment: .topLeading) {
+                        Color.default.opacity(0.4)
+                        field
+                    }
                 }
             }
         }
@@ -65,6 +75,15 @@ struct ReplayedCaretBlinkTests {
         /// Under `.opacity(0.5)`: the fade blends every frame of the caret once, at
         /// render time, each frame's bare cell over the field beneath it.
         case inAFade
+        /// Over a translucent colour in a `ZStack`: the colour's claim is kept under
+        /// the field's cells that leave their field to it, and the caret's frames
+        /// disagree about that cell.
+        case overATranslucentColour
+        /// Over `Color.default` at 0.4 in a `ZStack`: the canvas states the terminal's
+        /// own field, `ESC[49m`, under the caret, and the colour's claim is kept beneath
+        /// the visible caret's field in THAT colour — not as the field the cell shows,
+        /// which mixed the caret's own colour toward the page at every blink-on render.
+        case overTheTerminalsOwnFieldTranslucent
     }
 
     @Test("Every tick shows what a render at that instant draws", arguments: Ground.allCases)

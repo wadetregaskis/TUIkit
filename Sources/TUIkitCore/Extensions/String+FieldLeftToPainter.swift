@@ -40,7 +40,90 @@ extension String {
     ///     compositor does.
     /// - Returns: One entry per column, `true` where the painter's field shows.
     package func columnsLeavingFieldToPainter(width: Int, fillingStatedTerminalField: Bool = false) -> [Bool] {
-        var result = [Bool](repeating: true, count: max(0, width))
+        columns(width: width, beyondTheEnd: true) { stated, state, _ in
+            !(fillingStatedTerminalField ? state.namesBackground : stated) && !state.reversesVideo
+        }
+    }
+
+    /// For each of the first `width` columns of this line, whether it shows NOTHING
+    /// of its own: a blank, with nothing about the background said since the line's
+    /// last reset, not reversed, and no attribute that inks a blank cell (an
+    /// underline, a strike). What is behind such a cell is all it shows, so a layer
+    /// composited over it is composited over whatever is behind the line, which the
+    /// line cannot say. A column past the end of the line shows nothing too.
+    ///
+    /// - Parameter width: How many columns to answer for.
+    /// - Returns: One entry per column, `true` where the cell shows nothing.
+    package func columnsShowingNothing(width: Int) -> [Bool] {
+        columns(width: width, beyondTheEnd: true) { stated, state, character in
+            !stated && !state.reversesVideo && character == " " && !state.paintsInkOnBlankCell
+        }
+    }
+
+    /// For each of the first `width` columns of this line, whether reverse video is
+    /// in force on it: a cell that shows its ink as its field. A column past the end
+    /// of the line is not.
+    ///
+    /// - Parameter width: How many columns to answer for.
+    /// - Returns: One entry per column, `true` where the cell is reversed.
+    package func columnsReversingVideo(width: Int) -> [Bool] {
+        columns(width: width, beyondTheEnd: false) { _, state, _ in state.reversesVideo }
+    }
+
+    /// For each of the first `width` columns of this line, whether it is reversed with
+    /// no colour named in its background slot: a cell a compositor fills there
+    /// (`String.paintedOver(background:)`), and the reversal shows that slot as the
+    /// cell's INK. So what the compositor fills it with is the colour its glyph is
+    /// drawn in, and a claim on the field the cell shows cannot reach it. A column
+    /// past the end of the line is not.
+    ///
+    /// - Parameter width: How many columns to answer for.
+    /// - Returns: One entry per column, `true` where the cell's ink is left to fill.
+    package func columnsReversedOverNoNamedField(width: Int) -> [Bool] {
+        columns(width: width, beyondTheEnd: false) { _, state, _ in
+            state.reversesVideo && !state.namesBackground
+        }
+    }
+
+    /// For each of the first `width` columns of this line, whether it is reversed on
+    /// the terminal's own ink (`ESC[7;39…m`): the field it shows is the terminal's
+    /// foreground, which no background code spells, so a compositor draws a cell laid
+    /// on it reversed itself (`String.paintedOver(fieldsReversing:)`). A column past
+    /// the end of the line is not.
+    ///
+    /// - Parameter width: How many columns to answer for.
+    /// - Returns: One entry per column, `true` where the cell shows the terminal's
+    ///   foreground as its field.
+    package func columnsShowingTerminalInkAsField(width: Int) -> [Bool] {
+        columns(width: width, beyondTheEnd: false) { _, state, _ in
+            state.reversesVideo && state.foregroundColour == nil
+        }
+    }
+
+    /// For each of the first `width` columns of this line, the escape that states the
+    /// background in force there, and `""` where nothing about the field was said since
+    /// the last reset. A stated 49 is `ESC[49m`, the terminal's own field: not
+    /// `SGRState.renderedBackground`'s `""`, which is what a cell naming no field says,
+    /// and which a claim reading it takes for the field the cell shows. A column past
+    /// the end of the line has none.
+    ///
+    /// - Parameter width: How many columns to answer for.
+    /// - Returns: One escape per column.
+    package func columnsBackgroundEscapes(width: Int) -> [String] {
+        columns(width: width, beyondTheEnd: "") { stated, state, _ in
+            stated ? SGRState.backgroundEscape(state.backgroundColour) : ""
+        }
+    }
+
+    /// For each of the first `width` columns, `answer` asked of the cell there:
+    /// whether anything about the background was said since the last reset, the
+    /// state in force, and the character. A column past the end of the line is
+    /// `beyondTheEnd`; a wide glyph's second column answers as its first.
+    private func columns<Answer>(
+        width: Int, beyondTheEnd: Answer,
+        answering answer: (_ stated: Bool, _ state: SGRState, _ character: Character) -> Answer
+    ) -> [Answer] {
+        var result = [Answer](repeating: beyondTheEnd, count: max(0, width))
         guard width > 0, !isEmpty else { return result }
         var state = SGRState()
         var stated = false
@@ -57,8 +140,8 @@ extension String {
                 let cells = character.terminalWidth
                 // A zero-width scalar belongs to the cell before it.
                 guard cells > 0 else { return true }
-                let leaves = !(fillingStatedTerminalField ? state.namesBackground : stated) && !state.reversesVideo
-                for cell in column..<min(width, column + cells) { result[cell] = leaves }
+                let answered = answer(stated, state, character)
+                for cell in column..<min(width, column + cells) { result[cell] = answered }
                 column += cells
             }
             return true

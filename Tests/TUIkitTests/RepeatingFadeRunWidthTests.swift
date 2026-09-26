@@ -98,6 +98,31 @@ private struct TwoBreathsApp: App {
     var body: some Scene { WindowGroup { TwoBreaths(nested: nested).palette(SystemPalette(.green)) } }
 }
 
+/// The nested breath of `TwoBreaths`, laid in a `ZStack` over text two columns
+/// wide: the outer fade is cut where the text ends, over the `ZStack`'s blank
+/// canvas beyond it, and carried up from there.
+private struct TwoBreathsOverText: View {
+    @State private var dim = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ZStack(alignment: .leading) {
+                Text("ab")
+                Text(" A ").opacity(dim ? 0.2 : 1).background(Color.rgb(40, 40, 200)).opacity(dim ? 0.2 : 1)
+            }
+            Spacer()
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 0.4).repeatForever(autoreverses: true)) { dim = true }
+        }
+    }
+}
+
+private struct TwoBreathsOverTextApp: App {
+    init() {}
+    var body: some Scene { WindowGroup { TwoBreathsOverText().palette(SystemPalette(.green)) } }
+}
+
 @MainActor
 @Suite("A repeating fade's run is as wide as its fades")
 struct RepeatingFadeRunWidthTests {
@@ -119,6 +144,18 @@ struct RepeatingFadeRunWidthTests {
     @Test("A breath a background spent keeps breathing beside and inside another", arguments: [false, true])
     func aBreathABackgroundSpentBreathes(nested: Bool) throws {
         let found = ReplayOracle.compare({ TwoBreathsApp(nested: nested) }, ticks: 24, size: (30, 4))
+        try #require(found.compared >= 24, "only \(found.compared) rows were compared")
+        for mismatch in found.mismatches { Issue.record(Comment(rawValue: mismatch)) }
+    }
+
+    /// The same nested breath in a `ZStack` over two columns of text: the outer fade
+    /// is resolved over the text and carried up past it, a run each side, and the
+    /// inner breath's run is cut with it. Whole, that run lay inside neither side's
+    /// columns: the side over the text dropped it, and `A` held the phase of the
+    /// inner breath it was drawn at (23 of 24 ticks) while a render moved it.
+    @Test("A breath a background spent keeps breathing inside another that a ZStack cuts")
+    func aBreathInsideACutFadeBreathes() throws {
+        let found = ReplayOracle.compare({ TwoBreathsOverTextApp() }, ticks: 24, size: (30, 4))
         try #require(found.compared >= 24, "only \(found.compared) rows were compared")
         for mismatch in found.mismatches { Issue.record(Comment(rawValue: mismatch)) }
     }

@@ -876,6 +876,12 @@ rightmost covered column and may pass over uncovered ones on the way; those
 belong to a row that was never taken apart, and they reach the terminal
 unaltered.
 
+(Revised 2026-09-26, §108: at a compositor INSIDE the tree, a covered cell the blend
+leaves with no field is left unsaid rather than given the surface. What is behind it
+there is whatever is behind the compositor, a painter's fill as likely as the page.
+Since §94 a return to no field is spelled from a reset, which the row's page follows,
+never as `ESC[49m`, so the white cells this section was about do not come back.)
+
 ## 9.7 α = 1 is not the identity, and treating it as one was visible
 
 Three separate early returns took a fully opaque region to be a no-op: the
@@ -7055,7 +7061,9 @@ at the fill's opaque spelling, the field being the content's own. A translucent 
 `.overlay` is still punched where the overlay's cells land (`FrameBuffer.opacityRegionsPunched`):
 `Text("hello").background(Color.rgb(0, 0, 200).opacity(0.5)).overlay { Text("x") }` draws `x` on
 the fill's opaque spelling in a row of the fill at one half, a limit of the compositor's that
-predates this and is not about which layer a claim is. A `Table`'s own translucent row fill is left
+predates this and is not about which layer a claim is. (Lifted 2026-09-26, §108: a compositor keeps
+a base's claims on the field under a layer's cell that leaves its field to the base, and the fill's
+claim is one.) A `Table`'s own translucent row fill is left
 as a plain claim: a table draws its cells' text itself, with no fade or field of the content's to
 tell apart from it.
 
@@ -7195,3 +7203,206 @@ Before, all failed but the run's replays, which agreed with their renders, wrong
 frames left undrawn, the replays failed (`'⠋' in rgb(230, 120, 40) on the terminal's background`
 where the render has it on the terminal's foreground). `ANSIOverlaySplitTests` reads the field such a
 cell shows as the new kind in its reference, beside the reported RGB.
+
+## 108. A compositor carries up the fades over nothing (2026-09-26)
+
+A compositor inside the tree (a `ZStack`, an `.overlay`, a custom `Layout`) is where a layer
+lands on its base, and it resolves the layer's fades there (`compositedResolvingOpacity`): the
+last moment both cells are known. That is right wherever the base shows something under a faded
+cell. Where it shows NOTHING (a blank with no field of its own, which is all a stack's canvas is
+before anything lands on it), the base is not what is behind the fade. Whatever is behind the
+compositor is: a painter further out (§96), or the page. Measured on this tree before the fix,
+truecolor, the default page:
+
+- **A fade in a `ZStack` inside a painter was drawn on the page.** `ZStack { Text("ab").opacity(
+  0.5) }.background(Color.rgb(0, 0, 200))`: the blend found no field on either side, stated the
+  surface (§9.8), and the `.background`, which restates its fill only after resets, could not
+  put itself back. The result was `48;2;5;10;5` under `ab` in the middle of the blue, with the
+  letters' ink mixed toward the page. The same happens in any painter: a tinted or cursor `List`
+  row, a menu bar, a sheet's surface.
+- **An `.overlay` over text inside a painter.** `Text("xy").overlay { Text("•").opacity(0.5) }`
+  inside `.background(blue)`: the base shows the letter under the dot, so the glyph contest was
+  right, but neither side has a field and the surface was stated. The dot was on the page.
+- **A custom `Layout` resolved nothing at all.** It composites its subviews into its canvas in
+  place (`FrameBuffer.composite(with:at:)`) and lifted every subview's fade unresolved. Laid over
+  another subview's field, a faded label met that field at the root as its OWN and faded it:
+  `Color.rgb(200, 0, 0).frame(width: 4, height: 1)` with `Text("ab").opacity(0.5)` laid on it
+  drew `ab` on `48;2;103;5;3` beside the red, where a `ZStack` of the same two draws them on the
+  red.
+
+**The rule.** A compositor resolves a layer's fades only where its base shows something under
+them, and carries the rest up with the layer (`FrameBuffer.splittingClaims(overNothingIn:at:)`,
+`compositedCarryingClaimsOverNothing`, and `compositeCarryingClaimsOverNothing` for a `Layout`'s
+in-place fold). The claims are cut cell by cell by what the base shows
+(`String.columnsShowingNothing(width:)`: a blank, nothing about the field said since the last
+reset, not reversed, and no attribute that inks a blank), with the same cut the painters' claims
+take (`FrameBuffer.cutting(_:by:)`). Over nothing, the layer's cell is all there is, so compositing
+it there and fading it further out is exact. A run whose frames state their own alpha, lying
+wholly over nothing, goes up whole, because its drawn frame's claims are made from that alpha
+wherever it is resolved. And where the compositor does resolve, a covered cell the blend leaves
+with no field is left unsaid rather than given the surface (§9.8's revision):
+`resolvingOpacity(over:at:surface:palette:statingTheSurface:buildingRuns:)` with `false`. The row
+still states nothing under it, and whatever is behind the compositor shows there.
+
+A `Layout` whose subviews land on nothing, which is nearly every one, carries every fade up
+exactly as before. Where one lands on another, it is now resolved there, as a `ZStack` resolves it.
+
+**A run is cut where its two sides are spent in two places.** A run crossing from cells over
+something to cells over nothing is cut there (`AnimatedCellRun.clipped(toColumns:)`) when its sides
+go two ways. One stating its alpha frame by frame: its pieces over nothing go up whole, as a run wholly
+over nothing does; resolved at the compositor with the rest, their fields were mixed over the page
+where a painter was behind them. And one under a repeating fade the split cut: each side's fade
+folds the runs inside its own columns (§6b.1), and whole, the run was inside neither — the side
+resolved here dropped it, as a repeating fade drops every run it cannot fold, and it froze. That was
+§6b.1's nested breath, laid in a `ZStack` over text: `Text(" A ").opacity(pulse).background(blue)
+.opacity(pulse)` over `Text("ab")` held `A` at the inner breath's phase it was drawn at while a render
+moved it (23 ticks of 24). Every other run is spent by each side's claims in turn and left whole.
+
+**What it leaves alone.** The root's own compositing of floating layers resolves as before,
+since nothing further out is left to carry to. Where the base shows a glyph with no field of its
+own, a field the LAYER states (`Text("ab").background(.red).opacity(0.5)` over `Text("xy")`, or a
+translucent veil over text) is still mixed over the page there: at one half, a red over a blue
+`.background` is `rgb(103, 5, 3)` where `rgb(100, 0, 100)` is due. The glyph contest has to be
+decided at the compositor, which can see both glyphs, but the field needs what is behind the
+compositor. Doing both would need a claim for the field alone, carried up per cell, in both the
+line and every frame of a run over such a cell. That is about forty lines through `blendedSpan`'s
+output and the split, priced at half a day with its tests, and not done here.
+
+**What it costs where no such shape is present.** A compositor with no claim to split asks nothing.
+One with claims reads its base once per row under them. Counted with temporary counters over every
+`Stress --bench` scenario (10 frames and the warm-up): only `translucent` splits, 1,320 splits
+keeping 1,980 pieces and carrying none. Every scenario's checksum is identical with and without the
+change.
+
+`CompositorOverNothingTests` pins it: the `ZStack` inside a `.background` (field and ink), the
+`.overlay` over text inside one, a `Layout` laying a faded label over a colour (on the colour, as a
+`ZStack`'s), and the split itself. Before, the first three failed (9 issues). With the carry kept
+but the surface stated, the `.overlay` fails. It also holds three guards: a `Layout`'s label over
+nothing, faded over the painter around it (it passed before too); a label below one half over text
+still yielding to it; and a `ZStack` with nothing around it drawing exactly what it drew.
+`ContainerPayloadAudit` now counts a `ZStack` over nothing as a carrier, and a `ZStack` over a
+colour as the sink.
+
+### 108.1 The claims under a layer
+
+Carried up, a lower layer's claims stay in the compositor's canvas — over its own opaque
+spelling — until something further out resolves them. A layer composited over those cells
+replaces them, and the composite punches every claim under its footprint
+(`FrameBuffer.opacityRegionsPunched`), as it always has. Punched, a claim went and its field
+stayed. Measured on this tree before the fix, truecolor, the default page:
+
+- `ZStack(alignment: .leading) { Color.rgb(0, 0, 200).opacity(0.5).frame(width: 6, height: 1);
+  Text("ab") }` drew `a` and `b` on `48;2;0;0;200`, the colour at full strength, in a row of
+  `48;2;2;5;103`. The most common translucent backdrop there is.
+- A faded layer over a faded one was blended over it unfaded: `ZStack { Text("xy").opacity(0.3);
+  Text("ab").opacity(0.4) }` drew the `x` that wins the contest at nearly full strength, where it
+  is faint; a label at one half over `Color.blue.opacity(0.5)` was mixed over the opaque blue.
+- An `.overlay` over a translucent `.background` drew its label on the fill's opaque spelling
+  (§105's limit): the base's own claim, punched the same way.
+
+**The rule.** A compositor settles its base's claims under a layer before the layer lands on it
+(`FrameBuffer.settlingClaims(under:at:palette:)`), cell by cell. It reads the layer's cells as
+the composite reads them: a cell naming no colour in its background slot takes the base's field
+there, and a stated `ESC[49m` is one of them (`String.paintedOver(background:)`, §95), where a
+painter reading a 49 as the content's own field (`columnsLeavingFieldToPainter(width:)`) would
+say the label hides the field — punched there, a label on `Color.default` over the colour above
+was on the colour at full strength in a row of it at one half, and so was one in a custom
+`Layout` or an `.overlay` on a translucent fill.
+- Where the layer's cell leaves its field to the base's and fades nothing on what is behind it,
+  the cell shows the base's field under the layer's own glyph, and the base's claims there are
+  KEPT, about that field alone (`FieldUnderContent.shown`, §105's field-only claim): the
+  content's claims folded into one as the resolution folds them (the layer from the first, the
+  fields' alphas multiplied), and a painter's claims on its own field as they are. So the label
+  is on the colour as it shows beside it, wherever that is resolved — over the page, or over a
+  painter further out. A claim of the layer's own there that scales only its INK — a label in a
+  translucent ink, every secondary tier of a palette that fades its text — is not a fade on what
+  is behind it (§96's `hasFadeOnWhatIsBehind`): it contests no glyph and blends nothing over the
+  base's cell. It goes up with the kept claims, since it is paint on the field the cell ends up
+  with, which is only known where they resolve. Taken for a fade, the base's claims under such a
+  label were spent over the page, and inside a painter the label sat on a patch of the colour
+  mixed toward the page, beside the colour mixed toward the painter; resolved at the compositor,
+  its ink was mixed toward the colour at full strength.
+- Where the layer's DRAWN cell states a field of its own but a run of the layer has frames that
+  leave the field to the base — a block caret's two frames — the base's claims are kept BENEATH
+  that field (`FieldUnderContent.beneath`, in the base's colour), and each frame of the run takes
+  the field it shows as §105's run rule reads it. Punched, a caret drawn visible over
+  `Color.rgb(90, 20, 120).opacity(0.5)` in a `ZStack` blinked off onto the colour at full
+  strength, where a render drew it at one half over the page. A base cell stating the
+  terminal's own field gives that colour as `ESC[49m` (`String.columnsBackgroundEscapes`), which
+  the claim reads as the terminal's own: spelled as no escape at all, as a state's rendered
+  background spells it, the claim read as the field the cell SHOWS, and a run's drawn red cell
+  over `Color.default.opacity(0.4)` in a `ZStack` was mixed at 0.4 over the page,
+  `48;2;83;6;3`, where it is its own red; a block caret's visible frame there rendered mixed
+  toward the page and replayed in its own colour.
+- Where the layer FADES, it is blended over the base's cell there, and that cell is not what
+  shows until its own claims are spent: they are spent first, over what is known at the
+  compositor (the surface, left unsaid where the blend leaves no field), which is what a
+  compositor did before it carried anything. Two translucent layers cannot both travel in one line.
+- Where the layer's cell is reversed with nothing named in its background slot, the composite
+  fills that slot with the base's field, and the reversal shows it as the glyph's INK, which a
+  claim on a field cannot reach: spent first too. Punched, `Text("ab").inverted()` over the
+  colour drew its glyphs in the colour at full strength.
+- Where the base's cell is reversed on the terminal's own ink, which no background code spells
+  until the terminal reports it, or under a run stating its alpha frame by frame, spent first
+  too: a layer on the terminal's own foreground is drawn reversed itself (§107), which a claim on
+  the field it shows cannot reach; a run's alpha is in no claim to keep. A reversal of any other
+  ink shows that ink as a field the composite spells (§99.2), and its claims are kept like any
+  other: spent first, a faded `Text("abcdef").inverted()` under a label inside a `.background`
+  was mixed over the page under the label and over the painter beside it.
+- Where the layer's cell hides the base's field, or the base shows none, the claims go with the
+  cell, as they always did.
+
+**What it leaves alone.** A fading layer over a translucent lower one, inside a painter: the
+lower one is spent over the page under the layer, where it is carried to the painter beside it —
+§108's limit, for the cells two translucent layers share. It is what the compositor drew before
+this section, under the layer and beside it alike. The same for a layer's run stating a
+translucent INK frame by frame over such a colour (a `.border(AnimatedColor)` whose frames
+differ in alpha): a run's alpha is read with its run, and is not carried up with the kept claims
+the way a claim is. And for a reversed layer cell, whose glyph takes the lower colour as its ink.
+A kept claim under a cell that a row further out reverses — a `ZStack` of a translucent colour and
+a label in a `List`'s reversed cursor row or a menu's bar — is §105's reversed cell: the colour is
+in the slot the reversal shows as the label's ink, and is drawn at its opaque spelling, as a
+translucent `.background`'s is there, and beside the label it is what the `.background` is
+beside its own. Before this section the colour was spent over the page at the compositor: the
+label's ink was the colour mixed toward the page, and beside the label its cells showed the
+colour at full strength as the bar's field. Measured in a focused `List` on a palette whose
+accent the terminal decides: `a` in `rgb(10, 10, 115)` with the cell beside it on
+`rgb(0, 0, 200)` in a bar of `rgb(220, 220, 220)`; now `a` in `rgb(0, 0, 200)` and the cell
+beside it on the bar, both as `.background` draws them. Neither is the colour mixed toward the
+row's own field, which is what a claim on an ink under a reversal would need.
+
+**What it costs where no such shape is present: nothing measurable.** A base with no claim asks
+nothing more, and one with no claim in the layer's bounding box answers from the layer's width,
+without measuring a line of the layer: a `Layout` folding subviews that do not overlap, each
+carrying a fade up past the ones before it, asks each subview that once. Counted with temporary
+counters: over every `Stress --bench` scenario (10 frames and the warm-up), the settle was asked
+2,640 times in `translucent` and 220 in `customlayout`, found no claim on the base in either,
+and measured no line; twenty faded labels a `Layout` lays side by side inside a `.background`
+measured 19 lines of their layers before the bounding box, and none now. All 30 scenarios'
+checksums are identical with the round's changes and without them. And a claim that meets the
+layer is cut only over the footprint's bounds, where the layer's cells are: cut whole, a
+translucent backdrop filling a `Layout`'s 80 × 24 canvas under a hundred one-cell labels was
+asked about 27,780 cells, one piece of it per label, for 100 the labels cover; it is asked
+about those 100 (`FrameBuffer.settleWork`, a count a test binds).
+
+`CompositorOverNothingTests` pins each shape: the label over the translucent colour at the root
+and inside a `.background` (on the colour over the background, in its own ink), the label
+overlaid on a translucent fill, a faded layer over faded text and over a translucent colour
+(against the two composited in turn by hand), a run stating its alpha across the edge of what
+the base shows, inside a painter, and the split cutting a run under a cut fade; before, all six
+failed (11 issues). With the kept claims dropped, the three field shapes fail; with the claims
+spent first left alone, the faded layers fail. It also pins a label stating 49 over the colour in
+a `ZStack`, a `Layout` and an `.overlay` on a translucent fill (each `48;2;0;0;200` in a row of
+`48;2;2;5;103` when a stated 49 was read as the label's own), an inverted label over it (its ink
+`rgb(0, 0, 200)` where `rgb(2, 5, 103)` is due), a label in a translucent ink over it inside a
+`.background` and at the root (inside, `a` on `48;2;2;5;103` beside `48;2;100;0;100`), and faded
+inverted text under a label inside one. `ReplayedCaretBlinkTests` gains the caret over a
+translucent colour in a `ZStack`: punched, every blink-off tick replayed on
+`rgb(90, 20, 120)` where a render drew `rgb(48, 15, 63)`; and the caret over
+`Color.default.opacity(0.4)`: with the claim beneath its visible frame spelled as no escape, 16
+blink-on ticks replayed the caret's `rgb(102, 255, 102)` where a render drew it mixed toward the
+page, `rgb(44, 108, 44)`, and 14 blink-off ticks replayed the terminal's own background where a
+render drew the page; `CompositorOverNothingTests` pins a run's red cell there.
+`RepeatingFadeRunWidthTests` replays the nested breath over text through the run loop: before,
+23 issues. `TranslucentFillFieldTests` replays a run inside a `.background` inside a `ZStack`
+over a translucent colour as §105 replays one inside a compositing painter.

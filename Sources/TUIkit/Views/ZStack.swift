@@ -129,7 +129,7 @@ private struct _ZStackCore<Content: View>: View, Renderable {
         // over no children returns the initial value.
         guard frameWidth > 0, frameHeight > 0 else {
             return buffers.reduce(FrameBuffer()) {
-                $0.compositedResolvingOpacity(with: $1, at: (x: 0, y: 0), palette: context.environment.palette)
+                $0.compositedCarryingClaimsOverNothing(with: $1, at: (x: 0, y: 0), palette: context.environment.palette)
             }
         }
 
@@ -153,7 +153,7 @@ private struct _ZStackCore<Content: View>: View, Renderable {
             let dy =
                 verticalRun?.offsets[index]
                 ?? alignment.vertical.childOffset(childHeight: buffer.height, in: frameHeight)
-            result = result.compositedResolvingOpacity(
+            result = result.compositedCarryingClaimsOverNothing(
                 with: buffer, at: (x: dx, y: dy), palette: context.environment.palette)
         }
         return result

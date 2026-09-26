@@ -256,9 +256,8 @@ public struct _LayoutCore<L: Layout, Content: View>: View, Renderable, Layoutabl
             // In place: `composited` rebuilds every line of the canvas per
             // call, so folding n children through it is n × canvas even though
             // each child covers a couple of rows.
-            result.composite(
-                with: rendered, at: (x: entry.x, y: entry.y),
-                terminalForeground: { FrameBuffer.reportedTerminalForegroundField })
+            result.compositeCarryingClaimsOverNothing(
+                with: rendered, at: (x: entry.x, y: entry.y), palette: context.environment.palette)
         }
         return result
     }

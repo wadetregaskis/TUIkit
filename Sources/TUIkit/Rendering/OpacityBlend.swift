@@ -131,6 +131,7 @@ extension FrameBuffer {
         alpha: (Int) -> CellAlpha?,
         surface: Color,
         defaultForeground: Color,
+        statingTheSurface: Bool = true,
         fillingStatedTerminalField: Bool = false
     ) -> String {
         // Pinned rather than clamped: the span is documented as already trimmed to
@@ -301,7 +302,12 @@ extension FrameBuffer {
             // the parse having put it in the cell's style: re-emitted as the
             // shortest change, it could come out as a reset, which puts the
             // row's page back in its place.)
-            if coverage != nil, blended.background == nil {
+            //
+            // Stated only where the caller says the row is what shows: a compositor
+            // inside the tree leaves it unsaid, since what is behind a cell its base
+            // shows no field for is whatever is behind the compositor, which is not
+            // known there (`resolvingOpacity(over:at:surface:palette:statingTheSurface:buildingRuns:)`).
+            if statingTheSurface, coverage != nil, blended.background == nil {
                 blended.background = surface
                 blended.style = blended.style.settingBackground(surface)
             }

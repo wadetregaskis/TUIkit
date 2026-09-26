@@ -118,7 +118,7 @@ extension OverlayModifier: Renderable {
             ?? alignment.vertical.childOffset(childHeight: overlayHeight, in: baseHeight)
 
         // Composite the overlay onto the base
-        let composite = baseBuffer.compositedResolvingOpacity(
+        let composite = baseBuffer.compositedCarryingClaimsOverNothing(
             with: overlayBuffer, at: (x: horizontalOffset, y: verticalOffset),
             palette: context.environment.palette)
 

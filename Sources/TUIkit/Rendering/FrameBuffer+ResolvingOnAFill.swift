@@ -67,7 +67,7 @@ extension FrameBuffer {
     ///   - buildingRuns: `false` for a caller that keeps only the LINES — a breathing
     ///     row spending its content against a colour of its breath that the frame
     ///     being drawn does not show — so every run is left out rather than faded and
-    ///     thrown away (``resolvingOpacity(over:at:surface:palette:buildingRuns:)``).
+    ///     thrown away (``resolvingOpacity(over:at:surface:palette:statingTheSurface:buildingRuns:)``).
     /// - Returns: The buffer, spent, or as it was.
     func resolvingOpacity(
         onOpaqueFill fill: () -> FrameBuffer?, surface: Color, palette: any Palette, buildingRuns: Bool = true
@@ -87,7 +87,7 @@ extension FrameBuffer {
         var backdrop = surface
         if case .terminalDefault = surface.value { backdrop = .terminalBackground }
         return content.resolvingOpacity(
-            over: fill() ?? Self(), at: (x: 0, y: 0), surface: backdrop, palette: palette,
+            over: fill() ?? Self(), at: (x: 0, y: 0), surface: backdrop, palette: palette, statingTheSurface: true,
             fillingStatedTerminalField: false, buildingRuns: buildingRuns)
     }
 

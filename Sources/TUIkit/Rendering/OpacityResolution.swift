@@ -77,12 +77,20 @@ extension FrameBuffer {
         palette: any Palette
     ) -> Self {
         resolvingOpacity(
-            over: destination, at: position, surface: surface, palette: palette, fillingStatedTerminalField: false,
-            buildingRuns: true)
+            over: destination, at: position, surface: surface, palette: palette, statingTheSurface: true,
+            fillingStatedTerminalField: false, buildingRuns: true)
     }
 
-    /// ``resolvingOpacity(over:at:surface:palette:)``, saying whether a stated
+    /// ``resolvingOpacity(over:at:surface:palette:)``, saying whether a covered cell the
+    /// blend leaves with no field states `surface` as its field (§9.8), whether a stated
     /// `ESC[49m` is read as the field under it, and whether it builds the runs at all.
+    ///
+    /// The surface is stated wherever the resolved lines are what the row shows: the
+    /// root, a painter's fill, a floating layer over the finished page. It is left unsaid
+    /// at a compositor INSIDE the tree, which knows only its base: a cell its base shows
+    /// no field under is over whatever is behind the compositor, a painter's fill further
+    /// out as likely as the page, and stated, the page won over the fill after every
+    /// reset (`Opacity as composition.md` §108).
     ///
     /// `fillingStatedTerminalField` is a compositor's reading of the layer's stated 49:
     /// the composite that follows fills it with the field under its column, so a covered
@@ -98,7 +106,7 @@ extension FrameBuffer {
     /// per colour.
     func resolvingOpacity(
         over destination: Self, at position: (x: Int, y: Int), surface: Color, palette: any Palette,
-        fillingStatedTerminalField: Bool, buildingRuns: Bool
+        statingTheSurface: Bool, fillingStatedTerminalField: Bool, buildingRuns: Bool
     ) -> Self {
         // A run may be the only thing on the buffer with anything to say: a blinking
         // caret over a faded well claims nothing statically, because no one rectangle
@@ -212,6 +220,7 @@ extension FrameBuffer {
                 alpha: { alphas[$0 - start] },
                 surface: resolvedSurface,
                 defaultForeground: resolvedForeground,
+                statingTheSurface: statingTheSurface,
                 fillingStatedTerminalField: fillingStatedTerminalField)
             // Collapsed at the seam, where the seam is made: splicing leaves the
             // span's closing reset hard against the styling `insertOverlay`
@@ -271,7 +280,8 @@ extension FrameBuffer {
                 run, drawnLine: lines.indices.contains(run.offsetY) ? lines[run.offsetY] : "",
                 covering: regionsForRuns, destination: destination,
                 position: position, surface: resolvedSurface,
-                defaultForeground: resolvedForeground, fillingStatedTerminalField: fillingStatedTerminalField)
+                defaultForeground: resolvedForeground, statingTheSurface: statingTheSurface,
+                fillingStatedTerminalField: fillingStatedTerminalField)
         }
         result.animatedCells += Self.cyclingRuns(
             of: translucent, over: lines, folding: animatedCells, rebuilding: rebuild)
@@ -353,7 +363,7 @@ extension FrameBuffer {
     ///   - covering: What covers the run from OUTSIDE it, and only that. A run's own
     ///     per-frame statement must not be in this list or every frame would be folded
     ///     with the drawn frame's alpha as well as its own.
-    private static func faded(
+    private static func faded(  // swiftlint:disable:this function_parameter_count
         _ run: AnimatedCellRun,
         drawnLine: String,
         covering regions: [OpacityRegion],
@@ -361,6 +371,7 @@ extension FrameBuffer {
         position: (x: Int, y: Int),
         surface resolvedSurface: Color,
         defaultForeground resolvedForeground: Color,
+        statingTheSurface: Bool,
         fillingStatedTerminalField: Bool
     ) -> AnimatedCellRun? {
         // Cut to the buffer's own columns FIRST, because a run can name columns to
@@ -478,6 +489,7 @@ extension FrameBuffer {
                 alpha: { perColumn[$0 - columns.lowerBound] },
                 surface: resolvedSurface,
                 defaultForeground: resolvedForeground,
+                statingTheSurface: statingTheSurface,
                 fillingStatedTerminalField: fillingStatedTerminalField)
         }
         let fadedFrames: [String]
@@ -634,7 +646,7 @@ extension FrameBuffer {
         composited(
             with: overlay.resolvingOpacity(
                 over: self, at: position, surface: surface ?? palette.background, palette: palette,
-                fillingStatedTerminalField: !overlayIsPainted, buildingRuns: true),
+                statingTheSurface: true, fillingStatedTerminalField: !overlayIsPainted, buildingRuns: true),
             at: position, overlayIsPainted: overlayIsPainted,
             terminalForeground: { Self.reportedTerminalForegroundField })
     }
