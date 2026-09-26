@@ -188,6 +188,8 @@ enum Sessions {
         NotesSession.descriptor,
         PlaylistSession.descriptor,
         JobsSession.descriptor,
+        ResidualSession<EquatableRows>.descriptor,
+        ResidualSession<OpaqueRows>.descriptor,
     ]
 
     @MainActor
