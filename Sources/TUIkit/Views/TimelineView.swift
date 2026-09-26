@@ -117,18 +117,51 @@ private struct _TimelineViewCore<Schedule: TimelineSchedule, Content: View>: Vie
     /// whole schedule is in the past or the future.) The wake is the first
     /// entry strictly after `now`; there may be none, and then the view is
     /// finished changing.
-    private func resolve(now: Date) -> (entry: Date, next: Date?) {
+    ///
+    /// `entry` is `nil` when the schedule produced nothing at all — a paused
+    /// ``AnimationTimelineSchedule`` — and the content is then rendered for
+    /// `now`, which is not an entry: nothing about the view moved with it.
+    private func resolve(now: Date) -> (entry: Date?, next: Date?) {
         var entry: Date?
         for date in schedule.entries(from: now, mode: .normal) {
             if entry == nil { entry = date }
             if date > now { return (entry ?? date, date) }
         }
-        return (entry ?? now, nil)
+        return (entry, nil)
     }
 
-    private func timelineContext(now: Date) -> (TimelineViewDefaultContext, next: Date?) {
+    /// The context the content is built with, the next wake, and the context
+    /// it is measured and rendered in.
+    ///
+    /// The content is a function of the entry, and the entry is moved by the
+    /// clock, which no memo keys on and no write reports. So the entry is
+    /// NOTED at this identity, as an environment modifier notes the value it
+    /// injects, and a moved entry drops what the cache holds below it: a
+    /// `ForEach` row reading `timeline.date` — a list of "5 min ago" stamps
+    /// under `.everyMinute` — is memoized by its element, which the clock does
+    /// not move, and was served as the first entry drew it for as long as the
+    /// list was on screen. Whichever walk sees the move first clears, once —
+    /// and the note answers the later walks without comparing, which is sound
+    /// only because every walk of the frame resolves the same entry, against
+    /// the frame's one date (``frameDate(_:)``).
+    ///
+    /// Sizes go too: a row's text is the date's. And the depth goes up for the
+    /// content, as an `AnyView`'s does, so a timeline whose content is another
+    /// timeline — both drawn at this identity — notes under a slot of its own.
+    private func timelineContext(
+        now: Date, noting context: RenderContext
+    ) -> (TimelineViewDefaultContext, next: Date?, content: RenderContext) {
         let (entry, next) = resolve(now: now)
-        return (TimelineViewDefaultContext(date: entry, cadence: .live), next)
+        var contentContext = context
+        contentContext.environmentApplicationDepth += 1
+        if let entry, let cache = context.renderCache,
+            case .changed = cache.noteAppliedEnvironment(
+                entry, identity: context.identity, keyPath: \TimelineViewDefaultContext.date,
+                depth: context.environmentApplicationDepth)
+        {
+            cache.clearAffected(by: context.identity)
+        }
+        return (TimelineViewDefaultContext(date: entry ?? now, cadence: .live), next, contentContext)
     }
 
     /// The instant the schedule is resolved against: the FRAME's wall clock,
@@ -177,14 +210,14 @@ private struct _TimelineViewCore<Schedule: TimelineSchedule, Content: View>: Vie
     /// The timeline is exactly its content, flexibility included — forwarded
     /// rather than measured by rendering, so a flexible child stays flexible.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let (timeline, next) = timelineContext(now: frameDate(context))
+        let (timeline, next, contentContext) = timelineContext(now: frameDate(context), noting: context)
         declareMeasure(next: next, context: context)
-        return measureChild(content(timeline), proposal: proposal, context: context)
+        return measureChild(content(timeline), proposal: proposal, context: contentContext)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let now = frameDate(context)
-        let (timeline, next) = timelineContext(now: now)
+        let (timeline, next, contentContext) = timelineContext(now: now, noting: context)
         if context.isMeasuring { declareMeasure(next: next, context: context) }
         if let next {
             // One wake, for the next entry only. The frame it produces declares
@@ -205,6 +238,6 @@ private struct _TimelineViewCore<Schedule: TimelineSchedule, Content: View>: Vie
                 context.requestWake(token: token, afterSeconds: next.timeIntervalSince(now))
             }
         }
-        return TUIkitView.renderToBuffer(content(timeline), context: context)
+        return TUIkitView.renderToBuffer(content(timeline), context: contentContext)
     }
 }

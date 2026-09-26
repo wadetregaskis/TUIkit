@@ -392,6 +392,95 @@ struct TimelineViewTests {
         #expect(later.hasSuffix(" 100s|"), "the button was laid out at the width of the entry before: \(later)")
     }
 
+    /// The other direction from the timer above: rows BELOW the timeline that
+    /// read its date — a list of "5 min ago" stamps under `.everyMinute`. Each
+    /// `ForEach` row is memoized by its element, which the clock does not move,
+    /// and the clock is not a write the cache sees, so every row was served as
+    /// the first entry drew it, for as long as the list was on screen.
+    @Test("Rows that read the timeline's date are drawn for the current entry")
+    func rowsReadingTheDateFollowIt() {
+        let (tui, context, scheduler) = harness()
+        let clock = SteppedClock(seconds: 1)
+        let list = TimelineView(SteppedSchedule(clock: clock)) { timeline in
+            VStack(spacing: 0) {
+                ForEach(0..<3, id: \.self) { index in
+                    Text(verbatim: "row \(index) at \(Int(timeline.date.timeIntervalSinceReferenceDate))")
+                }
+            }
+        }
+        _ = render(list, tui: tui, context: context, scheduler: scheduler)
+        _ = render(list, tui: tui, context: context, scheduler: scheduler)
+        clock.seconds = 7
+        let lines = render(list, tui: tui, context: context, scheduler: scheduler).lines.map(\.stripped)
+        #expect(lines.prefix(3) == ["row 0 at 7", "row 1 at 7", "row 2 at 7"], "the rows kept the entry before")
+    }
+
+    /// And a timeline whose entry did NOT move leaves the rows below it
+    /// alone — the clear is on a change of entry, not on every frame.
+    ///
+    /// Asked of the subtree clears rather than of the rows served: a suite
+    /// running beside this one that moves a process-wide answer (a colour
+    /// depth, the terminal's colours) clears every cache in the process, and
+    /// that is not this view clearing anything.
+    @Test("A timeline whose entry did not move clears nothing below it")
+    func stillEntryClearsNothing() {
+        let (tui, context, scheduler) = harness()
+        let clock = SteppedClock(seconds: 1)
+        let list = TimelineView(SteppedSchedule(clock: clock)) { timeline in
+            VStack(spacing: 0) {
+                ForEach(0..<3, id: \.self) { index in
+                    Text(verbatim: "row \(index) at \(Int(timeline.date.timeIntervalSinceReferenceDate))")
+                }
+            }
+        }
+        _ = render(list, tui: tui, context: context, scheduler: scheduler)
+        _ = render(list, tui: tui, context: context, scheduler: scheduler)
+        let before = tui.renderCache.stats.subtreeClears
+        _ = render(list, tui: tui, context: context, scheduler: scheduler)
+        #expect(tui.renderCache.stats.subtreeClears == before, "a still entry cleared the rows below it")
+        clock.seconds = 2
+        _ = render(list, tui: tui, context: context, scheduler: scheduler)
+        #expect(tui.renderCache.stats.subtreeClears == before + 1, "a moved entry clears once, on one walk")
+    }
+
+    /// The rows above, in the frame that straddles an entry boundary. The
+    /// timeline notes its entry once a pass, on whichever walk sees it first,
+    /// so when the measure saw the entry before the boundary and the render the
+    /// one after it, the render's entry was never noted and nothing cleared the
+    /// rows: they were served what the entry before drew, under a timeline
+    /// drawing the entry after — and, with the wake counted from the render's
+    /// read, for a whole period of the schedule.
+    @Test("Rows that read the timeline's date agree with it in the frame that straddles a boundary")
+    func rowsAgreeInAStraddledFrame() {
+        let (tui, context, scheduler) = harness()
+        let clock = StraddlingClock(seconds: 1)
+        // Beside a bar, so the timeline is laid out — measured — before it is
+        // drawn, as it is anywhere but at the root.
+        let list = HStack(alignment: .top, spacing: 0) {
+            TimelineView(StraddlingSchedule(clock: clock)) { timeline in
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(verbatim: "entry \(Int(timeline.date.timeIntervalSinceReferenceDate))")
+                    ForEach(0..<3, id: \.self) { index in
+                        Text(verbatim: "row \(index) at \(Int(timeline.date.timeIntervalSinceReferenceDate))")
+                    }
+                }
+            }
+            Text("|")
+        }
+        for _ in 0..<2 {
+            clock.beginFrame(straddling: false)
+            _ = render(list, tui: tui, context: context, scheduler: scheduler)
+        }
+        clock.beginFrame(straddling: true)
+        let lines = render(list, tui: tui, context: context, scheduler: scheduler).lines.map {
+            String($0.stripped.reversed().drop { $0 == " " }.reversed())
+        }
+        let entry = lines[0].dropFirst("entry ".count).prefix { $0.isNumber }
+        #expect(
+            Array(lines[1...3]) == (0..<3).map { "row \($0) at \(entry)" },
+            "the rows and the timeline drew different entries: \(lines.prefix(4))")
+    }
+
     /// What the fix declares, asked of the tracker: a timeline with an entry
     /// ahead reads the clock when it measures — either way it is measured — and
     /// says so; one that has run out of entries is finished changing, and stays
@@ -433,15 +522,24 @@ struct TimelineViewTests {
 /// and this turns "later" into "the other side".
 private final class StraddlingClock {
     let seconds: Double
-    /// Every date the schedule was handed, in order.
+    /// Whether this frame straddles the boundary; a frame that does not reads
+    /// `seconds` however late it asks.
+    private var straddles = true
+    /// Every date the schedule was handed this frame, in order.
     private(set) var handed: [Date] = []
 
     init(seconds: Double) { self.seconds = seconds }
 
+    /// A new frame: the next date handed over is its first.
+    func beginFrame(straddling: Bool) {
+        handed = []
+        straddles = straddling
+    }
+
     func entry(for date: Date) -> Date {
         let first = handed.first ?? date
         handed.append(date)
-        return Date(timeIntervalSinceReferenceDate: date > first ? seconds + 1 : seconds)
+        return Date(timeIntervalSinceReferenceDate: straddles && date > first ? seconds + 1 : seconds)
     }
 }
 
