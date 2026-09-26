@@ -4564,6 +4564,15 @@ before and after the focus report, and the Example's cursor row reversed at all
 and `ReplayedRunFieldTests` under the new oracle. Still open from the paragraph
 above: a persistent dim is neither recorded nor restated.
 
+**2026-09-26: a transition fades a run in a reversed row as the row draws it.**
+Over the terminal's unreported page, a transition's fade drops a glyph whose ink
+and field, as the cell displays them, are both that page, and clears the
+reversal with it. A spinner's frame in a reversed row carries no 7 of its own,
+so, faded alone, it kept its glyph while the line dropped it, and the tick drew
+it in the terminal's foreground between the transition's renders. A frame is now
+faded in the row's style, with a reversal's `39` kept as stated.
+`Opacity as composition.md` §101.1; `TransitionFadeRunTests`.
+
 **2026-09-26: a fade inside a reversed row is spent against the row.** A label
 faded below one half in a reversed row (a focused list's cursor row, or a menu's
 focused row, on a palette whose highlight has no RGB) was carried up past the

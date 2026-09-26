@@ -97,6 +97,13 @@ public struct SGRState: Sendable, Equatable {
             }
         }
 
+        /// `ESC[39m` held as an ink of its own — the terminal's, stated — where a
+        /// caller keeps what a painter stated beside what it nets. A reversal of the
+        /// terminal's own pair states `39`, and a pass that rewrites colours reads it
+        /// as the palette's ink, where an unsaid ink is the terminal's and left alone
+        /// (`AnimatedCellRun.groundStyle`).
+        package static let statedTerminalInk = Self.named(39)
+
         /// A colour from a complete parameter list — one named code, or the
         /// three- or five-element extended forms — or `nil` for anything else.
         init?(parameters: [String]) {

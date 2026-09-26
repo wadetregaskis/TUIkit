@@ -6720,3 +6720,43 @@ Limits:
 - A painter's style is assumed to be the same under every cell of a run — which it is for
   every painter the framework has. Where it is not, each cell takes the style under its own
   column, from a reset where an attribute has to go off (`GroundStyleRestatementTests`).
+
+### 101.1 A transition fades a run in a reversed row as the row draws it (2026-09-26)
+
+A transition's fade (`.transition(.opacity)`, `OpacityFade.fading`) rewrites the colours a view
+drew, and rewrites its runs the same way (`FrameBuffer.restyleRuns`): each frame, and both
+records. Over the terminal's unreported page, it also judges each cell by what the cell DISPLAYS.
+A glyph whose ink and field are both that page is dropped, and a reversal is cleared with it
+(§83, §91). So below one half, a reversed row (`ESC[7;<ink>;<field>m`, the row's) fades to the
+page, and its glyphs go.
+
+The rewrite took a run's frames alone. A spinner's frame in such a row carries no 7 of its own;
+the 7 is the row's. Judged alone, the frame was unreversed, on the terminal's own colours, which
+the fade never touches, so it kept its glyph. Meanwhile the ground, a reversed record, was faded
+and its reversal cleared. The tick (§101) restated that cleared style in front of the frame, and
+drew the glyph in the terminal's foreground where the render, judging the line with the row's 7
+in force, had dropped it. This was measured at the effect, with every frame of a two-cell probe in
+a list's cursor row and a menu's focused row replayed over the row drawn at every other, against
+renders at the same phase. At 0.25 and 0.4, on a `Color.default` page with RGB roles and on the
+terminal's own pair, frames 1 and 2 (no ink of their own, and a stated 49) replayed `'⠙' in the
+terminal's foreground on the terminal's background` where the render has a blank. That is 48
+cells, and it lasts until the transition's next render, two ticks at most.
+
+**The rule.** A pass that restyles a run restyles each frame as the row draws it: the painters'
+style (`AnimatedCellRun.groundStyle`) goes in front of the frame first (`String.restatingGroundStyle`),
+as §100 does for the blend, and the pass judges the cell as the line had it. On the terminal's own
+pair, the row states its ink as `39`, and a style netted into an `SGRState` holds `39` as no ink at
+all. On the terminal they are one colour. To the fade they are not: it fades a stated `39` as the
+palette's ink, and never touches an unstated one. So the style keeps a reversal's ink stated as
+`39` as that statement (`SGRState.Colour.statedTerminalInk`), and the frame is restyled in exactly
+what the line was. Composed without it, the terminal pair's trailing blank came back reversed on
+the terminal's foreground where the line faded to the page (60 cells, every one on that pair).
+
+What it leaves alone: a run whose painters restate a field and nothing more has no style, and is
+restyled byte for byte as before. So is every pass whose rewrite reads each sequence alone — a
+colour effect — since restating the style in front of a frame gives it the statements the line
+had. For the tick, an explicit `39` restated in front of a frame is the colour it was.
+
+`TransitionFadeRunTests` pins it: the probe in a list's cursor row and a menu's focused row, on
+the terminal's page and the terminal's own pair, at 0.25, 0.4, 0.6 and 0.75. Before, 48 replayed
+cells failed; composed without the stated ink, 60.

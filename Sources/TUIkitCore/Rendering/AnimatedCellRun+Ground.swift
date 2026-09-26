@@ -315,6 +315,15 @@ extension AnimatedCellRun {
     /// highlight has no RGB to breathe between — restates `ESC[7;<ink>;<field>m`,
     /// so a frame drawn in it is drawn reversed: this holds the 7 and the ink, and
     /// ``String/restatingGroundStyle(_:)`` draws a frame in them.
+    ///
+    /// A reversal the painters state in the terminal's own ink — `ESC[7;39…m`, a row
+    /// reversing the terminal's own pair — keeps that ink as they spelled it, stated
+    /// (``SGRState/Colour/statedTerminalInk``), where the state alone would net `39`
+    /// into no ink at all. On the terminal the two are one colour. To a pass that
+    /// rewrites colours they are not: `OpacityFade.fading` fades a stated `39` as the
+    /// palette's ink and never touches an unstated one. So a frame restyled in the
+    /// netted style came out on the terminal's foreground where the line the same pass
+    /// rewrote had faded to the page (`Opacity as composition.md` §101.1).
     package var groundStyle: [SGRState]? {
         // Asked before anything is built: nearly every run's painters restate a
         // field and nothing more, and a style list for such a run would be walked
@@ -324,12 +333,12 @@ extension AnimatedCellRun {
     }
 
     /// `record`'s style under each of `width` cells: its state with the background
-    /// taken off.
+    /// taken off, a reversal's ink stated as `39` kept as that statement.
     private static func style(of record: String, cells width: Int) -> [SGRState] {
         var style: [SGRState] = []
         style.reserveCapacity(max(0, width))
         // A page is only ever a field, so any page reads the same style.
-        walk(record, cells: width, onPage: "") { state in
+        walk(record, cells: width, onPage: "", keepingStatedInk: true) { state in
             var restated = state
             restated.setBackground(nil)
             style.append(restated)
@@ -386,8 +395,12 @@ extension AnimatedCellRun {
     /// under each of `width` cells — of which the field is one part — until it
     /// answers `false`. A short record's last state stands under the cells it does
     /// not reach.
+    ///
+    /// `keepingStatedInk` keeps a reversal's ink stated as `39` as that statement
+    /// (``SGRState/Colour/statedTerminalInk``): for the style, not the fields.
     private static func walk(
-        _ record: String, cells width: Int, onPage page: String, _ body: (SGRState) -> Bool
+        _ record: String, cells width: Int, onPage page: String, keepingStatedInk: Bool = false,
+        _ body: (SGRState) -> Bool
     ) {
         var onPage = SGRState()
         if !page.isEmpty { onPage.apply(page) }
@@ -398,6 +411,11 @@ extension AnimatedCellRun {
             switch segment {
             case .ansi(let sequence, isSGR: true):
                 state = SGRState.restating(onPage, after: sequence, in: state)
+                if keepingStatedInk, state.reversesVideo, state.foregroundColour == nil,
+                    SGRState.lastInkStatementIsTheTerminals(in: sequence)
+                {
+                    state.setForeground(SGRState.Colour.statedTerminalInk)
+                }
             case .ansi:
                 break
             case .visible(let character):
@@ -421,6 +439,31 @@ extension AnimatedCellRun {
 // MARK: - A painter's reset rule
 
 extension SGRState {
+    /// Whether the last thing `sequence` says about the ink is `39`, the terminal's
+    /// own: a later colour, or a reset, says otherwise.
+    static func lastInkStatementIsTheTerminals(in sequence: String) -> Bool {
+        guard sequence.hasPrefix("\u{1B}["), sequence.hasSuffix("m") else { return false }
+        let parameters = sequence.dropFirst(2).dropLast().split(separator: ";", omittingEmptySubsequences: false)
+        var terminals = false
+        var index = parameters.startIndex
+        while index < parameters.endIndex {
+            // An empty parameter is a 0, a reset.
+            let code = parameters[index].isEmpty ? 0 : Int(parameters[index]) ?? -1
+            switch code {
+            case 39: terminals = true
+            case 0, 30...37, 90...97: terminals = false
+            case 38, 48, 58:
+                // An extended colour's own parameters are not codes.
+                let kind = index + 1 < parameters.endIndex ? Int(parameters[index + 1]) : nil
+                if code == 38 { terminals = false }
+                index += kind == 5 ? 2 : kind == 2 ? 4 : 0
+            default: break
+            }
+            index += 1
+        }
+        return terminals
+    }
+
     /// `state` after `sequence`, with `restatement` put back at a reset the way a
     /// painter puts its own back — and the row builder the page.
     ///
@@ -479,11 +522,28 @@ extension FrameBuffer {
     /// ones the pass rewrote in the lines. A run's alpha rides through unchanged:
     /// such a pass leaves the lines' opacity regions standing too.
     ///
+    /// Each frame is restyled as the row draws it: in what its painters restated
+    /// beside the field (``AnimatedCellRun/groundStyle``: a row's reversal, a dim),
+    /// put in front of it first (``String/restatingGroundStyle(_:)``), as the line
+    /// the pass rewrote had them. A pass can judge a cell by the whole of its state:
+    /// a transition's fade over the terminal's unreported page drops a glyph whose
+    /// ink and field, as the cell DISPLAYS them, are both that page, and clears the
+    /// reversal with it (`OpacityFade.fading`). Restyled alone, a spinner's frame in
+    /// a reversed row was judged unreversed, on the terminal's own colours, which the
+    /// fade never touches, so it kept its glyph while the line, judged reversed,
+    /// dropped it; and the tick drew the glyph in the terminal's foreground over a
+    /// ground whose reversal the fade had cleared (`Opacity as composition.md`
+    /// §101.1). A frame that already states its painters' style comes back as it was
+    /// (§100), and a run whose painters restate a field and nothing more is restyled
+    /// exactly as before.
+    ///
     /// - Parameter restyle: The pass's rewrite of a line.
     package mutating func restyleRuns(_ restyle: (String) -> String) {
         guard !animatedCells.isEmpty else { return }
         animatedCells = animatedCells.map { run in
-            run.replacingFrames(run.frames.map(restyle), alpha: run.alpha).paintingGround(restyle)
+            let style = run.groundStyle
+            let frames = run.frames.map { restyle(style.map($0.restatingGroundStyle) ?? $0) }
+            return run.replacingFrames(frames, alpha: run.alpha).paintingGround(restyle)
         }
     }
 }
