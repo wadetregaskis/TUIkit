@@ -754,7 +754,16 @@ That walk is Ω(rows) per measure, and it is priced by who reads it:
   it is the order of the drawing, which builds, measures and renders each of
   those rows anyway. A walk that reaches every row claims a natural size, so
   the per-pass memo serves it to every later ask at the same width: one walk
-  per width per frame, not one per rung of the natural-extent ladder.
+  per width per frame, not one per rung of the natural-extent ladder — and, on
+  a view that scrolls only vertically, one width: an automatic scrollbar's
+  first round asks the other whether the content overflows, one line past the
+  viewport, where each walk stops a screenful in (`contentOverflowsCanvas`).
+  From the view's second render, that is: its first has no content height
+  recorded yet, so its first round climbs the ladder and walks every row at
+  the other width too (the forty groups below build 78,922 rows on their first
+  frame). A header over 2,000 rows builds 4,007 a frame after a write, the
+  walk and the drawing; the estimate built 3,017, and drew only the rows its
+  estimate had room for.
 - **Where it is not drawn** it is pure cost, and one shape pays it in full:
   nested stacks in the rows of an outer lazy stack. Below 256 rows the outer
   stack places its rows by measuring every one of them, so every row's nested
@@ -762,11 +771,14 @@ That walk is Ω(rows) per measure, and it is priced by who reads it:
   from a sixteen-row sample, and each sampled row's nested stack is walked to
   measure it. Forty rows each holding 300 rows, under a `@State` write above
   the scroll view every frame (so no memo survives): 4,402 rows built a frame
-  by the estimate, 27,122 by the walk — two walks of every nested stack, one
-  per scrollbar candidate width, and the drawn rows once more by their own
-  render. Where every row is one line the estimate was already exact, and that
-  cost buys nothing. `Stress --bench --scenario app-shapes --variant
-  grouped-feed` prices it (`grouped-feed-uniform` the one-line case,
+  by the estimate, 14,662 by the walk — one walk of every nested stack, at the
+  width the content is drawn at; a screenful of each at the full width, where
+  the scrollbar asks only whether the content overflows (27,122 when that
+  question was asked at the ladder's first rung, which walks every row); and
+  the drawn rows once more by their own render. Where every row is one line
+  the estimate was already exact, and that cost buys nothing. `Stress --bench
+  --scenario app-shapes --variant grouped-feed` prices it
+  (`grouped-feed-uniform` the one-line case,
   `--scale 8` the sampled outer stack, 320 sections); the commit that shipped
   this has the row counts. The sampled case has been a price for a correct
   drawing only since 1f5d063b: before it, a section taller than the viewport

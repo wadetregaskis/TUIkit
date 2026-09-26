@@ -405,18 +405,18 @@ struct NestedLazyStackReachTests {
     @Test("A nested stack is walked once per width a frame, not once per ask")
     func nestedStackIsWalkedOncePerWidth() {
         // A scroll view asks its content its height at several budgets a frame
-        // — each rung of the natural-extent ladder at each scrollbar
-        // candidate's width, then the outer stack's slot walk at the canvas it
-        // settled on — and a walk that stopped nowhere claims a natural size,
-        // so the per-pass memo serves the later asks at the same width: one
-        // walk per width. The two groups on screen are measured and drawn once
-        // more by their own render, which builds them afresh (a freshly built
-        // view is a new memo key), and each group's first eight rows answer the
-        // scroll view's ideal-size ask.
+        // — each rung of the natural-extent ladder at the width it draws at,
+        // then the outer stack's slot walk at the canvas it settled on — and a
+        // walk that stopped nowhere claims a natural size, so the per-pass memo
+        // serves the later asks at the same width: one walk per width. The two
+        // groups on screen are measured and drawn once more by their own
+        // render, which builds them afresh (a freshly built view is a new memo
+        // key), and a screenful of each group answers the scrollbar's first
+        // round (see the next test) and the scroll view's ideal-size ask.
         //
-        // Twenty groups, 6,190 rows: 13,762 built a frame with the claim. Without
-        // it 32,332 — this content is past the ladder's 4,096-line first rung,
-        // so each width took two rungs, and the slot walk a fifth walk.
+        // Twenty groups, 6,190 rows: 7,732 built a frame with the claim. Without
+        // it 20,112 — this content is past the ladder's 4,096-line first rung,
+        // so the width took two rungs, and the slot walk a third walk.
         let builds = RowBuilds()
         let groups = 20
         let app = HeadlessApp(
@@ -430,6 +430,38 @@ struct NestedLazyStackReachTests {
         let rows = (0..<groups).reduce(0) { $0 + 300 + $1 }
         #expect(visible(app).contains { $0.contains("g0 r0") }, "precondition: the first group is drawn")
         #expect(perFrame * 2 < 5 * rows, "an invalidated frame built \(perFrame) rows of \(rows)")
+    }
+
+    @Test("The scrollbar's first round asks a nested stack for a screenful, not for every row")
+    func scrollbarProbeDoesNotWalkEveryRow() {
+        // An automatic scrollbar is decided by measuring the content at the
+        // full width, and — when it overflows — again a column narrower, where
+        // the bar leaves it and the render draws it. The first measure only
+        // has to learn WHETHER the content is taller than the viewport, and it
+        // asks at the natural-extent ladder's first rung, 4,096 lines — where
+        // a nested stack walks every row it holds, at a width nothing is drawn
+        // at. For content the view has seen walk one it asks one line past the
+        // viewport instead, and each walk stops a screenful in.
+        //
+        // Twenty groups, 6,190 rows, on the frame after a write above the
+        // scroll view: 13,762 rows built with both widths walked. One line past
+        // the viewport, the frame is one whole walk, a screenful per group, and
+        // the two groups on screen drawn: 7,732.
+        let builds = RowBuilds()
+        let groups = 20
+        let app = HeadlessApp(
+            GroupsApp(groups: groups, tallAfterSixteen: false, builds: builds), width: 30, height: 10)
+        app.frame(atNanos: 0)
+        app.frame(atNanos: Self.frame)
+        let before = builds.count
+        app.send(KeyEvent(key: .character("t")))
+        app.frame(atNanos: 2 * Self.frame)
+        let perFrame = builds.count - before
+        let rows = (0..<groups).reduce(0) { $0 + 300 + $1 }
+        let screen = visible(app)
+        #expect(screen.contains { $0.contains("tick 1") }, "precondition: the write landed: \(screen)")
+        #expect(screen.contains { $0.contains("g0 r0") }, "precondition: the first group is drawn: \(screen)")
+        #expect(perFrame * 2 < 3 * rows, "an invalidated frame built \(perFrame) rows of \(rows)")
     }
 
     @Test(

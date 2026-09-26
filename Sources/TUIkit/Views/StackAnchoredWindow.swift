@@ -808,6 +808,12 @@ extension _VStackCore {
                     children, built: sampleChildren, proposal: sampleProposal,
                     heightLimit: heightLimit, context: measureContext)
             else { return nil }
+            // Tells the scroll view above that its content walks: see
+            // `RenderCache.nestedStackWalks`. Only once the walk has answered:
+            // a stack with a spacer falls back to the exact walk, which
+            // measures every row whatever budget it is offered, so a smaller
+            // budget would save it nothing.
+            context.renderCache?.nestedStackWalks &+= 1
             (counted, height) = (reached.counted, reached.height)
             // A whole-content width ask reads the budget to classify itself
             // (`contentWidthAsk`), so only the prefix answer may claim it.
@@ -908,10 +914,13 @@ extension _VStackCore {
     /// it is pure cost: a nested stack in a row of an outer lazy stack is
     /// measured whenever the outer stack places its rows, on screen or not.
     /// Forty such rows of 300 rows each, with a `@State` write above the scroll
-    /// view every frame, build 27,122 rows a frame where the estimate built
-    /// 4,402, each the same in three runs of the probe that counted it — see
-    /// "What ships" under §6b of `Documentation/Locating things without drawing
-    /// them.md`, which also says why a count of rows built can move.
+    /// view every frame, build 14,662 rows a frame where the estimate built
+    /// 4,402, each the same in three runs of the probe that counted it — one
+    /// walk of each at the width the content is drawn at, since the
+    /// scrollbar's first round asks the other width only a screenful
+    /// (`contentOverflowsCanvas`) — see "What ships" under §6b of
+    /// `Documentation/Locating things without drawing them.md`, which also
+    /// says why a count of rows built can move.
     private func reachedRows(
         _ children: ChildViewCollection, built: [ChildView], proposal: ProposedSize,
         heightLimit: Int, context: RenderContext

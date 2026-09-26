@@ -237,6 +237,26 @@ public final class ScrollViewHandler: PersistedFocusable, ScrollableOffsetState 
     /// with false precision. Re-synced every render pass.
     var contentHeightIsEstimate = false
 
+    /// Whether the measures that decide this view's bars have seen its content
+    /// walk a lazy stack nested in it — below a header, or in a row of an outer
+    /// lazy stack — rather than estimate it (`RenderCache.nestedStackWalks`).
+    /// Set by the first render whose scrollbar decision does, measuring or
+    /// drawn, and never cleared: a decision whose measures were served from a
+    /// memo walks nothing, and so cannot say the stack is gone. The scrollbar's
+    /// first round reads it to pick the budget it asks whether the content
+    /// overflows at (`resolveScrollbars`), never the answer.
+    ///
+    /// Nor would a run of decisions that walked nothing say it. A frame that
+    /// measures from scratch can find its nested stacks' sizes already in the
+    /// pass's memo, walked by an ask before the decision (this view's ideal
+    /// size), and a frame whose render is served whole makes no decision at
+    /// all. So content that stops holding such a stack keeps the smaller
+    /// budget and its two costs (`contentOverflowsCanvas`) — a tab view in it
+    /// asks for one frame more at each new viewport height, and content taller
+    /// than a screenful is measured once more for the question — with no walk
+    /// left to save.
+    var contentWalksNestedStacks = false
+
     /// A one-shot "seek to the very bottom" intent (End key, scrollbar
     /// bottom jump, `scrollToBottom()`). Against an ESTIMATED content
     /// height, assigning `maxOffset` once can strand the view short: the

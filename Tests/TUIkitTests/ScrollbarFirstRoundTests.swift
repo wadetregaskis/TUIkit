@@ -291,10 +291,13 @@ struct ScrollbarFirstRoundTests {
 /// among the viewport heights given — each asked in a context of its own, so
 /// that neither is served the other's answer. The content is laid out
 /// `contentWidth` wide, as the scrollbar's round asks it, in a context that
-/// offers `availableWidth`.
+/// offers `availableWidth`. With `oneLinePast`, the shortcut is asked one line
+/// past the viewport, and only its yeses are held to the ladder: a no there is
+/// never trusted, and the round measures the ladder after it.
 @MainActor
 private func disagreements(
-    _ name: String, _ content: some View, heights: [Int], contentWidth: Int, availableWidth: Int
+    _ name: String, _ content: some View, heights: [Int], contentWidth: Int, availableWidth: Int,
+    oneLinePast: Bool = false
 ) -> [String] {
     func context() -> RenderContext {
         var environment = EnvironmentValues()
@@ -309,12 +312,12 @@ private func disagreements(
     var found: [String] = []
     for height in heights {
         let shortcut = core.contentOverflowsCanvas(
-            contentWidth: contentWidth, viewportHeight: height, context: context())
+            contentWidth: contentWidth, viewportHeight: height, oneLinePast: oneLinePast, context: context())
         let ladder =
             core.contentExtents(
                 contentWidth: contentWidth, viewportHeight: height, horizontal: false, context: context()
             ).height > height
-        if shortcut != ladder {
+        if oneLinePast ? shortcut && !ladder : shortcut != ladder {
             found.append("\(name) at \(height): the shortcut said \(shortcut), the ladder \(ladder)")
         }
     }
@@ -323,14 +326,18 @@ private func disagreements(
 
 /// ``disagreements(_:_:heights:contentWidth:availableWidth:)`` for every content
 /// the agreement tests hold the shortcut to: rows, a padded and bordered
-/// column, lazy stacks direct and under a header, a wrapped paragraph alone
-/// and beside a mark in a row, a spacer, a filling frame, a colour, a nested
-/// scroll view, a list, a geometry reader, and content that picks its layout
-/// by the height it is offered.
+/// column, lazy stacks direct, under a header and in the rows of an outer one,
+/// a wrapped paragraph alone and beside a mark in a row, a spacer, a filling
+/// frame, a colour, a nested scroll view, a list, a geometry reader, and
+/// content that picks its layout by the height it is offered.
 @MainActor
-private func disagreementsOverEveryContent(heights: [Int], contentWidth: Int, availableWidth: Int) -> [String] {
+private func disagreementsOverEveryContent(
+    heights: [Int], contentWidth: Int, availableWidth: Int, oneLinePast: Bool = false
+) -> [String] {
     func ask(_ name: String, _ content: some View) -> [String] {
-        disagreements(name, content, heights: heights, contentWidth: contentWidth, availableWidth: availableWidth)
+        disagreements(
+            name, content, heights: heights, contentWidth: contentWidth, availableWidth: availableWidth,
+            oneLinePast: oneLinePast)
     }
     var found: [String] = []
     found += ask(
@@ -354,6 +361,18 @@ private func disagreementsOverEveryContent(heights: [Int], contentWidth: Int, av
             Text("header")
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(0..<300, id: \.self) { Text($0 < 16 ? "row \($0)" : "row \($0)\nmore") }
+            }
+        })
+    found += ask(
+        "three groups, each a header over a lazy stack of 300 rows, in an outer lazy stack",
+        LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(0..<3, id: \.self) { group in
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("group \(group)")
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(0..<300, id: \.self) { Text("g\(group) r\($0)") }
+                    }
+                }
             }
         })
     found += ask("a wrapped paragraph", Text(String(repeating: "words that wrap ", count: 18)))
@@ -398,7 +417,9 @@ private func disagreementsOverEveryContent(heights: [Int], contentWidth: Int, av
 struct ScrollbarShortcutAgreementTests {
     /// Around each content's own height, where an off-by-one would show: a
     /// viewport a line short of it, exactly it, and a line more.
-    private static let heights = [0, 1, 4, 9, 10, 11, 19, 20, 21, 29, 30, 31, 299, 300, 301, 449, 450, 451]
+    private static let heights = [
+        0, 1, 4, 9, 10, 11, 19, 20, 21, 29, 30, 31, 299, 300, 301, 449, 450, 451, 902, 903, 904,
+    ]
 
     /// The shortcut is the ladder's first rung, not climbed. Where that rung
     /// does not fill its budget the ladder ends on it, so the two cannot
@@ -423,6 +444,20 @@ struct ScrollbarShortcutAgreementTests {
     @Test("The shortcut says what the ladder says at a viewport no column wide")
     func shortcutAgreesWithTheLadderAtNoWidth() {
         let found = disagreementsOverEveryContent(heights: Self.heights, contentWidth: 1, availableWidth: 0)
+        #expect(found.isEmpty, "\(found.count) disagreements:\n\(found.joined(separator: "\n"))")
+    }
+
+    /// For content it has seen walk a nested lazy stack, the round asks one
+    /// line past the viewport, where each such stack stops a screenful in
+    /// rather than walking every row it holds. A yes there reserves the bar
+    /// with no ladder after it, so every yes must be the ladder's; a no is
+    /// followed by the ladder, which decides, so a no may differ — and does,
+    /// for content that picks a shorter layout when it is offered less.
+    @Test("One line past the viewport, every yes the shortcut says is the ladder's", arguments: [false, true])
+    func oneLinePastSaysOnlyTheLaddersYes(noColumn: Bool) {
+        let found = disagreementsOverEveryContent(
+            heights: Self.heights, contentWidth: noColumn ? 1 : 30, availableWidth: noColumn ? 0 : 30,
+            oneLinePast: true)
         #expect(found.isEmpty, "\(found.count) disagreements:\n\(found.joined(separator: "\n"))")
     }
 }

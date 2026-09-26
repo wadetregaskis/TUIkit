@@ -675,10 +675,17 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         settled: (width: Int, height: Int)?
     ) {
         let textLines = TextIndicatorLines(context.environment)
+        // Read around the measures that decide the bars, which are the ones the
+        // hint is for: see `ScrollViewHandler.contentWalksNestedStacks`.
+        let nestedWalksBefore = context.renderCache?.nestedStackWalks
         let bars = resolveScrollbars(
             viewportWidth: viewportWidth, viewportHeight: viewportHeight,
             horizontal: wantsHorizontal, textLines: textLines,
-            lastContentHeight: handler.contentHeight, context: context)
+            lastContentHeight: handler.contentHeight,
+            contentWalksNestedStacks: handler.contentWalksNestedStacks, context: context)
+        if let nestedWalksBefore, context.renderCache?.nestedStackWalks != nestedWalksBefore {
+            handler.contentWalksNestedStacks = true
+        }
         // Fitted to the viewport BEFORE the reservation takes anything out of
         // it. The floor used to be applied afterwards, at the draw site, to the
         // content window, which under `.visible` the reservation had already made
@@ -920,10 +927,14 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     /// of eight past 4,096 lines. So on a view that scrolls only vertically, a
     /// round that can only ADD the vertical bar asks first whether the content
     /// overflows at all, at the ladder's first rung and no further
-    /// (``contentOverflowsCanvas(contentWidth:viewportHeight:context:)``): a
+    /// (``contentOverflowsCanvas(contentWidth:viewportHeight:oneLinePast:context:)``): a
     /// yes reserves the bar and moves on; a no measures the ladder as before,
-    /// and its answer decides. Not on a view that also scrolls horizontally,
-    /// whose horizontal bar reads the round's measured WIDTH. And only when the
+    /// and its answer decides. For content this view has seen walk a nested
+    /// lazy stack (`contentWalksNestedStacks`) it asks one line past the
+    /// viewport instead: at the rung each such stack walks every row it
+    /// holds, and there each stops a screenful in (see
+    /// `contentOverflowsCanvas`). Not on a view that also scrolls
+    /// horizontally, whose horizontal bar reads the round's measured WIDTH. And only when the
     /// content overflowed as the handler last recorded it (`lastContentHeight`)
     /// — at the latest render of this view. That is the previous frame's last
     /// draw, unless another render of this view came after that draw: a
@@ -952,13 +963,21 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     ///   too — and then it is that render's. It decides which question the
     ///   first round asks first, never the answer; `0`, the default and what
     ///   the ideal-size ask passes, never asks the shortcut.
+    /// - Parameter contentWalksNestedStacks:
+    ///   ``ScrollViewHandler/contentWalksNestedStacks``: whether the measures
+    ///   that decided this view's bars have seen its content walk a lazy stack
+    ///   nested in it. It
+    ///   picks the budget the shortcut asks at — one line past the viewport
+    ///   rather than the ladder's first rung — never the answer, which a yes
+    ///   at either budget decides and a no at either leaves to the ladder.
     ///
     /// Internal rather than private for ``idealSize(proposal:context:)``,
     /// which asks a horizontally scrolling view the same question on the
     /// measure side.
     func resolveScrollbars(
         viewportWidth: Int, viewportHeight: Int, horizontal: Bool,
-        textLines: TextIndicatorLines, lastContentHeight: Int = 0, context: RenderContext
+        textLines: TextIndicatorLines, lastContentHeight: Int = 0,
+        contentWalksNestedStacks: Bool = false, context: RenderContext
     ) -> (vertical: Bool, horizontal: Bool, settled: (width: Int, height: Int)?) {
         let verticalPolicy = context.environment.verticalScrollIndicatorVisibility
         let horizontalPolicy = context.environment.horizontalScrollIndicatorVisibility
@@ -998,7 +1017,8 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             // question can be a second measure.
             if measuresVertical, !wantsScrollbar, !horizontal, lastContentHeight > probeHeight,
                 contentOverflowsCanvas(
-                    contentWidth: probeWidth, viewportHeight: probeHeight, context: context)
+                    contentWidth: probeWidth, viewportHeight: probeHeight,
+                    oneLinePast: contentWalksNestedStacks, context: context)
             {
                 wantsScrollbar = true
                 continue

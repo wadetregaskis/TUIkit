@@ -480,6 +480,18 @@ public final class RenderCache: @unchecked Sendable {
     /// own answers. Counted on the probe's path only.
     package internal(set) var measuresBeneathProbes = 0
 
+    /// How many measures of a lazy stack NESTED in a scroll view's content —
+    /// below a header, or in a row of an outer lazy stack — have walked the
+    /// rows their budget reaches rather than estimating them, over every pass.
+    /// Only ever compared as a delta: a `ScrollView` reads it around the
+    /// measures that decide its scrollbars, to learn whether its content holds
+    /// such a stack, which decides the budget its scrollbar's first round asks
+    /// at (`resolveScrollbars`).
+    /// Counted on that walk's path only, which is Ω(rows) already, and only
+    /// once the walk has answered: a stack that falls back to the exact walk
+    /// is walked whole at any budget.
+    package var nestedStackWalks = 0
+
     /// The width-traits generation this cache's contents were measured under.
     ///
     /// The claim is part of what a measurement means, so memos taken under one

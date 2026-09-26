@@ -93,10 +93,11 @@ extension _ScrollViewCore {
     /// Whether the content, laid out at `contentWidth` on the canvas
     /// ``contentExtents(contentWidth:viewportHeight:horizontal:context:)``
     /// measures a vertical view's content on, is taller than `viewportHeight` —
-    /// asked at the natural-extent ladder's first rung, and not climbed past it.
+    /// asked at the natural-extent ladder's first rung, and not climbed past it;
+    /// or, `oneLinePast`, one line past the viewport (below).
     ///
     /// The question the scrollbar's first round asks, and all it needs to: see
-    /// ``resolveScrollbars(viewportWidth:viewportHeight:horizontal:textLines:lastContentHeight:context:)``.
+    /// ``resolveScrollbars(viewportWidth:viewportHeight:horizontal:textLines:lastContentHeight:contentWalksNestedStacks:context:)``.
     /// The climb is what made the round dear. A lazy stack past the windowing
     /// threshold reports its estimate clamped to the budget it is offered, and a
     /// clamp says nothing about what lies past it, so the ladder climbs by eight
@@ -125,20 +126,44 @@ extension _ScrollViewCore {
     /// reaches (`anchoredSizeThatFits`), so at the first rung it walks every row
     /// it holds, at a width nothing is drawn at: a whole walk more a frame, and
     /// for lazy stacks in the rows of an outer one, nearly half the frame (forty
-    /// groups of 300 rows: 27,122 rows built on the frame after a write, of
-    /// which one walk, 12,780, is this question's).
-    func contentOverflowsCanvas(contentWidth: Int, viewportHeight: Int, context: RenderContext) -> Bool {
+    /// groups of 300 rows: 27,122 rows built on the frame after a write, against
+    /// 14,662 one line past the viewport). So for content the view has seen
+    /// walk one (`ScrollViewHandler.contentWalksNestedStacks`) the caller asks
+    /// `oneLinePast` instead, and each nested walk stops a screenful in. A yes
+    /// there is the ladder's yes for content whose height does not shrink as its
+    /// budget grows — the assumption
+    /// ``contentOverflowsVertically(viewportHeight:reported:context:)``, the
+    /// ideal size's twin, already makes, with the same exception,
+    /// `ViewThatFits(in: .vertical)` — and a no is not trusted, as at the rung.
+    ///
+    /// The smaller budget brings back the two costs the rung avoids, neither
+    /// of which changes an answer. A tab view in such content files its size
+    /// at the smaller budget and asks for one frame more — once for each
+    /// viewport height the view is first laid out at, not once overall (a
+    /// probe: one subtree clear on the second frame at each new height, none
+    /// with the rung; switching tabs cost nothing more). And a
+    /// natural size the pass already holds for the content at this width can
+    /// serve the question only if it fits one line past the viewport, so
+    /// taller content is measured once more for it. The hint is never cleared
+    /// (see there), so content that has stopped walking a nested stack keeps
+    /// paying both, for no walk saved.
+    func contentOverflowsCanvas(
+        contentWidth: Int, viewportHeight: Int, oneLinePast: Bool = false, context: RenderContext
+    ) -> Bool {
         // The ladder's first rung, as `contentExtents` and then
         // `measureNaturalExtent` ask it of a vertical view's content: the same
-        // canvas, no ideal-width mark, the width stated, the starting budget.
-        // The stated width is the context's own but for a view no column
-        // wide, whose first round still asks at one.
+        // canvas, no ideal-width mark, the width stated, the starting budget —
+        // or one line past the viewport. The stated width is the context's
+        // own but for a view no column wide, whose first round still asks at
+        // one.
         var probe = contentCanvasContext(
             contentWidth: contentWidth, viewportHeight: viewportHeight, horizontal: false,
             context: context
         ).askingIdealWidth(false)
         probe.availableWidth = contentWidth
-        probe.availableHeight = naturalExtentStartingBudget(forVisible: viewportHeight)
+        probe.availableHeight =
+            oneLinePast && viewportHeight < Int.max
+            ? viewportHeight + 1 : naturalExtentStartingBudget(forVisible: viewportHeight)
         return measureChild(
             content, proposal: ProposedSize(width: contentWidth, height: nil), context: probe
         ).height > viewportHeight
