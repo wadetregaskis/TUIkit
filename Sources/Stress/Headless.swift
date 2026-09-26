@@ -5,6 +5,7 @@
 //  License: MIT
 
 import Dispatch
+import Foundation
 import TUIkit
 import TUIkitCore
 
@@ -120,6 +121,17 @@ enum Headless {
             identity: ViewIdentity(rootType: BenchRoot.self))
     }
 
+    /// Stamps the frame's one wall-clock date on `context`'s render cache, as
+    /// `RenderLoop` and `ViewRenderer` stamp theirs, so a `TimelineView` in a
+    /// scenario resolves its schedule once a walk, not once a read: left
+    /// unstamped, it read `Date()` in the measure and again in the render, and
+    /// a walk that began just short of an entry boundary laid out one entry and
+    /// drew the next (`RenderCache.frameDate`).
+    @MainActor
+    private static func stampFrameDate(_ context: RenderContext) {
+        context.environment.renderCache?.frameDate = Date()
+    }
+
     /// The type the bench's identity tree is rooted at — a stand-in for the
     /// `App` type `RenderLoop` roots a real tree at.
     private enum BenchRoot {}
@@ -177,12 +189,14 @@ enum Headless {
             channels.beginWalk()
             context.environment.stateStorage?.beginRenderPass()
             context.environment.renderCache?.beginRenderPass()
+            stampFrameDate(context)
             _ = renderToBuffer(view, context: context)
             context.environment.stateStorage?.endRenderPass()
             context.environment.renderCache?.removeInactive()
             channels.beginWalk()
             context.environment.stateStorage?.beginRenderPass()
             context.environment.renderCache?.beginRenderPass()
+            stampFrameDate(context)
             let buffer = renderToBuffer(view, context: context)
             context.environment.stateStorage?.endRenderPass()
             let staleServes = context.environment.renderCache?.renderMemoMismatches ?? []
@@ -302,6 +316,7 @@ enum Headless {
         // Warm up (build lazy state, prime caches) outside the timed region.
         let channels = HeadlessInputChannels()
         var warm = makeContext(cols: cols, rows: rows, channels: channels)
+        stampFrameDate(warm)
         _ = renderToBuffer(view, context: warm)
 
         var checksum = 0
@@ -347,6 +362,7 @@ enum Headless {
             channels.beginWalk()
             warm.stateStorage?.beginRenderPass()
             warm.renderCache?.beginRenderPass()
+            stampFrameDate(warm)
             let buffer = renderToBuffer(view, context: warm)
             warm.stateStorage?.endRenderPass()
             warm.renderCache?.removeInactive()

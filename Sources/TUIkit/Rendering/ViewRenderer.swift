@@ -119,6 +119,10 @@ extension ViewRenderer {
         context.stateStorage.beginRenderPass()
         context.lifecycle.beginRenderPass()
         context.renderCache.beginRenderPass()
+        // One wall-clock date for the snapshot's measure and render alike, as
+        // the loop stamps one per frame: a timeline measured for one entry and
+        // drawn for the next is laid out for the wrong text.
+        context.renderCache.frameDate = FrameClock.nowDate
 
         let renderContext = RenderContext(
             availableWidth: size.width,

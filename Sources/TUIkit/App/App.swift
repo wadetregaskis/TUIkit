@@ -538,7 +538,10 @@ extension AppRunner {
         scheduler: AnimationScheduler
     ) -> FramePacer.Frame {
         scheduler.beginFrame()
+        // The two clocks read together, so a wake counted from the wall clock
+        // lands where it was counted to on the monotonic one.
         let frameNow = FrameClock.nowNanos
+        let frameDate = FrameClock.nowDate
         // Before the breath is read below, so the phase it passes and every clock
         // read inside the frame are this frame's instant — see `CursorTimer.observe`.
         cursorTimer.observe(nowNanos: UInt64(bitPattern: frameNow))
@@ -546,7 +549,8 @@ extension AppRunner {
             pulsePhase: cursorTimer.breathPhase,
             cursorTimer: cursorTimer,
             animationScheduler: scheduler,
-            frameNowNanos: frameNow)
+            frameNowNanos: frameNow,
+            frameDate: frameDate)
         scheduler.endFrame()
         // Demand-driven animation clock: kept ticking only while a frame
         // actually consumed it, so a static screen drives no further frames.
@@ -582,9 +586,11 @@ extension AppRunner {
     /// does it: one reading, observed before the breath is read.
     fileprivate func renderOutsidePacer(renderer: RenderLoop<A>, cursorTimer: CursorTimer) {
         let frameNow = FrameClock.nowNanos
+        let frameDate = FrameClock.nowDate
         cursorTimer.observe(nowNanos: UInt64(bitPattern: frameNow))
         renderer.render(
-            pulsePhase: cursorTimer.breathPhase, cursorTimer: cursorTimer, frameNowNanos: frameNow)
+            pulsePhase: cursorTimer.breathPhase, cursorTimer: cursorTimer, frameNowNanos: frameNow,
+            frameDate: frameDate)
     }
 
     /// Reads and dispatches every terminal event currently pending (up to a

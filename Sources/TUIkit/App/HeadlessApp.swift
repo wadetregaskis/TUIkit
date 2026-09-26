@@ -8,6 +8,8 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
+
 // MARK: - Headless App
 
 /// An app assembled the way `AppRunner` assembles one — `RenderLoop`, the
@@ -84,11 +86,14 @@ package final class HeadlessApp<A: App> {
         tuiContext.synthesizeKeyEvent = { _ = inputHandler.handle($0) }
     }
 
-    /// Renders one frame at `nanos` on the monotonic clock's scale.
-    package func frame(atNanos nanos: Int64) {
+    /// Renders one frame at `nanos` on the monotonic clock's scale, and at
+    /// `date` on the wall clock — the date a `TimelineView` resolves its
+    /// schedule against. The wall clock now unless given, since a script that
+    /// holds no timeline has no use for one of its own.
+    package func frame(atNanos nanos: Int64, date: Date = FrameClock.nowDate) {
         if clearsRenderCacheEachFrame { tuiContext.renderCache.clearAll() }
         animationScheduler.beginFrame()
-        renderer.render(animationScheduler: animationScheduler, frameNowNanos: nanos)
+        renderer.render(animationScheduler: animationScheduler, frameNowNanos: nanos, frameDate: date)
         animationScheduler.endFrame()
     }
 

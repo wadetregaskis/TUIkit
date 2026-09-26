@@ -587,6 +587,26 @@ public final class RenderCache: @unchecked Sendable {
     /// and a harness that opens passes without it never set one.
     package var frameInstant: AnimationInstant?
 
+    /// The wall clock at the frame being drawn: the one `now` every walk of the
+    /// pass resolves a `TimelineView`'s schedule against, stamped by `RenderLoop`
+    /// at the same moment as the frame's monotonic `frameNowNanos`.
+    ///
+    /// One date a frame, not one a read. The measure and the render each read
+    /// the clock for themselves, microseconds apart, and a frame that began just
+    /// before an entry boundary measured the entry before it and drew the one
+    /// after it: a timer laid out for "9s" drew "10s" into two cells, "1…". And
+    /// a timeline notes its entry once a pass (`noteAppliedEnvironment` answers
+    /// the later walks without comparing), so the walk that saw the new entry
+    /// was not the one that cleared what the old one drew.
+    ///
+    /// Here rather than beside `frameNowNanos` in the environment's
+    /// `AnimationFrame`, which is 17 bytes and fits an existential's inline
+    /// buffer: a `Date` would make it 32, and box the one value every frame of
+    /// every app publishes. Set with `frameInstant`, and like it not cleared by
+    /// ``beginRenderPass()``; `nil` where nothing stamps frames (a bare test
+    /// context), and a timeline then reads the clock as it always did.
+    package var frameDate: Date?
+
     /// Reports `@State` written mid-walk, when `TUIKIT_DIAGNOSE_BODY_MUTATION=1`
     /// asked for it. `nil` otherwise, which is the whole of its cost.
     public var bodyMutationDiagnostic: BodyMutationDiagnostic? =

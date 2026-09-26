@@ -11,6 +11,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import TUIkit
 
 // MARK: - A session
@@ -125,6 +126,19 @@ final class DrivenSession {
     /// of work done, not of time, so a run tells the same story on a busy machine.
     let cacheCounts: () -> (stats: RenderCache.Stats, rows: RenderCache.RowWork)
 
+    /// The wall-clock date a frame at `nanos` is stamped with: a fixed epoch
+    /// plus the frame's own instant, so it moves in the frame's steps.
+    ///
+    /// Not each app's own clock. The warm twin and the cold one each read
+    /// `Date()` for themselves, microseconds apart, so a `TimelineView` entry
+    /// boundary could fall between them and the oracle would report the
+    /// difference as a stale serve; and a real date moves in real time while
+    /// the instant moves in sixtieths, so a timeline's wake — counted from the
+    /// date and added to the instant — mixed the two clocks.
+    static func date(atNanos nanos: Int64) -> Date {
+        Date(timeIntervalSinceReferenceDate: 800_000_000 + Double(nanos) / 1_000_000_000)
+    }
+
     /// Plays `session` against its own ``HeadlessApp`` of `width` × `height`
     /// cells, clearing its render cache before every frame when `cold`.
     init<S: StressSession>(_ session: S, width: Int, height: Int, cold: Bool) {
@@ -137,7 +151,7 @@ final class DrivenSession {
         send = { app.send($0) }
         sendMouse = { app.send($0) }
         resize = { app.resize(width: $0, height: $1) }
-        frame = { app.frame(atNanos: $0) }
+        frame = { app.frame(atNanos: $0, date: Self.date(atNanos: $0)) }
         screen = { app.screen }
         bytesWritten = { app.bytesWritten }
         check = { session.check($0, after: $1) }

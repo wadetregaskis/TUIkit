@@ -20,6 +20,12 @@ import Foundation
 /// The default is the clock now, and the frame pacer reads the same one.
 enum FrameClock {
     static var nowNanos: Int64 { Int64(bitPattern: MonotonicClock.nowNanoseconds) }
+
+    /// The wall clock, read beside ``nowNanos`` wherever a frame is stamped: the
+    /// one date a `TimelineView` resolves its schedule against in every walk of
+    /// the frame, and the one its wake is counted from. See
+    /// `RenderCache.frameDate`.
+    static var nowDate: Date { Date() }
 }
 
 /// ANSI background codes for each render surface in a frame.
@@ -386,12 +392,16 @@ extension RenderLoop {
     ///     instant a wake declared this frame is measured from, and the same `now`
     ///     the run loop computes the next animation deadline after, so the two
     ///     agree exactly.
+    ///   - frameDate: The wall clock at the same moment, read beside
+    ///     `frameNowNanos`: the one date every walk of the frame resolves a
+    ///     `TimelineView`'s schedule against. See `RenderCache.frameDate`.
     @discardableResult
     func render(
         pulsePhase: Double = 0,
         cursorTimer: CursorTimer? = nil,
         animationScheduler: AnimationScheduler? = nil,
-        frameNowNanos: Int64 = FrameClock.nowNanos
+        frameNowNanos: Int64 = FrameClock.nowNanos,
+        frameDate: Date = FrameClock.nowDate
     ) -> RenderActivity {
         // This frame's instant, before anything reads a phase from the clock. The run
         // loop has already shown it; a render called any other way has not.
@@ -438,7 +448,7 @@ extension RenderLoop {
         var environment = buildEnvironment()
         publishAnimationValues(
             into: &environment, pulsePhase: pulsePhase, cursorTimer: cursorTimer,
-            animationScheduler: animationScheduler, frameNowNanos: frameNowNanos)
+            animationScheduler: animationScheduler, frameNowNanos: frameNowNanos, frameDate: frameDate)
         // Install a fresh volatile-read tracker at the render root so that, after
         // the frame, we can tell whether anything actually consumed the pulse
         // clock (the row memo reuses this same tracker further down). Likewise
@@ -1174,13 +1184,16 @@ extension RenderLoop {
     ///
     /// `frameNowNanos` is the instant a wake declared this frame is measured from,
     /// and the one the loop asks for the next firing after, so the two agree
-    /// exactly rather than by a clock read apart.
+    /// exactly rather than by a clock read apart. `frameDate` is the wall clock
+    /// read beside it, for the same reason: a timeline's wake is the distance
+    /// from this date to its next entry, counted from `frameNowNanos`.
     private func publishAnimationValues(
         into environment: inout EnvironmentValues,
         pulsePhase: Double,
         cursorTimer: CursorTimer?,
         animationScheduler: AnimationScheduler?,
-        frameNowNanos: Int64
+        frameNowNanos: Int64,
+        frameDate: Date
     ) {
         environment.pulsePhase = pulsePhase
         environment.cursorTimer = cursorTimer
@@ -1210,6 +1223,10 @@ extension RenderLoop {
         tuiContext.renderCache.frameInstant = AnimationInstant(
             content: Double(frameNowNanos) / 1_000_000_000,
             cursor: cursorTimer?.elapsed(for: .cursor) ?? 0)
+        // And the wall clock at that instant, the one date every walk of this
+        // frame resolves a timeline's schedule against — see
+        // `RenderCache.frameDate`.
+        tuiContext.renderCache.frameDate = frameDate
         // Consumed, not merely read, so it applies to exactly one pass: the one
         // that first shows the change. A frame that renders for some other
         // reason must not restart animations that already began.

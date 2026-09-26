@@ -157,7 +157,11 @@ TimelineView(.everyMinute) { context in
 The date the content receives is the schedule's **entry**, not the instant of
 the render. With ``TimelineSchedule/everyMinute`` it is the top of the current
 minute however late in that minute the frame lands, so a clock never shows a
-time that disagrees with the boundary it was drawn for.
+time that disagrees with the boundary it was drawn for. And it is one entry for
+the whole frame: the schedule is resolved against the frame's own date, read
+once when the frame begins, so the pass that lays the content out and the pass
+that draws it never land either side of a boundary — a timer is not measured
+for "9s" and drawn as "10s".
 
 The cost model is the one this article keeps coming back to. A timeline is not a
 poll: each frame it declares exactly one wake — the next entry — and the run

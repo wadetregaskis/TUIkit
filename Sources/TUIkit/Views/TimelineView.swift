@@ -131,15 +131,30 @@ private struct _TimelineViewCore<Schedule: TimelineSchedule, Content: View>: Vie
         return (TimelineViewDefaultContext(date: entry, cadence: .live), next)
     }
 
+    /// The instant the schedule is resolved against: the FRAME's wall clock,
+    /// stamped once beside its monotonic `frameNowNanos` (`RenderCache.frameDate`),
+    /// and the clock itself only where nothing stamps frames.
+    ///
+    /// Not the clock at each read. The measure and the render each read it for
+    /// themselves, and a frame that began just before an entry boundary measured
+    /// the entry before it and drew the one after it: a timer laid out for "9s"
+    /// drew "10s" into its two cells, "1…". And the wake was counted from the
+    /// render's read but added to the frame's instant, so it fired early by
+    /// however far into the frame the render had got, and the next frame began
+    /// just short of the boundary it was woken for — ready to straddle it again.
+    private func frameDate(_ context: RenderContext) -> Date {
+        context.renderCache?.frameDate ?? Date()
+    }
+
     /// The timeline is exactly its content, flexibility included — forwarded
     /// rather than measured by rendering, so a flexible child stays flexible.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let (timeline, _) = timelineContext(now: Date())
+        let (timeline, _) = timelineContext(now: frameDate(context))
         return measureChild(content(timeline), proposal: proposal, context: context)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        let now = Date()
+        let now = frameDate(context)
         let (timeline, next) = timelineContext(now: now)
         if let next {
             // One wake, for the next entry only. The frame it produces declares
@@ -151,7 +166,7 @@ private struct _TimelineViewCore<Schedule: TimelineSchedule, Content: View>: Vie
                 // dates the app chose, so it wakes where the next frame of its
                 // lattice begins, as every other animation of whole ticks does,
                 // rather than a sixtieth after whenever this render landed. The
-                // content still saw this render's own date.
+                // content still saw the frame's own date.
                 context.requestWake(
                     token: token,
                     atNanos: AnimationClock.nanoseconds(

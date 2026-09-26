@@ -37,12 +37,15 @@ struct TimelineViewTests {
         )
     }
 
+    /// One frame, fenced as the loop fences it — its wall-clock date stamped
+    /// once, beside its monotonic instant, as `RenderLoop` stamps it.
     private func render(
         _ view: some View, tui: TUIContext, context: RenderContext, scheduler: AnimationScheduler
     ) -> FrameBuffer {
         tui.mouseEventDispatcher.beginRenderPass()
         tui.stateStorage.beginRenderPass()
         tui.renderCache.beginRenderPass()
+        tui.renderCache.frameDate = Date()
         context.environment.focusManager?.beginRenderPass()
         scheduler.beginFrame()
         let buffer = renderToBuffer(view, context: context)
@@ -290,5 +293,93 @@ struct TimelineViewTests {
         // And it renders at the width its flexibility asked for.
         let buffer = render(flexible, tui: tui, context: context, scheduler: scheduler)
         #expect(buffer.width == 40)
+    }
+
+    // MARK: - One date a frame
+
+    /// A timer beside a bar, whose clock crosses a second between two reads.
+    private func straddledTimer(_ clock: StraddlingClock) -> some View {
+        HStack(spacing: 0) {
+            TimelineView(StraddlingSchedule(clock: clock)) { timeline in
+                Text(verbatim: "\(Int(timeline.date.timeIntervalSinceReferenceDate))s")
+            }
+            Text("|")
+        }
+    }
+
+    /// The measure and the render each read the clock, a walk apart, so a frame
+    /// that began just short of an entry boundary measured the entry before it
+    /// and drew the one after it: a timer laid out for "9s" drew "10s" into its
+    /// two cells. Nothing memoized — the frame disagreed with itself.
+    @Test("A frame lays its timeline out for the entry it draws, however the clock moves between its walks")
+    func oneEntryPerFrame() {
+        let (tui, context, scheduler) = harness()
+        let clock = StraddlingClock(seconds: 9)
+        let line = render(straddledTimer(clock), tui: tui, context: context, scheduler: scheduler)
+            .lines[0].stripped
+        #expect(line == "9s|", "measured for one entry and drawn for another")
+        #expect(Set(clock.handed).count == 1, "the schedule was asked about \(Set(clock.handed).count) instants in one frame")
+    }
+
+    /// The loop stamps the frame's date beside its monotonic instant, and the
+    /// wake is the distance from that date to the next entry, counted from that
+    /// instant — so it lands on the entry. Counted from a second read of the
+    /// clock, taken however far into the frame the render had got, it fired
+    /// that much early, and the frame it woke began short of the boundary.
+    @Test("The loop resolves a timeline against the frame's date, and wakes it exactly at the next entry")
+    func wakeIsCountedFromTheFrameDate() {
+        let harness = RenderLoopHarness()
+        let loop = harness.loop(WakeApp())
+        let scheduler = AnimationScheduler()
+        let nanos = 5 * second
+        scheduler.beginFrame()
+        loop.render(animationScheduler: scheduler, frameNowNanos: nanos, frameDate: WakeApp.date)
+        scheduler.endFrame()
+        #expect(scheduler.nextFiring(after: nanos) == nanos + second, "the wake missed the entry it was counted to")
+    }
+}
+
+// MARK: - A clock that crosses a boundary mid-frame
+
+/// A clock whose entry boundary falls between two reads of it in one frame:
+/// handed the first date it sees, it is at entry `seconds`; handed any LATER
+/// date, it has crossed into the next second.
+///
+/// What the real clock does to a frame that begins just short of a boundary,
+/// made certain: two reads of the clock a walk apart are two different dates,
+/// and this turns "later" into "the other side".
+private final class StraddlingClock {
+    let seconds: Double
+    /// Every date the schedule was handed, in order.
+    private(set) var handed: [Date] = []
+
+    init(seconds: Double) { self.seconds = seconds }
+
+    func entry(for date: Date) -> Date {
+        let first = handed.first ?? date
+        handed.append(date)
+        return Date(timeIntervalSinceReferenceDate: date > first ? seconds + 1 : seconds)
+    }
+}
+
+/// A schedule over a ``StraddlingClock``, with one entry always ahead.
+private struct StraddlingSchedule: TimelineSchedule {
+    let clock: StraddlingClock
+
+    func entries(from startDate: Date, mode: TimelineScheduleMode) -> [Date] {
+        [clock.entry(for: startDate), .distantFuture]
+    }
+}
+
+/// A timeline whose next entry is one second after the frame date it is drawn at.
+private struct WakeApp: App {
+    static let date = Date(timeIntervalSinceReferenceDate: 800_000_000)
+
+    var body: some Scene {
+        WindowGroup {
+            TimelineView(.explicit([Self.date.addingTimeInterval(-5), Self.date.addingTimeInterval(1)])) { _ in
+                Text("tick")
+            }
+        }
     }
 }
