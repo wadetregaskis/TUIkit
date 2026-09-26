@@ -355,6 +355,9 @@ final class TUIContext: @unchecked Sendable {
         // And the cache at the dispatcher's interned handler ids: a stored
         // buffer carries them in its regions, so the two prune together.
         self.renderCache.internedIDTable = self.mouseEventDispatcher
+        // And the drag session at the cache, so a view lifted out of its place
+        // — or landing back in it — is not served as it was stored.
+        self.dragAndDropSession.renderInvalidation = self.renderCache
     }
 
     /// Creates a new TUI context with the given services.
@@ -389,6 +392,8 @@ final class TUIContext: @unchecked Sendable {
         self.stateStorage.renderCache = self.renderCache
         // See init(): and the interned handler ids, which prune with it.
         self.renderCache.internedIDTable = self.mouseEventDispatcher
+        // See init(): and the drag session, whose carried view draws as gone.
+        self.dragAndDropSession.renderInvalidation = self.renderCache
     }
 }
 

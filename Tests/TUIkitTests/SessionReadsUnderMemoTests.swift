@@ -1,0 +1,283 @@
+//  🖥️ TUIkit — Terminal UI Kit for Swift
+//  SessionReadsUnderMemoTests.swift
+//
+//  What a view reads from a per-app SESSION while it renders — the drag in
+//  flight — is state no memo keys on and no `@State` write reports. A row
+//  memoized above such a read was served as it was stored when the session
+//  moved. Each test here plays one gesture against two apps, one keeping its
+//  render cache and one emptying it before every frame, and holds them to
+//  drawing the same thing on every frame: the oracle the Stress sessions use,
+//  for gestures no session plays. The gestures whose state IS written where the
+//  cache sees it — a hover face, a list reorder, a menu — are pinned beside
+//  them as controls.
+//
+//  Created by Wade Tregaskis
+//  License: MIT
+
+import Foundation
+import Testing
+
+@testable import TUIkit
+@testable import TUIkitView
+
+/// One script, played against an app that keeps its render cache and one that
+/// empties it before every frame.
+@MainActor
+private final class Twin<A: App> {
+    let warm: HeadlessApp<A>
+    let cold: HeadlessApp<A>
+    /// On the monotonic clock's own scale, so a deadline a session counts from
+    /// `FrameClock.nowNanos` — a tooltip's delay — falls among these frames.
+    private(set) var now = FrameClock.nowNanos
+    /// Every frame on which the two drew different screens, described.
+    private(set) var divergences: [String] = []
+    private var frames = 0
+
+    init(_ make: () -> A, width: Int = 60, height: Int = 16) {
+        warm = HeadlessApp(make(), width: width, height: height)
+        cold = HeadlessApp(make(), width: width, height: height)
+        cold.clearsRenderCacheEachFrame = true
+        frame()
+    }
+
+    /// One frame of each, 1/60 s after the last, compared.
+    func frame() {
+        now += 16_666_667
+        frames += 1
+        let date = Date(timeIntervalSinceReferenceDate: 800_000_000 + Double(frames) / 60)
+        warm.frame(atNanos: now, date: date)
+        cold.frame(atNanos: now, date: date)
+        let (w, c) = (warm.screen.map(\.stripped), cold.screen.map(\.stripped))
+        guard w != c, let row = w.indices.first(where: { $0 >= c.count || w[$0] != c[$0] }) else { return }
+        divergences.append("frame \(frames), row \(row): kept \"\(w[row])\", cold \"\(c[row])\"")
+    }
+
+    func frames(_ count: Int) {
+        for _ in 0..<count { frame() }
+    }
+
+    /// Delivers `event` to both.
+    func send(_ event: MouseEvent) {
+        _ = warm.send(event)
+        _ = cold.send(event)
+    }
+
+    /// Where `text` first appears on the cold screen: column and row.
+    func position(of text: String) -> (x: Int, y: Int)? {
+        for (row, line) in cold.screen.map(\.stripped).enumerated() {
+            if let range = line.range(of: text) {
+                return (line.distance(from: line.startIndex, to: range.lowerBound), row)
+            }
+        }
+        return nil
+    }
+}
+
+// MARK: - The pages
+
+private struct Card: Identifiable, Equatable {
+    let id: Int
+    var title: String { "card \(id)" }
+}
+
+private let cards = (0..<4).map(Card.init(id:))
+
+/// A column of draggable cards, each a `ForEach` row memoized by its card, over
+/// a zone that takes whatever is dropped on it.
+private struct CardsApp: App {
+    var body: some Scene {
+        WindowGroup {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(cards) { card in
+                    Text(verbatim: card.title).draggable(card.title)
+                }
+                Spacer()
+                Text("drop zone").dropDestination(for: String.self) { _, _ in
+                    Drops.taken += 1
+                    return true
+                }
+            }
+        }
+    }
+}
+
+/// How many drops the zones have taken, in every app.
+@MainActor
+private enum Drops {
+    static var taken = 0
+}
+
+/// A column of buttons, each lit by the pointer over it.
+private struct ButtonsApp: App {
+    var body: some Scene {
+        WindowGroup {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(cards) { card in
+                    Button(card.title) {}
+                }
+                Spacer()
+            }
+        }
+        .mouseSupport(.full)
+    }
+}
+
+/// Two columns of cards, each a `ForEach` row memoized by its column, holding
+/// a list the pointer reorders.
+private struct ColumnsApp: App {
+    var body: some Scene {
+        WindowGroup {
+            HStack(alignment: .top, spacing: 1) {
+                ForEach(["left", "right"], id: \.self) { title in
+                    ReorderColumn(title: title)
+                }
+            }
+        }
+    }
+}
+
+private struct ReorderColumn: View {
+    let title: String
+    @State private var items = ["a", "b", "c", "d"]
+
+    var body: some View {
+        List {
+            ForEach(items, id: \.self) { Text(verbatim: "\(title) \($0)") }
+                .onMove { items.move(fromOffsets: $0, toOffset: $1) }
+        }
+        .frame(width: 20, height: 8)
+    }
+}
+
+/// A column of rows, each with a menu and a context menu.
+private struct MenusApp: App {
+    var body: some Scene {
+        WindowGroup {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(cards) { card in
+                    HStack(spacing: 1) {
+                        Menu("menu \(card.id)") {
+                            Button("one") {}
+                            Button("two") {}
+                        }
+                        Text(verbatim: "ctx \(card.id)")
+                            .contextMenu {
+                                Button("three") {}
+                            }
+                    }
+                }
+                Spacer()
+            }
+        }
+    }
+}
+
+// MARK: - The gestures
+
+@MainActor
+@Suite("What a view reads from a session is drawn as a cold frame draws it")
+struct SessionReadsUnderMemoTests {
+    /// A card being carried has left its place: it floats at the pointer, and
+    /// the row it came from draws blank. The blanking asks the drag session,
+    /// which nothing the row memo keys on reports, so a memoized row went on
+    /// drawing the card beside its own floating preview — and, stored blank
+    /// while the drag lasted, went on drawing nothing once it was over.
+    ///
+    /// Both ends: released over nothing, the preview flies home and the row
+    /// stays blank until it lands; released over the zone, the drop is taken
+    /// and the row is drawn again at once.
+    @Test(
+        "A card drawn blank while it is carried, and drawn again once it is home",
+        arguments: [false, true])
+    func draggedCard(dropped: Bool) throws {
+        let twin = Twin(CardsApp.init)
+        twin.frames(3)
+        let card = try #require(twin.position(of: "card 1"))
+        let zone = try #require(twin.position(of: "drop zone"))
+        let x = card.x + 2
+        let end = dropped ? zone : (x: x, y: card.y + 8)
+        twin.send(MouseEvent(button: .left, phase: .pressed, x: x, y: card.y))
+        twin.frame()
+        for step in 1...4 {
+            let y = card.y + (end.y - card.y) * step / 4
+            twin.send(MouseEvent(button: .left, phase: .dragged, x: dropped ? zone.x + 2 : x, y: y))
+            twin.frame()
+        }
+        let takenBefore = Drops.taken
+        twin.send(MouseEvent(button: .left, phase: .released, x: dropped ? zone.x + 2 : x, y: end.y))
+        #expect(
+            Drops.taken - takenBefore == (dropped ? 2 : 0),
+            "precondition: the drop is taken exactly when it lands on the zone")
+        twin.frames(24)
+        #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
+        #expect(twin.warm.screen.map(\.stripped).contains { $0.contains("card 1") }, "the card never came back")
+    }
+
+    /// A button's hover face is the button's own state, written as the pointer
+    /// arrives — a write the render cache sees. Pinned as a control.
+    @Test("A button's hover face follows the pointer through a memoized row")
+    func hoveredButton() throws {
+        let twin = Twin(ButtonsApp.init)
+        twin.frames(3)
+        let button = try #require(twin.position(of: "card 3"))
+        twin.send(MouseEvent(button: .none, phase: .moved, x: button.x + 1, y: button.y))
+        twin.frames(3)
+        twin.send(MouseEvent(button: .none, phase: .moved, x: button.x + 1, y: button.y + 6))
+        twin.frames(3)
+        #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
+    }
+
+    /// A row lifted out of a list and carried to another place: the gap it
+    /// leaves, the slot it would land in and the lifted picture are the list's
+    /// handler's, which the drag moves every step. Pinned as a control.
+    @Test("A list reordered by the pointer inside a memoized row draws each step of the drag")
+    func reorderedList() throws {
+        let twin = Twin(ColumnsApp.init, width: 50, height: 14)
+        twin.frames(3)
+        let row = try #require(twin.position(of: "right b"))
+        let x = row.x + 2
+        twin.send(MouseEvent(button: .left, phase: .pressed, x: x, y: row.y))
+        twin.frame()
+        for step in 1...3 {
+            twin.send(MouseEvent(button: .left, phase: .dragged, x: x, y: row.y + step))
+            twin.frame()
+        }
+        twin.send(MouseEvent(button: .left, phase: .released, x: x, y: row.y + 3))
+        twin.frames(20)
+        #expect(
+            twin.position(of: "right b")?.y != row.y,
+            "precondition: the cold app moved the row, or this proves nothing")
+        #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
+    }
+
+    /// A menu opened by a click, and a context menu by the right button, from
+    /// a memoized row, and closed again. Pinned as controls.
+    @Test("Menus opened from a memoized row draw open, and closed again")
+    func menus() throws {
+        let twin = Twin(MenusApp.init)
+        twin.frames(3)
+        let menu = try #require(twin.position(of: "menu 1"))
+        twin.send(MouseEvent(button: .left, phase: .pressed, x: menu.x + 1, y: menu.y))
+        twin.frame()
+        twin.send(MouseEvent(button: .left, phase: .released, x: menu.x + 1, y: menu.y))
+        twin.frames(3)
+        #expect(
+            twin.cold.screen.map(\.stripped).contains { $0.contains("one") },
+            "precondition: the cold app shows the menu open, or this proves nothing")
+        _ = twin.warm.send(KeyEvent(key: .escape))
+        _ = twin.cold.send(KeyEvent(key: .escape))
+        twin.frames(3)
+        let context = try #require(twin.position(of: "ctx 2"))
+        twin.send(MouseEvent(button: .right, phase: .pressed, x: context.x + 1, y: context.y))
+        twin.frame()
+        twin.send(MouseEvent(button: .right, phase: .released, x: context.x + 1, y: context.y))
+        twin.frames(3)
+        #expect(
+            twin.cold.screen.map(\.stripped).contains { $0.contains("three") },
+            "precondition: the cold app shows the context menu open, or this proves nothing")
+        _ = twin.warm.send(KeyEvent(key: .escape))
+        _ = twin.cold.send(KeyEvent(key: .escape))
+        twin.frames(3)
+        #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
+    }
+}

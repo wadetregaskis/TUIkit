@@ -236,6 +236,26 @@ final class DragAndDropSession: @unchecked Sendable {
     /// The dispatcher whose composited regions supply target geometry.
     weak var dispatcher: MouseEventDispatcher?
 
+    /// Where a change of what ``isDragSource(_:)`` answers is reported: the
+    /// app's render cache, wired by `TUIContext`.
+    ///
+    /// A view drawn as gone while it is carried reads that answer as it
+    /// renders, and it is session state no memo keys on and no `@State` write
+    /// reports. So a `.draggable` card in a memoized `ForEach` row went on
+    /// drawing itself beside its own floating preview — and a row stored
+    /// blank while the drag lasted would have gone on drawing nothing once
+    /// the card was home. Every change of the view drawn as gone now drops
+    /// what the cache holds for it, and above it, as a `@State` write there
+    /// would: ``source`` and ``returnFlight`` report their own changes.
+    weak var renderInvalidation: (any RenderInvalidationSink)?
+
+    /// Reports a change of the view drawn as gone — see ``renderInvalidation``.
+    private func drawnAsGoneMoved(from old: ViewIdentity?, to new: ViewIdentity?) {
+        guard old != new else { return }
+        if let old { renderInvalidation?.invalidateRender(for: old) }
+        if let new { renderInvalidation?.invalidateRender(for: new) }
+    }
+
     /// This frame's drop targets, in registration (render) order.
     private(set) var targets: [Target] = []
 
@@ -351,7 +371,13 @@ final class DragAndDropSession: @unchecked Sendable {
     /// materialised on demand from the node chain (see `ViewIdentity.path`).
     /// Structural comparison also answers ``isDragSource(within:)`` exactly,
     /// where a path prefix could not — row 1's path is a prefix of row 11's.
-    private(set) var source: ViewIdentity?
+    ///
+    /// Set before ``active`` when a drag begins and cleared with it when it
+    /// ends, so its changes are the drag's: each is reported to the render
+    /// cache (``renderInvalidation``).
+    private(set) var source: ViewIdentity? {
+        didSet { drawnAsGoneMoved(from: oldValue, to: source) }
+    }
 
     /// Whether `identity` names the view whose drag is in flight — **or whose
     /// preview is still flying home to it**.
@@ -641,7 +667,15 @@ final class DragAndDropSession: @unchecked Sendable {
     }
 
     /// The flight in progress, if any.
-    private(set) var returnFlight: ReturnFlight?
+    ///
+    /// The view it flies home to draws as gone until it lands, so the flight
+    /// starting and landing are reported to the render cache as the drag's own
+    /// start and end are (``renderInvalidation``). Landing happens in the loop's
+    /// `driveDragFlights`, before the frame's pass begins, so the frame that
+    /// no longer shows the flight is the frame that draws the view again.
+    private(set) var returnFlight: ReturnFlight? {
+        didSet { drawnAsGoneMoved(from: oldValue?.source, to: returnFlight?.source) }
+    }
 
     /// Where the returning preview is right now, as the render loop last
     /// advanced it. The scene draws THIS rather than advancing the flight

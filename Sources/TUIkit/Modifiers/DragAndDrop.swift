@@ -97,6 +97,11 @@ extension DraggableModifier: Renderable, Layoutable {
         // rows the drop is aimed between. A `List` drawing a landing SLOT for
         // this same drag collapses the row around the blank instead, so the
         // list keeps its length — see `_ListCore.decorateForReorder`.
+        //
+        // The answer is the session's, which no memo keys on: the session
+        // reports every change of it to the render cache
+        // (`DragAndDropSession.renderInvalidation`), so a memo above this view
+        // is not served the card while the card is in the hand.
         let identity = context.identity
         if session.isDragSource(identity) {
             buffer = FrameBuffer(
