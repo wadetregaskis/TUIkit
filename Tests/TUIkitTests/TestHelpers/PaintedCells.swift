@@ -97,3 +97,76 @@ func spelled(_ field: SGRState.Colour?) -> String {
     state.setBackground(field)
     return state.renderedBackground
 }
+
+// MARK: - What a cell shows
+
+/// A colour as a cell SHOWS it: one of its own, or one of the terminal's two —
+/// which are two colours, and which a slot left unstated shows depends on the slot.
+///
+/// Reverse video (SGR 7) exchanges what the two slots show, so a cell's spelled
+/// ink and field say what it looks like only once the 7 is taken into account:
+/// a glyph drawn in `ESC[38;2;220;220;220m` on the terminal's own field and the
+/// same glyph with a 7 in front are two different pictures, and a comparison of
+/// the spellings calls them one.
+enum ShownColour: Equatable, CustomStringConvertible {
+    case colour(SGRState.Colour)
+    case terminalForeground
+    case terminalBackground
+
+    var description: String {
+        switch self {
+        case .colour(.rgb(let red, let green, let blue)): "rgb(\(red), \(green), \(blue))"
+        case .colour(.indexed(let index)): "colour \(index) of 256"
+        case .colour(.named(let code)): "SGR \(code)"
+        case .terminalForeground: "the terminal's foreground"
+        case .terminalBackground: "the terminal's background"
+        }
+    }
+}
+
+extension PaintedCell {
+    /// The colour the cell is filled with: its background, or — reversed — its
+    /// foreground, each the terminal's own where it is unstated.
+    var shownField: ShownColour {
+        state.reversesVideo
+            ? state.foregroundColour.map { .colour($0) } ?? .terminalForeground
+            : state.backgroundColour.map { .colour($0) } ?? .terminalBackground
+    }
+
+    /// The colour a glyph is drawn in: the field's twin.
+    var shownInk: ShownColour {
+        state.reversesVideo
+            ? state.backgroundColour.map { .colour($0) } ?? .terminalBackground
+            : state.foregroundColour.map { .colour($0) } ?? .terminalForeground
+    }
+
+    /// Every attribute in force that the cell can show, spelled as their parameters:
+    /// on a glyph, all but reverse video, which the two colours above have already
+    /// answered for — bold, dim, underline and the rest; on a blank, only those that
+    /// draw on one (an underline, a blink, a strike), since a bold or a dim space is
+    /// a space.
+    var shownAttributes: String {
+        var attributes = state
+        attributes.setForeground(nil)
+        attributes.setBackground(nil)
+        attributes.apply(glyph == " " ? "\u{1B}[22;23;27;28m" : "\u{1B}[27m")
+        return attributes.parameters
+    }
+
+    /// Whether the two cells look the same: the glyph, the field, the attributes
+    /// the cell can show, and the ink wherever something draws in it — a glyph, or
+    /// an attribute that inks a blank cell (an underline, a strike).
+    func looksLike(_ other: PaintedCell) -> Bool {
+        guard glyph == other.glyph, shownField == other.shownField, shownAttributes == other.shownAttributes
+        else { return false }
+        let inked = glyph != " " || state.paintsInkOnBlankCell
+        return !inked || shownInk == other.shownInk
+    }
+
+    /// The cell as ``looksLike(_:)`` compares it, for a message.
+    var shown: String {
+        let ink = glyph != " " || state.paintsInkOnBlankCell ? " in \(shownInk)" : ""
+        let attributes = shownAttributes.isEmpty ? "" : " [\(shownAttributes)]"
+        return "'\(glyph)'\(ink) on \(shownField)\(attributes)"
+    }
+}

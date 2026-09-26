@@ -5505,6 +5505,59 @@ an RGB palette on the same silent terminal keeps its tint and its breath; and wi
 Terminal "Basic"'s sixteen reported the slot accent breathes in `accentFillPulse`'s own ends
 again.
 
+### 86.1 A fade inside a reversed row is spent against the row (2026-09-26)
+
+A row that reverses, whether a focused `List`'s cursor row or a menu's focused row (§88), carried
+its content's fades up past its reversal. At the root they met the reversal's field as the faded
+view's own. A reversed cell shows that field from its foreground slot. Where the field has no RGB
+(the palette's ink on a `Color.default` page, or the terminal's own foreground), a fade below one
+half lost it to the page (rule 9), and the glyph went with it (rule 10). Measured on this tree
+before the fix, truecolor, through `ReversedRowFadeTests`:
+- `HStack(spacing: 0) { Text("ab").opacity(0.3); Text("cd") }` in the cursor row of a focused list
+  on `terminalPagePalette` (`ESC[7;38;2;220;220;220;49m`) drew `ab` as two blanks on the terminal's
+  own field in the middle of the bar of 220.
+- The same happened in a menu's focused row, and in both on the terminal's own pair, as a hole of
+  the terminal's page in a bar of its foreground.
+- On an RGB page with a slot accent (`ReversedRowSlotAccentPalette`, the bar `220` on a page of
+  `20;20;30`), the label's field was mixed toward the page at 0.3 and at 0.6 (`140;140;144`
+  beside `220`), where the bar is behind it. The reversal is RGB there and the page is RGB, so the
+  mix is not a cut, and it was wrong at every alpha.
+
+**The rule.** A reversal is a painter. The row it draws is behind every fade inside it, as a
+`.listRowBackground`'s fill is (§22), and its field is its INK: that is what the reversal shows
+under a cell that states nothing. So the row spends its content's fades against the reversal
+(`FrameBuffer.resolvingOpacity(onReversal:palette:)`). It does so AFTER it paints, over its
+finished lines and the runs grounded on them, where the reversal is already in force under every
+cell. The blend reads each cell as the row draws it, exchanged (rule 6), and spells its answer in
+the exchanged colours, with the 7 only where they have no spelling without it (§85). The row
+restates its reversal after every reset of every line it paints, so content spent BEFORE the
+paint would be reversed a second time under the spent span. Spent after, nothing restates the
+reversal over it. `_MenuItemRowBar` spends right after it reverses its lines. `_ListCore` spends
+after `RowBackground.stillLines` has reversed a still row's lines, with the content's claims
+shifted past the row's gutter and cut to what a badge leaves (`spentOnReversal`), and the row
+then claims nothing more for its content.
+
+Below one half on the terminal's own pair, the label's ink fades all the way into the bar: the
+terminal's page as ink, on its foreground as field. Neither has a spelling in the other's slot, so
+the glyph is dropped as §85 drops one, leaving a blank of the bar rather than a hole in it.
+
+A run in such a row is blended there too, over its ground, which the row has just reversed. This
+was measured, with each frame replayed over the row drawn at every other: no replayed cell that
+matched the corrected render before this change fails to match it after, and 72 more match. The
+replay still draws a faded run in a reversed row unreversed, which is the reversed rows' own limit
+(§86, the run the row carries).
+
+**What it costs where no such shape is present:** a reversed row asks its content's claims and
+its runs' alphas whether anything fades (`FrameBuffer.fadesOnWhatIsBehind`), and builds nothing
+when nothing does. No other row is asked. No `Stress --bench` scenario draws a reversed row
+(their palettes have RGB), so none spends one.
+
+`ReversedRowFadeTests` pins it for a list's cursor row and a menu's focused row, on the three
+pairs a reversal exchanges (the terminal's page, an RGB page with a slot accent, and the
+terminal's own pair). The label is faded to 0.3 and 0.6 and must sit on the row's field beside the
+unfaded label, keeping its glyphs except where §85 drops one. Before, all four cases failed
+(20 issues).
+
 ## 87. A text selection and a block caret on a highlight the terminal decides (2026-09-15)
 
 A `TextField`'s, `SecureField`'s or `TextEditor`'s selection is a tint: the accent at 60%

@@ -4406,6 +4406,20 @@ same instant draws it in `ESC[7;38;2;220;220;220m`. The dim is still inferred.
 `ReplayOracle` compares each cell's glyph and field and a glyph's ink, not its
 attributes, so neither shows there.
 
+**2026-09-26: a fade inside a reversed row is spent against the row.** A label
+faded below one half in a reversed row (a focused list's cursor row, or a menu's
+focused row, on a palette whose highlight has no RGB) was carried up past the
+reversal. At the root it met the reversal's field as its own. Where that field
+has no RGB (the palette's ink over a `Color.default` page, or the terminal's own
+foreground), the page won below one half, and the label came out as two blanks on
+the terminal's own field in the middle of the bar. With an RGB page and a slot
+accent, the label's field was mixed toward the page at every alpha. The row now
+spends its content's fades against the reversal, whose field is its ink. It does
+so over its finished lines, after it has restated `ESC[7;<ink>;<field>m` after
+every reset, so nothing restates the 7 over the spent cells again. This was
+measured through the render (`ReversedRowFadeTests`), not live.
+`Opacity as composition.md` §86.1.
+
 #### The animation replay compensates a second time — FIXED 2026-08-29
 
 A row is compensated when it is rendered. When an `AnimatedCellRun` on that row

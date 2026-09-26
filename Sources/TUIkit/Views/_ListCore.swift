@@ -3628,10 +3628,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // A reversal states its own pair and closes itself, so its lines are painted
             // rather than handed a colour to persist under their resets; everything else
             // takes the colour (``RowBackground/stillLines(_:)``).
-            return RenderedRow(
-                lines: background.stillLines { lines(over: $0) },
-                pulseFrames: nil, childRuns: Self.grounding(childRuns, on: background),
-                claims: claims(over: fill), contentClaims: contentClaims(droppedRunClaims))
+            return spentOnReversal(
+                RenderedRow(
+                    lines: background.stillLines { lines(over: $0) },
+                    pulseFrames: nil, childRuns: Self.grounding(childRuns, on: background),
+                    claims: claims(over: fill), contentClaims: contentClaims(droppedRunClaims)),
+                of: background, row: row, badged: shouldRenderBadge, rowWidth: rowWidth, palette: palette)
         }
         // A breathing row repaints its WHOLE line every tick, so a narrower run
         // on the same line would be overwritten by it — two animations claiming
@@ -3756,6 +3758,39 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         return (runs, droppedClaims)
     }
 
+    /// `rendered` — a still row, drawn — with its content's fades spent against the
+    /// row's REVERSAL where the row reverses (`FrameBuffer.resolvingOpacity(onReversal:
+    /// palette:)`), over the finished lines and the runs grounded on them, and so
+    /// claiming nothing more for its content; any other row as it is.
+    ///
+    /// The reversal is behind every fade inside the row, and it is spent after the
+    /// row is drawn because the row restates its reversal after every reset of every
+    /// line it paints: spent before the painting, the row would reverse the spent
+    /// cells a second time. Carried up past it instead, a label faded below one half
+    /// met the reversal's field at the root as its own and lost it to the page — a
+    /// hole in the cursor row (`Opacity as composition.md` §86.1).
+    private func spentOnReversal(
+        _ rendered: RenderedRow, of background: RowBackground, row: SelectableListRow<SelectionValue>,
+        badged: Bool, rowWidth: Int, palette: any Palette
+    ) -> RenderedRow {
+        // The content's claims as the attach would carry them: its own, then what its
+        // dropped runs left. Asked first, so a reversed row with nothing fading in it —
+        // nearly every one — builds nothing.
+        let claims = rendered.contentClaims ?? row.buffer.opacityRegions
+        guard case .reversed(let ink, _) = background,
+            FrameBuffer.fadesOnWhatIsBehind(claims, runAlphas: rendered.childRuns.lazy.map { $0.alpha })
+        else { return rendered }
+        // Past the gutter every row line opens with.
+        var painted = FrameBuffer(lines: rendered.lines)
+        painted.opacityRegions = cutToBadgedContent(claims, of: row, badged: badged, rowWidth: rowWidth)
+            .map { $0.shifted(byX: 1, y: 0) }
+        painted.animatedCells = rendered.childRuns.map { $0.cellRun }
+        let spent = painted.resolvingOpacity(onReversal: ink.opaqueSpelling, palette: palette)
+        return RenderedRow(
+            lines: spent.lines, pulseFrames: nil, childRuns: spent.animatedCells.map { .placed($0) },
+            claims: rendered.claims, contentClaims: [])
+    }
+
     /// The mark, the badge and the fill a row of `lines` lines owes, per line, from the
     /// one derivation `Table` also calls. `badgeColumns` is the BADGE's columns and
     /// nothing else: the rest of a list row's content is a child buffer that claims for
@@ -3831,6 +3866,24 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// The same, under a cell whose frame states the terminal's own field
         /// (``AnimatedCellRun/groundUnderStatedDefault``).
         var groundUnderStatedDefault: String?
+
+        /// `run`, placed as the row's lines have it.
+        static func placed(_ run: AnimatedCellRun) -> Self {
+            Self(
+                y: run.offsetY, x: run.offsetX, width: run.width, frames: run.frames,
+                frameTicks: run.frameTicks, clock: run.clock, alpha: run.alpha, ground: run.ground,
+                groundUnderStatedDefault: run.groundUnderStatedDefault)
+        }
+
+        /// This run as a buffer carries it, for a pass over the row's own lines.
+        var cellRun: AnimatedCellRun {
+            var run = AnimatedCellRun(
+                offsetX: x, offsetY: y, width: width, frames: frames, frameTicks: frameTicks, clock: clock,
+                alpha: alpha)
+            run.ground = ground
+            run.groundUnderStatedDefault = groundUnderStatedDefault
+            return run
+        }
 
         /// The same run with both records painted by `paint`, as the row painted
         /// the line under it.

@@ -136,6 +136,12 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
             // cell bare, so their grounds take the same paint as the lines do
             // (`AnimatedCellRun.ground`) — here, and in the two cases below.
             buffer.paintRunGrounds { _, ground in reversed(ground) }
+            // And the bar is behind every fade inside the label: spent against it,
+            // over the lines just reversed, and nothing restates the reversal after.
+            // Carried up, a label faded below one half met the reversal's field as
+            // its own and lost it to the page — a hole in the bar
+            // (`Opacity as composition.md` §86.1).
+            buffer = buffer.resolvingOpacity(onReversal: ink.opaqueSpelling, palette: palette)
         case .fill(let color):
             buffer.lines = plain.map { painted($0, color) }
             buffer.paintRunGrounds { _, ground in painted(ground, color) }
