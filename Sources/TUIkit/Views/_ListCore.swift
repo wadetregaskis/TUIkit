@@ -543,7 +543,24 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
         let mark = tracker.beginScope()
         defer { tracker.endScope(mark) }
-        let widest = (0..<source.count).map { index in
+        let widest = walkForWidestRow(source)
+        // Kept until the clock next moves a row's timeline, when that is all
+        // that stood in the way: refused, a list of "5 min ago" rows would walk
+        // every row on every frame it hugged (`VolatileReadTracker.clockedReads`).
+        if let memo, let hold = tracker.sizeHold(since: mark),
+            !walkContext.environment.hasUncomparableEnvironmentValue
+        {
+            memo.cache.storeSize(
+                key: key, identity: context.identity, view: memo.signature, size: ViewSize.fixed(widest, 0),
+                lapsingAt: hold.lapsesAt)
+        }
+        return widest
+    }
+
+    /// The widest of `source`'s rows, badge included, from every row — the
+    /// walk ``widestRowWidth(source:context:)`` keeps the answer of.
+    private func walkForWidestRow(_ source: RowSource<SelectionValue>) -> Int {
+        (0..<source.count).map { index in
             // The content alone: a width needs no selection value, and the
             // row's type is asked below only of a row showing a badge.
             let content = source.content(at: index)
@@ -568,17 +585,6 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 }
             return (content.widthWithoutRendering ?? content.buffer.width) + badgeCells
         }.max() ?? 0
-        // Kept until the clock next moves a row's timeline, when that is all
-        // that stood in the way: refused, a list of "5 min ago" rows would walk
-        // every row on every frame it hugged (`VolatileReadTracker.clockedReads`).
-        if let memo, let hold = tracker.sizeHold(since: mark),
-            !walkContext.environment.hasUncomparableEnvironmentValue
-        {
-            memo.cache.storeSize(
-                key: key, identity: context.identity, view: memo.signature, size: ViewSize.fixed(widest, 0),
-                lapsingAt: hold.lapsesAt)
-        }
-        return widest
     }
 
     /// Captures the populated-state values that the mouse-

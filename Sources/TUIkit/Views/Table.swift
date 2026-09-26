@@ -3438,14 +3438,7 @@ where Value.ID: Hashable {
         let existingTracker = context.environment.volatileReadTracker
         let tracker = existingTracker ?? VolatileReadTracker()
         let unsafeBefore = tracker.cacheUnsafeCount
-        // The header measured here is the one that will be DRAWN, sort
-        // indicator and all: measuring the bare title instead fitted the
-        // column two cells short and truncated its own header ("Track…").
-        var fitted = headerTitle(for: column).strippedLength
-        for item in data {
-            fitted = max(fitted, cellValue(column, for: item, context: context).strippedLength)
-            if let cap, fitted >= cap { break }
-        }
+        let fitted = scanForFitWidth(of: column, cappedAt: cap, context: context)
 
         if let memo, tracker.cacheUnsafeCount == unsafeBefore,
             !context.environment.hasUncomparableEnvironmentValue
@@ -3453,6 +3446,20 @@ where Value.ID: Hashable {
             memo.cache.storeSize(
                 key: key, identity: context.identity, view: memo.signature,
                 size: ViewSize.fixed(fitted, 0))
+        }
+        return fitted
+    }
+
+    /// The widest of `column`'s header and cells, stopping at `cap` — the scan
+    /// ``fitWidth(of:at:cappedAt:context:)`` keeps the answer of.
+    private func scanForFitWidth(of column: TableColumn<Value>, cappedAt cap: Int?, context: RenderContext) -> Int {
+        // The header measured here is the one that will be DRAWN, sort
+        // indicator and all: measuring the bare title instead fitted the
+        // column two cells short and truncated its own header ("Track…").
+        var fitted = headerTitle(for: column).strippedLength
+        for item in data {
+            fitted = max(fitted, cellValue(column, for: item, context: context).strippedLength)
+            if let cap, fitted >= cap { break }
         }
         return fitted
     }

@@ -279,16 +279,24 @@ private func verifyServe(
 /// could be caught only by the pixels it happened to move. On a throwaway
 /// tracker, so what the check reads cannot decide what the live pass stores.
 /// Out of line, to keep the serve itself small.
+///
+/// - Parameters:
+///   - served: What the memo handed back.
+///   - label: What the size is of, for the report; "(cross-frame)" is added.
+///     Built only when there is something to report.
+///   - proposal: The proposal the size answers, for the report.
+///   - context: Where the size was asked.
+///   - measure: Measures it afresh.
 @inline(never)
 @MainActor
-private func verifyServedSize<Key>(
-    _ served: ViewSize, of _: Key.Type, proposal: ProposedSize, context: RenderContext,
+package func verifyServedSize(
+    _ served: ViewSize, label: @autoclosure () -> String, proposal: ProposedSize, context: RenderContext,
     measure: (RenderContext) -> ViewSize
 ) -> ViewSize {
     let fresh = context.withVolatileReadTracker(VolatileReadTracker()) { measure($0) }
     guard fresh != served else { return fresh }
     context.renderCache?.noteMeasureMemoMismatch(
-        viewType: "\(Key.self) (cross-frame)", served: served, fresh: fresh, proposal: proposal,
+        viewType: "\(label()) (cross-frame)", served: served, fresh: fresh, proposal: proposal,
         availableWidth: context.availableWidth, availableHeight: context.availableHeight,
         identity: context.identity.path)
     return fresh
@@ -333,7 +341,7 @@ func measureValueMemoized<Key: Equatable>(
         measureGeneration: context.measureGeneration)
     if let cached = cache.lookupSize(key: sizeKey, view: key) {
         if RenderCache.verifiesMeasureMemo {
-            return verifyServedSize(cached, of: Key.self, proposal: proposal, context: context, measure: measure)
+            return verifyServedSize(cached, label: "\(Key.self)", proposal: proposal, context: context, measure: measure)
         }
         return cached
     }
