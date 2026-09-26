@@ -874,7 +874,7 @@ extension WindowGroup: SceneRenderable {
                 OverlayLayer(
                     offsetX: frame.x,
                     offsetY: frame.y,
-                    content: content,
+                    content: Self.card(content, palette: context.environment.palette),
                     level: .notification,
                     // Pinned to the pointer: clipped at the screen edge, never
                     // slid back onto it. Sliding is what made a wide preview
@@ -893,10 +893,29 @@ extension WindowGroup: SceneRenderable {
             centered.overlays.append(
                 OverlayLayer(
                     offsetX: step.x, offsetY: step.y,
-                    content: step.preview, level: .notification, clampsToScreen: false,
+                    content: Self.card(step.preview, palette: context.environment.palette),
+                    level: .notification, clampsToScreen: false,
                     isOpaque: true))  // the same card, on its way home
         }
         return centered
+    }
+
+    /// `preview` as the card it is lifted as: on the page's colour, which the
+    /// compositor paints under its blanks (``OverlayLayer/isOpaque``), and with every
+    /// fade inside it spent against that — the card is behind them.
+    ///
+    /// Here, where the card is made, because the compositor cannot: it spends a
+    /// layer's fades against its surface only for a centred one, since an anchored
+    /// layer may carry its presenter's fade, which has to take the surface with it
+    /// (`Opacity as composition.md` §96.2). A drag preview has no presenter — it is
+    /// made here, at the root, from what a row or a view drew — so every fade it
+    /// carries is its content's own. Left to the compositor they were resolved
+    /// against the page BEHIND the card: below one half the page's glyphs won the
+    /// faded cells, through the card (§106). Nothing to spend, nothing built.
+    private static func card(_ preview: FrameBuffer, palette: any Palette) -> FrameBuffer {
+        guard preview.hasFadeOnWhatIsBehind else { return preview }
+        return preview.paintedOver(background: ANSIRenderer.backgroundCode(for: palette.background.resolve(with: palette)))
+            .resolvingOpacity(onOpaqueFill: { nil }, surface: palette.background, palette: palette)
     }
 
     /// Centers a buffer within the target dimensions.

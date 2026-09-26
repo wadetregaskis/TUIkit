@@ -3016,10 +3016,18 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         }
                         if !wasActive, !carried.isEmpty {
                             // Hand the rows' own buffers to the session, which
-                            // floats them at the cursor above everything else.
+                            // floats them at the cursor above everything else —
+                            // what they draw, their fades included: the lines
+                            // alone lifted a faded label at full strength (§106).
                             // Their hit regions go — a copy of a row riding the
-                            // pointer must not also be clickable.
-                            var preview = FrameBuffer(lines: carried.flatMap(\.lines))
+                            // pointer must not also be clickable — and so do their
+                            // layers and runs, which a floating copy does not
+                            // replay; what a run said about alpha stays behind
+                            // (§69.4).
+                            var preview = carried.reduce(into: FrameBuffer()) { $0.appendVertically($1) }
+                            preview.opacityRegions += preview.animatedCells.flatMap(\.alphaLeftBehind)
+                            preview.animatedCells = []
+                            preview.overlays = []
                             preview.hitTestRegions = []
                             // The whole block travels, so the grab point moves
                             // down it by however much of the block was above the

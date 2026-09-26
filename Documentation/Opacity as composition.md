@@ -6906,7 +6906,9 @@ opacity region at all: the focused row's bar (§96.3) and the popup's own surfac
 them, and every faded label is on the surface with its glyphs, nothing of the page through it. A
 toast's content is strings; a tooltip's, text. A lifted drag preview is built from its rows' LINES
 (`_ListCore`, `FrameBuffer(lines:)`) and carries no region at all — which is a finding of its own,
-outside this section's: a label faded in a row that is dragged is lifted at full strength. The
+outside this section's: a label faded in a row that is dragged is lifted at full strength. (Fixed
+2026-09-26, §106 — and a `.draggable` view's preview, which does carry its fades, reached the
+compositor with them as an anchored layer: this limit, in a built-in shape.) The
 known issue in `FadeInsideAPainterTests` stays as the pin for a hand-built layer.
 
 **A fade inside a translucent fill** (§22, §96): draws wrong. (Fixed 2026-09-26 with the exact
@@ -7074,3 +7076,44 @@ agreed with their renders, wrong alike. With the claims told apart but the frame
 taken out, eleven replays failed instead (at 1, frame 1 over frame 0: `rgb(0, 0, 200)` — the
 fill's opaque spelling — where the render has `rgb(2, 5, 103)`). `FadeInsideAPainterTests` drops the
 known issue it held.
+
+## 106. A lifted drag preview lifts what its rows draw (2026-09-26)
+
+§103's finding. A drag preview is a card over the page (`OverlayLayer.isOpaque`): the root floats
+it at the pointer, the compositor paints its blanks on the page's colour and composites it covering
+what is under it (§98). Two of its three producers got its fades wrong, in opposite ways. Measured
+on this tree before the fix, truecolor, the default palette, over a page of `#`:
+
+- **A `List` row carried on the pointer (`.cursor`) was lifted at full strength.** The row's
+  preview was built from its buffers' LINES (`FrameBuffer(lines:)`), so `HStack(spacing: 0) {
+  Text("ab").opacity(0.3); Text("cd") }` in the dragged row floated with `ab` in `51;255;51`, the
+  unfaded ink, where the row draws it 30% of the way from the page (`19;84;19`).
+- **A `.draggable` view's preview kept its fades and lost them to the page behind the card.** The
+  modifier hands the session the view's buffer, fades on it, and the root floated it as an ANCHORED
+  layer, whose fades the compositor resolves against what is behind the layer, not its surface —
+  §96.2's limit, in a built-in shape: below one half the page's `#` won the faded cells, through the
+  card, in its own ink.
+
+**The rule.** The card is behind every fade inside it, and the preview carries only its content's:
+it is made at the root, from what a row or a view drew, and no presenter's fade can reach it. So the
+root spends the preview's fades against the card where it makes the layer (`WindowGroup.renderScene`,
+`card(_:palette:)`: painted on the page's colour, then resolved on it as a `.background` resolves on
+its fill), for the lifted preview and for its flight home alike. And the `List` lifts what its rows
+draw: their buffers stacked with their claims (`appendVertically`), and, since a floating copy
+replays no runs, what their runs said about alpha left behind as claims (§69.4); their hit regions
+and layers go, as before.
+
+**What it costs where no such shape is present:** while a drag is on screen, the root asks the
+preview once a frame whether anything in it fades (`hasFadeOnWhatIsBehind`, a scan of its claims)
+and builds nothing when not; the `List` stacks its carried rows once, when the drag begins. With
+no drag on screen, nothing. No `Stress --bench` scenario drags.
+
+**What it leaves alone.** A `Table` row's preview is rebuilt from its data as it travels from the
+grid to the carried row (`previewMorphLines`), in the table's own text, which carries no fade of a
+view's; a palette whose text inks are translucent claims them on the grid, and the carried row draws
+them at their opaque spelling.
+
+`LiftedDragPreviewFadeTests` pins both: a `List` row carried on the pointer and a view's preview as
+`.draggable` hands it over, each with `ab` faded to 0.3 over a page of `#` — the letters on the card,
+in their ink 30% of the way from it. Before, the row's letters were at full strength, and the view's
+were the page's `#`.
