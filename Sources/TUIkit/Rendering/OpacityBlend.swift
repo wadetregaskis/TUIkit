@@ -500,7 +500,24 @@ extension FrameBuffer {
         let fieldWithinLayer =
             source.background.map { $0.opacity(alpha.field, over: destinationField) }
         let ownField = fieldWithinLayer ?? destinationField
-        let inkWithinLayer = sourceInk.map { $0.opacity(alpha.ink, over: ownField) }
+        let sourcePaintsInk =
+            source.character != " " || source.style.paintsInkOnBlankCell
+        let destinationPaintsInk =
+            destination.map { $0.character != " " || $0.style.paintsInkOnBlankCell } ?? false
+        // A blank source has no ink: its ink channel is its FIELD, and over a glyph
+        // it covers that glyph by the field's own alpha, as it covers the field
+        // around it (rule 3) — a veil, which the glyph shows through. Not the ink's
+        // alpha, which is 1 for a cell that paints none: folded with that, a
+        // translucent colour laid over text — `ZStack { Text("hello");
+        // Color.blue.opacity(0.5) }` — drew the letters in the blue itself, on a
+        // field half way to it (`Opacity as composition` §104). Only where a glyph
+        // shows through: over a blank the answer is a blank, whose ink nobody sees.
+        let inkWithinLayer: Color?
+        if !sourcePaintsInk, destinationPaintsInk, let field = source.background {
+            inkWithinLayer = field.opacity(alpha.field, over: destinationInk)
+        } else {
+            inkWithinLayer = sourceInk.map { $0.opacity(alpha.ink, over: ownField) }
+        }
         let foreground =
             inkWithinLayer.map { $0.opacity(alpha.layer, over: destinationInk) }
             ?? destination?.foreground
@@ -537,10 +554,8 @@ extension FrameBuffer {
         // paste honest. Removing something from the picture is what `.hidden()`,
         // `.opacity(0)` and simply not drawing it are for; a transparent colour is
         // a colour.
-        let sourcePaintsInk =
-            source.character != " " || source.style.paintsInkOnBlankCell
-        let destinationPaintsInk =
-            destination.map { $0.character != " " || $0.style.paintsInkOnBlankCell } ?? false
+        // (`sourcePaintsInk` and `destinationPaintsInk` are asked above, where the
+        // ink channel of a blank is decided.)
         // The LAYER's alpha decides the contest, never the ink's. The contest is
         // between two layers' glyphs — how present this layer is — while a
         // translucent ink has no contest at all: it is one cell's own glyph over

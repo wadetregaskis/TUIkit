@@ -6922,3 +6922,24 @@ into the field it scales the ink by. Not fixed, because the fix is a choice betw
   decision: a stored property on the region type every shift, punch, scale and memo key touches,
   the fold's rule for whose flag holds where two regions cover a cell, and the blend's ink step —
   priced at one to two days with its tests, and a clean build.
+
+## 104. A translucent colour's blank veils the glyph under it by its own alpha (2026-09-26)
+
+Rule 3 says a veil covers the ink it lies over exactly as much as the field around it. A veil
+translucent by its COLOUR rather than by a layer fade did not: `ZStack { Text("hello");
+Color.rgb(0, 0, 200).opacity(0.5) }` — and the same veil as a `.background` on blanks — drew the
+letters in `rgb(0, 0, 200)` itself, on a field half way to it (`48;2;2;5;103`, truecolor, the
+default page): the text all but vanished at one half. The blend reads a blank cell's ink channel
+as its field (rule 7) and then folded it with the INK's alpha, which is 1 for a cell that paints
+no ink, where the channel's alpha is the field's. A layer fade was right by accident: its alpha is
+the layer's, and the layer step applies to both channels.
+
+The blank's ink channel over a glyph is now its field at the field's own alpha, over the glyph's
+ink, and then the layer step as before: the letters stand in their ink half way to the veil at
+one half. Only where a glyph shows through: over a blank the answer is a blank, whose ink no one
+sees, so its bytes are as they were.
+
+`TranslucentVeilTests` pins it at the blend (a blank of blue at a field alpha of 0.25, 0.5 and
+0.75 over red text: the letters in blue mixed over red by that alpha, the field over the surface)
+and through the public API (the colour as a view and as a `.background` on blanks, over text in a
+`ZStack`). Before, all five failed with the letters in the veil's colour.
