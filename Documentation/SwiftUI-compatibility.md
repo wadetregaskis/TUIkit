@@ -478,7 +478,10 @@ window**, not a deferred-creation machine:
   full-height buffer, off-window rows blank), so `onAppear`/`task` fire on
   visibility — matching SwiftUI's model rather than materialising everything.
   A `LazyVStack` nested *below* other scroll content (not at the content
-  origin) is left un-windowed, and `pinnedViews:` is still absent.
+  origin) is left un-windowed — measured and drawn over every row, as a
+  `VStack` is, so its cost per frame tracks its row count, including in a row
+  of an outer lazy stack that is out of sight — and `pinnedViews:` is still
+  absent.
 - **Cross-axis sizing** hugs the widest *placed* child (identical to
   `VStack`), which is stabler than SwiftUI's first-subview ideal — TUIkit
   has rendered every visible child anyway, so it knows the real width.

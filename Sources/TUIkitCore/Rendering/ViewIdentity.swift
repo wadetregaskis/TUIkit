@@ -219,6 +219,19 @@ extension ViewIdentity {
         return IdentityNode.structurallyEqual(candidate, ancestor.node)
     }
 
+    /// ``isDirectDescent(from:)`` for an ancestor known only by its DEPTH:
+    /// whether every step from that depth down to this identity is a
+    /// single-child descent.
+    ///
+    /// The lineage is not compared, so this is sound only where the caller
+    /// knows the identity at `ancestorDepth` on this chain IS the ancestor it
+    /// means — a scroll view's content origin, carried down its content's own
+    /// contexts (`RenderContext.scrollContentOriginDepth`), say. It is what
+    /// lets that origin travel as two bytes rather than as an identity.
+    public func isDirectDescent(fromDepth ancestorDepth: Int) -> Bool {
+        singleChildAncestor(atDepth: ancestorDepth) != nil
+    }
+
     /// The node at `ancestorDepth` on this chain, when every step below it
     /// down to this identity is a single-child descent; else `nil`.
     private func singleChildAncestor(atDepth ancestorDepth: Int) -> IdentityNode? {

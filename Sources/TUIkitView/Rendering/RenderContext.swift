@@ -239,6 +239,32 @@ public struct RenderContext {
     /// compares `generationIgnoringIdealWidth`.
     public var measureGeneration: UInt8 = 0
 
+    /// The depth of the innermost enclosing `ScrollView`'s content identity,
+    /// plus one; `0` outside any scroll content. Set by the scroll view for
+    /// every ask it makes of its content, and cleared for a subtree drawn
+    /// somewhere else (a sheet, a popover, a menu presented from inside it).
+    ///
+    /// A lazy stack asks it at MEASURE time whether its render will band it or
+    /// draw it whole: a stack reached from the content by single-child steps
+    /// is the one the scroll window is consumed by, and its measure may be an
+    /// estimate only the scrollbar reads; any other stack below the content is
+    /// drawn whole, into the height its measure claimed, and must measure what
+    /// it will draw. A measure has no window to ask — the scroll view publishes
+    /// one only for its render — hence this.
+    ///
+    /// A field and not an environment value because an environment value cost
+    /// more than the question is worth: one more entry in every scroll view's
+    /// content environment, copied by every environment write beneath it,
+    /// measured **+2.0% on `session/editor`**, which has no nested stack at
+    /// all. A depth rather than the identity because the identity is a class
+    /// reference, and eight more bytes would move this struct past its 104-byte
+    /// stride (see ``measureGeneration``); two bytes land in padding that is
+    /// already there, after the flags. The lineage the depth leaves out is
+    /// implied: every identity a context carries descends from the one it was
+    /// given, and the canvas is cleared where a context is lent to a subtree
+    /// drawn elsewhere.
+    package var scrollContentOriginDepth: UInt16 = 0
+
     /// Whether this measure is a horizontal natural-extent probe's IDEAL-WIDTH
     /// ask — see ``measureGeneration``'s bit 7. Under it, a width proposal of
     /// `nil` means SwiftUI's unspecified: a view that fills whatever it is

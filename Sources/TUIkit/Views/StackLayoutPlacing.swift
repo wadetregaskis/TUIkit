@@ -55,20 +55,44 @@ extension _VStackCore {
         let children = resolveChildViews(from: content, context: context)
         return rowSlots(
             count: children.count, childAt: { children[$0] }, width: width, context: context,
-            keepsMeasuresLive: keepsMeasuresLive)
+            keepsMeasuresLive: keepsMeasuresLive, stoppingPast: nil)
+    }
+
+    /// The slots of the rows `renderWindow`'s append-while-fits walk DRAWS
+    /// under `heightLimit`: every row that wholly fits, then the first that
+    /// does not, which it draws clipped at the cell (`appendSaturatedTail`).
+    ///
+    /// Built one ordinal at a time and stopped there, so it touches the rows
+    /// the drawing will: every row for a stack whose budget holds all of them,
+    /// a screenful for one whose budget is a screen. Marks what it measures
+    /// live, as a lazy stack's walk does (see above).
+    ///
+    /// - Parameter built: Children already built by the caller, reused rather
+    ///   than built again for the leading ordinals they cover.
+    func reachedRowSlots(
+        _ children: ChildViewCollection, built: [ChildView] = [], heightLimit: Int, width: Int?,
+        context: RenderContext
+    ) -> [RowSlot] {
+        rowSlots(
+            count: children.count, childAt: { $0 < built.count ? built[$0] : children[$0] },
+            width: width, context: context, keepsMeasuresLive: true, stoppingPast: heightLimit)
     }
 
     /// The one slot rule, walked over `count` children in order, each fetched
     /// by ordinal from `childAt` — so a caller holding a lazily built
-    /// collection hands out only the rows the walk actually takes.
+    /// collection hands out only the rows the walk actually takes — and
+    /// stopped after the first slot whose bottom passes `heightLimit`, when
+    /// one is given.
     private func rowSlots(
         count: Int, childAt: (Int) -> ChildView, width: Int?, context: RenderContext,
-        keepsMeasuresLive: Bool
+        keepsMeasuresLive: Bool, stoppingPast heightLimit: Int?
     ) -> [RowSlot] {
         let proposal = ProposedSize(width: width, height: nil)
         let liveMarks = keepsMeasuresLive ? context.renderCache : nil
         var slots: [RowSlot] = []
-        slots.reserveCapacity(count)
+        // Only an unbounded walk knows it will take every row; a bounded one
+        // over a million rows may take forty.
+        if heightLimit == nil { slots.reserveCapacity(count) }
         var runningY = 0
         for ordinal in 0..<count {
             let child = childAt(ordinal)
@@ -86,6 +110,9 @@ extension _VStackCore {
             let y = runningY + spacingBefore
             slots.append(RowSlot(child: child, y: y, size: size, spacingBefore: spacingBefore))
             runningY = y + size.height
+            // The fit test `renderWindow` and `windowSizeThatFits` both make:
+            // this row is the first that does not fit whole.
+            if let heightLimit, runningY > heightLimit { break }
         }
         return slots
     }
@@ -125,6 +152,26 @@ extension _VStackCore {
         guard let window = context.environment.scrollContentWindow else { return nil }
         guard let owner = window.contentIdentity else { return window }
         return context.identity.isDirectDescent(from: owner) ? window : nil
+    }
+
+    /// Whether this stack is inside a scroll view's content WITHOUT being the
+    /// stack that consumes its window — a lazy stack below a header, say, or
+    /// one inside a row of an outer lazy stack.
+    ///
+    /// Such a stack is drawn whole by `renderWindow`'s append-while-fits walk,
+    /// into the height its parent gives it, and its parent gives it the height
+    /// this stack MEASURED: so its measure is the drawing's extent, not an
+    /// estimate for a scrollbar.
+    ///
+    /// The measure-time twin of ``consumableScrollWindow(context:)``, asked of
+    /// the origin the scroll view marks for its measures and its render alike
+    /// (`RenderContext.scrollContentOriginDepth`), since a measure has no window
+    /// to ask. No origin means no scroll view above — or a window injected
+    /// directly, which the render trusts — and is not this.
+    func isNestedInScrollContent(context: RenderContext) -> Bool {
+        let origin = Int(context.scrollContentOriginDepth)
+        guard origin > 0 else { return false }
+        return !context.identity.isDirectDescent(fromDepth: origin - 1)
     }
 }
 

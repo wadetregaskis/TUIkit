@@ -137,7 +137,7 @@ extension _ScrollViewCore {
     /// what earlier frames drew, and a horizontally scrolling list of filling
     /// rows shrank to its prefix's width from its third frame.
     func idealContentContext(_ context: RenderContext) -> RenderContext {
-        var contentContext = context.withChildIdentity(type: Content.self)
+        var contentContext = contentContext(context)
         if !axes.contains(.horizontal) && contentContext.environment.asksWholeContentWidth {
             contentContext.environment.asksWholeContentWidth = false
         }

@@ -3,9 +3,9 @@
 //
 //  A presentation is attached inside the content that presents it and drawn
 //  over the screen. It used to inherit the canvas a scroll view published for
-//  that content — the viewport, the whole-width mark, the visible window — so a
-//  sheet presented from a horizontal strip laid itself out as if it were the
-//  strip. These pin that it starts clean.
+//  that content — the viewport, the whole-width mark, the visible window, the
+//  content's origin — so a sheet presented from a horizontal strip laid itself
+//  out as if it were the strip. These pin that it starts clean.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -21,6 +21,10 @@ private final class CanvasLog {
     /// What each render of the presented content saw: the whole-width mark, and
     /// whether a viewport was published.
     var seen: [(wholeWidth: Bool, viewport: Bool)] = []
+    /// Whether each render of the presented content was still marked as inside
+    /// the strip's content — the origin a lazy stack asks to learn it is nested
+    /// in scroll content, and so must be measured over every row it reaches.
+    var markedOrigin: [Bool] = []
 }
 
 /// Records the scroll canvas it is drawn in.
@@ -31,7 +35,19 @@ private struct CanvasSpy: View {
 
     var body: some View {
         log.seen.append((wholeWidth, viewport != nil))
-        return Text("presented")
+        return OriginSpy(log: log)
+    }
+}
+
+/// Records the content origin its context carries — a field of the context,
+/// not an environment value, so only a `Renderable` can see it.
+private struct OriginSpy: View, Renderable {
+    let log: CanvasLog
+    var body: Never { fatalError("OriginSpy renders via Renderable") }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        log.markedOrigin.append(context.scrollContentOriginDepth != 0)
+        return FrameBuffer(text: "presented")
     }
 }
 
@@ -80,5 +96,9 @@ struct PresentationScrollCanvasTests {
         #expect(
             log.seen.allSatisfy { !$0.wholeWidth && !$0.viewport },
             "the presented content inherited the strip's canvas: \(log.seen)")
+        #expect(!log.markedOrigin.isEmpty, "precondition: the presented content was rendered")
+        #expect(
+            !log.markedOrigin.contains(true),
+            "the presented content was marked as inside the strip's content")
     }
 }

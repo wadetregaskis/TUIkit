@@ -203,7 +203,7 @@ extension PopoverPresentationModifier: Renderable {
             .withAvailableWidth(context.environment.terminalWidth)
             .withAvailableHeight(context.environment.overlayContentHeight)
         popoverContext.environment.activeFocusSectionID = sectionID
-        popoverContext.environment.leaveScrollCanvas()
+        popoverContext.leaveScrollCanvas()
         // `@Environment(\.dismiss)` inside the popover closes the POPOVER — the
         // same act as its Escape handler above. Left unset it would mean the
         // top-level dismissal, which is to quit the application.

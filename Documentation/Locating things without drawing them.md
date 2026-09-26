@@ -736,6 +736,68 @@ lazy stack's total height first. With pull, each level answers only for
 its own children, outward from an anchor it was handed, and unknown
 extents are never demanded.
 
+**What ships (2026-09-23).** The pull above is the design; what ships windows
+only the scroll view's DIRECT content (`consumableScrollWindow`). A lazy stack
+below a header, as here, or in a row of an outer lazy stack, is drawn whole by
+the classic append-while-fits walk, into the height its parent gives it — the
+height it measured. So its measure is its drawn extent, not a scrollbar
+estimate: above 256 rows it is taken over the rows its budget reaches
+(`anchoredSizeThatFits`, told apart by the content origin the scroll view marks
+on every context it asks its content in, `RenderContext.scrollContentOriginDepth`),
+where the sixteen-row sample
+had ended the scroll view wherever the estimate did and left every row past it
+unreachable (`NestedLazyStackReachTests`).
+
+That walk is Ω(rows) per measure, and it is priced by who reads it:
+
+- **Where the stack is drawn** — this example, whose whole `VStack` is drawn —
+  it is the order of the drawing, which builds, measures and renders each of
+  those rows anyway. A walk that reaches every row claims a natural size, so
+  the per-pass memo serves it to every later ask at the same width: one walk
+  per width per frame, not one per rung of the natural-extent ladder.
+- **Where it is not drawn** it is pure cost, and one shape pays it in full:
+  nested stacks in the rows of an outer lazy stack. Below 256 rows the outer
+  stack places its rows by measuring every one of them, so every row's nested
+  stack is walked whether that row is on screen or not; above 256 it estimates
+  from a sixteen-row sample, and each sampled row's nested stack is walked to
+  measure it. Forty rows each holding 300 rows, under a `@State` write above
+  the scroll view every frame (so no memo survives): 4,402 rows built a frame
+  by the estimate, 27,122 by the walk — two walks of every nested stack, one
+  per scrollbar candidate width, and the drawn rows once more by their own
+  render. Where every row is one line the estimate was already exact, and that
+  cost buys nothing. `Stress --bench --scenario app-shapes --variant
+  grouped-feed` prices it (`grouped-feed-uniform` the one-line case,
+  `--scale 8` the sampled outer stack); the commit that shipped this has the
+  numbers.
+- **In a view that also scrolls horizontally** neither bullet's arithmetic
+  holds. The content is asked how wide it is as well — the horizontal probe —
+  and a nested stack answers every width ask there with the whole-content
+  width its kept record holds (`contentWidthOverAllRows`). That answer reads
+  the budget to classify itself, so it claims no natural size
+  (`anchoredSizeThatFits` claims one only for the prefix answer), and every
+  rung of the ladder and every later ask at a width walks every row again:
+  nine measures of each nested stack a frame. The same forty rows of 300
+  build 103,762 rows a frame after a write, where the estimate built 7,002.
+
+Every count here is rows built — calls of a row's builder — on the frame after
+a write, and each was the same on every such frame and in three runs of the
+probe that took it. That is the probe's property, not a guarantee. A row is
+built when its measure misses the pass's memo, and the memo keys a row by its
+view's bytes (`viewValueHash`), among them the heap addresses of its `ForEach`
+closure's context and of its element's box; where a freed row's address comes
+straight back, the memo serves a measure the count would otherwise show. So a
+probe whose rows capture differently can read less, and move from frame to
+frame: the two-axis forty groups, in a probe whose rows capture less, read
+anywhere from 52,342 to 80,195 across runs and allocator settings
+(`MallocScribble`, `MallocNanoZone`), where the probe above read 103,762 under
+every one. What moves is which measures are served, never what one answers.
+
+Walking only the nested stacks someone can see is not a change to this arm.
+The outer stack places its rows at exact line positions, so a row above the
+viewport measured from an estimate that later turned exact would move
+everything on screen; it would have to place them in row space, from an
+anchor, as the anchored window does — which is the pull above.
+
 ### 6c. Follow the log
 
 A build-log pane: `ScrollView { LazyVStack { ForEach(lines) { … } } }`

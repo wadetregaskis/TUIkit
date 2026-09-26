@@ -363,7 +363,7 @@ enum TextFieldSuggestions {
         // being uncomparable used to keep them all from storing; this keeps
         // them so now that the value compares.
         labelContext.environment.hasUncomparableEnvironmentValue = true
-        labelContext.environment.leaveScrollCanvas()
+        labelContext.leaveScrollCanvas()
 
         // The drop-down's own model — the same one the `Picker` builds, so the
         // marker column, the width and the pointer handling are one

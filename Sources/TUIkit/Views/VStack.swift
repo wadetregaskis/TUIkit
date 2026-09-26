@@ -246,7 +246,11 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // render-path mutation): without it, frame 1's measures would
         // eagerly walk millions of rows before the render ever got the
         // chance to seed. Checked BEFORE the eager resolve, which would
-        // build every row.
+        // build every row. (A large stack NESTED below other content in a
+        // scroll view is never windowed, so it never seeds a hypothesis, and
+        // `anchoredSizeThatFits` measures it over the rows its budget reaches
+        // rather than estimating it: the render draws it whole, into the
+        // height answered here.)
         let collection = resolveChildViewCollection(from: content, context: measureContext)
         if collection.isUniformlyKeyed {
             if let fast = uniformSeekSizeThatFits(collection, proposal: proposal, context: context) {

@@ -91,7 +91,7 @@ struct _PickerMenuCore<SelectionValue: Hashable>: View, Renderable, Layoutable {
     private func renderedOptionLabels(context: RenderContext) -> [String?] {
         var labelContext = context.withAvailableWidth(
             max(context.availableWidth, context.environment.terminalWidth))
-        labelContext.environment.leaveScrollCanvas()
+        labelContext.leaveScrollCanvas()
         return entries.map { entry in
             entry.label.map { $0.renderToBuffer(context: labelContext).lines.first ?? "" }
         }

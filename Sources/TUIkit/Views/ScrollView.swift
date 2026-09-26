@@ -1089,7 +1089,9 @@ extension EnvironmentValues {
 
     /// Forgets the canvas an enclosing ``ScrollView`` published for its content
     /// — ``scrollViewportSize``, `asksWholeContentWidth` and
-    /// ``scrollContentWindow`` — for a subtree drawn somewhere else.
+    /// ``scrollContentWindow`` — for a subtree drawn somewhere else. Called
+    /// through `RenderContext.leaveScrollCanvas()`, which forgets the content
+    /// origin the scroll view marks on the context as well.
     ///
     /// A sheet, a popover, an alert or a pop-up menu is attached inside the
     /// content that presents it, but drawn over the screen, and its context
@@ -1105,6 +1107,22 @@ extension EnvironmentValues {
         if self[ScrollViewportSizeKey.self] != nil { self[ScrollViewportSizeKey.self] = nil }
         if asksWholeContentWidth { asksWholeContentWidth = false }
         if scrollContentWindow != nil { scrollContentWindow = nil }
+    }
+}
+
+extension RenderContext {
+    /// Forgets the canvas an enclosing ``ScrollView`` published for its content
+    /// — the environment's share (``EnvironmentValues/leaveScrollCanvas()``)
+    /// and the content origin marked on the context itself
+    /// (`scrollContentOriginDepth`) — for a subtree drawn somewhere else.
+    ///
+    /// The origin has to go with the rest: a lazy stack in a sheet presented
+    /// from inside a scroll view is not in that scroll view's content, and
+    /// told it was, it would measure every row its budget reaches rather than
+    /// the sample, for a drawing that is not there.
+    mutating func leaveScrollCanvas() {
+        environment.leaveScrollCanvas()
+        scrollContentOriginDepth = 0
     }
 }
 

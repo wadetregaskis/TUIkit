@@ -742,6 +742,18 @@ extension _VStackCore {
     /// flexibility come from a bounded sample. Estimation here is honest —
     /// the absolute total feeds only the scrollbar and the clip bound, both
     /// of which the design declares estimated (§3).
+    ///
+    /// Honest, that is, for the stack whose render consumes the scroll window,
+    /// and for no other. One NESTED in a scroll view's content — below a
+    /// header, or in a row of an outer lazy stack — never gets the window
+    /// (`consumableScrollWindow`): it is drawn whole, by `renderWindow`'s
+    /// append-while-fits walk, into the height its parent gives it, and its
+    /// parent gives it the height measured here. The estimate was therefore its
+    /// drawn height, and rows past it were drawn nowhere: 300 rows priced at
+    /// the sixteen-row sample's one line each, of which all but sixteen were
+    /// two, ended the scroll view at row 157. So that stack is measured over
+    /// the rows its budget reaches instead (`reachedRows`) — exactly the rows
+    /// the walk would draw.
     func anchoredSizeThatFits(
         _ children: ChildViewCollection, proposal: ProposedSize, context: RenderContext
     ) -> ViewSize? {
@@ -785,9 +797,26 @@ extension _VStackCore {
             : contentWidthOverAllRows(
                 children, widthLimit: widthLimit, ask: ask, state: state, context: context)
 
-        let (counted, height) = sampledRows(
-            sampleChildren, count: count, state: state, proposal: sampleProposal,
-            heightLimit: heightLimit, context: measureContext)
+        // The rows whose widths count, and the height: estimated for a stack
+        // whose window will band it, exact for one that will be drawn whole.
+        let counted: ArraySlice<ViewSize>
+        let height: Int
+        var isNatural = false
+        if isNestedInScrollContent(context: context) {
+            guard
+                let reached = reachedRows(
+                    children, built: sampleChildren, proposal: sampleProposal,
+                    heightLimit: heightLimit, context: measureContext)
+            else { return nil }
+            (counted, height) = (reached.counted, reached.height)
+            // A whole-content width ask reads the budget to classify itself
+            // (`contentWidthAsk`), so only the prefix answer may claim it.
+            isNatural = reached.isNatural && exact == nil
+        } else {
+            (counted, height) = sampledRows(
+                sampleChildren, count: count, state: state, proposal: sampleProposal,
+                heightLimit: heightLimit, context: measureContext)
+        }
 
         var maxWidth = 0
         var widthFlexible = false
@@ -816,7 +845,8 @@ extension _VStackCore {
 
         return ViewSize(
             width: maxWidth, height: height,
-            isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible)
+            isWidthFlexible: widthFlexible, isHeightFlexible: heightFlexible
+        ).declaringNaturalSize(isNatural)
     }
 
     /// The estimate: the first sixteen rows measured, the pitch averaged over
@@ -855,6 +885,49 @@ extension _VStackCore {
             budget: heightLimit, pitch: estimate, spacing: spacing, count: count))
         let total = count * estimate - spacing
         return (sampled.prefix(prefix), min(total, max(0, heightLimit)))
+    }
+
+    /// Every row a stack drawn WHOLE will draw under `heightLimit`, measured,
+    /// and the height they take — `reachedRowSlots`, the same fit test the
+    /// append-while-fits walk makes, so the two cannot disagree about where the
+    /// stack ends. Every reached row counts for the width: the walk draws each,
+    /// the last one clipped. `nil` at a spacer, whose share of the height only
+    /// the full walk can distribute.
+    ///
+    /// `isNatural` when the walk took every row inside the budget and every
+    /// row's own answer was natural: the budget then shaped nothing, and the
+    /// measure memo may serve this answer to any ask at the same width with
+    /// room for it (`ViewSize.isNaturalSize`). A scroll view asks its content
+    /// at several budgets a pass — each rung of the natural-extent ladder, then
+    /// the render's own canvas — and without the claim each ask walked every
+    /// row again.
+    ///
+    /// Ω(rows reached) per measure, and inside a scroll view that is every row.
+    /// Where the stack is drawn, that is the order of the drawing itself, which
+    /// builds, measures and renders each of those rows. Where it is NOT drawn
+    /// it is pure cost: a nested stack in a row of an outer lazy stack is
+    /// measured whenever the outer stack places its rows, on screen or not.
+    /// Forty such rows of 300 rows each, with a `@State` write above the scroll
+    /// view every frame, build 27,122 rows a frame where the estimate built
+    /// 4,402, each the same in three runs of the probe that counted it — see
+    /// "What ships" under §6b of `Documentation/Locating things without drawing
+    /// them.md`, which also says why a count of rows built can move.
+    private func reachedRows(
+        _ children: ChildViewCollection, built: [ChildView], proposal: ProposedSize,
+        heightLimit: Int, context: RenderContext
+    ) -> (counted: ArraySlice<ViewSize>, height: Int, isNatural: Bool)? {
+        let slots = reachedRowSlots(
+            children, built: built, heightLimit: heightLimit, width: proposal.width,
+            context: context)
+        guard !slots.contains(where: \.child.isSpacer) else { return nil }
+        // A walk that stopped past the limit reports the LIMIT, as the exact
+        // walk does (`windowSizeThatFits`): the row it stopped at is drawn
+        // clipped to it.
+        let bottom = slots.last.map { $0.y + $0.height } ?? 0
+        let isNatural =
+            slots.count == children.count && bottom <= max(0, heightLimit)
+            && slots.allSatisfy(\.size.isNaturalSize)
+        return (slots.map(\.size)[...], min(bottom, max(0, heightLimit)), isNatural)
     }
 
     /// How many rows a walk of this stack touches under `budget`: the ones

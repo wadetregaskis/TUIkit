@@ -15,6 +15,26 @@ import TUIkitCore
 import TUIkitView
 
 extension _ScrollViewCore {
+    /// The context the content is measured and drawn in, at every site that
+    /// asks it anything: under its OWN child identity (see `contentExtents`),
+    /// marked as the scroll content's origin (`scrollContentOriginDepth`), so a
+    /// windowed stack below can tell from a measure whether its render will
+    /// band it or draw it whole.
+    ///
+    /// One helper for every site because the answer depends on it: the measure
+    /// memo keys on no context but the widths, so a stack asked once with the
+    /// origin (the extents) and once without (this view's ideal size) could be
+    /// served the other ask's answer — and the ideal size is the content's own,
+    /// as in SwiftUI, which for a nested stack is the height it draws.
+    func contentContext(_ context: RenderContext) -> RenderContext {
+        var contentContext = context.withChildIdentity(type: Content.self)
+        // Depth plus one, so 0 can mean "no scroll content". A chain too deep
+        // for two bytes is marked as none, which answers as the estimate did.
+        let depth = contentContext.identity.depth + 1
+        contentContext.scrollContentOriginDepth = depth < Int(UInt16.max) ? UInt16(depth) : 0
+        return contentContext
+    }
+
     /// The content's natural extents at a candidate viewport, WITHOUT building a
     /// buffer — the same measures `renderedContent` uses to size its render, so the
     /// scrollbar-reservation decision matches what will actually be drawn.
@@ -96,9 +116,17 @@ extension _ScrollViewCore {
     /// offered one line past the viewport, a tab view in an overflowing scroll
     /// view filed a new extent on the first frame that took this path, and the
     /// write asked for one frame more (`TabViewIdleRenderTests`). What that
-    /// gives up is small: an eager stack measures every row whatever it is
-    /// offered and a windowed one its sample, so only a little content is
-    /// cheaper at the smaller budget — a column of short lazy stacks among it.
+    /// gives up is small for most content: an eager stack measures every row
+    /// whatever it is offered, and a windowed one at the content's origin its
+    /// sample.
+    ///
+    /// Not for a windowed stack NESTED below other content — under a header, or
+    /// in a row of an outer lazy stack. It measures every row its budget
+    /// reaches (`anchoredSizeThatFits`), so at the first rung it walks every row
+    /// it holds, at a width nothing is drawn at: a whole walk more a frame, and
+    /// for lazy stacks in the rows of an outer one, nearly half the frame (forty
+    /// groups of 300 rows: 27,122 rows built on the frame after a write, of
+    /// which one walk, 12,780, is this question's).
     func contentOverflowsCanvas(contentWidth: Int, viewportHeight: Int, context: RenderContext) -> Bool {
         // The ladder's first rung, as `contentExtents` and then
         // `measureNaturalExtent` ask it of a vertical view's content: the same
@@ -128,7 +156,7 @@ extension _ScrollViewCore {
     func contentCanvasContext(
         contentWidth: Int, viewportHeight: Int, horizontal: Bool, context: RenderContext
     ) -> RenderContext {
-        var canvas = context.withChildIdentity(type: Content.self)
+        var canvas = contentContext(context)
         // Publish the visible viewport so descendants can fit to it instead of the
         // (unbounded, below) measure canvas — e.g. Image's `.imageFitTarget(.viewport)`.
         canvas.environment.scrollViewportSize = ScrollViewportSize(
