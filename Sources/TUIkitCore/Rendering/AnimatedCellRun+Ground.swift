@@ -135,6 +135,54 @@ extension AnimatedCellRun {
                 ?? Array(repeating: nil, count: max(0, width)))
     }
 
+    /// Both lists of fields this run's cells are drawn over in a row the writer has
+    /// yet to build — a buffer's own line, before any page is put under it: a field a
+    /// painter stated as `ESC[49m` held as that statement (`.named(49)`), which the
+    /// splice restates.
+    ///
+    /// In such a row a stated 49 and a reset are two fields — the terminal's own, and
+    /// the page the writer will put back — and on a page with an RGB two colours
+    /// (`Opacity as composition` §94). ``fields(onPage:)`` reads a row on its page,
+    /// where they are one: the tick's reading, of a row already on screen. A splice
+    /// into a row still to be built with it left a cell whose painter stated 49 on
+    /// none, which the page would fill.
+    ///
+    /// - Returns: The fields under a bare cell and under a stated `ESC[49m`.
+    package func fieldsInAnUnbuiltRow() -> GroundFields {
+        let none = [SGRState.Colour?](repeating: nil, count: max(0, width))
+        return GroundFields(
+            bare: ground.map { Self.unbuiltFields(of: $0, cells: width) } ?? none,
+            underStatedDefault: groundUnderStatedDefault.map { Self.unbuiltFields(of: $0, cells: width) } ?? none)
+    }
+
+    /// `record` read cell by cell as a row still to be built reads it: the field
+    /// under each of `width` cells, a stated 49 as `.named(49)`, and `nil` after a
+    /// reset. A short record's last field stands under the cells it does not reach.
+    private static func unbuiltFields(of record: String, cells width: Int) -> [SGRState.Colour?] {
+        var fields: [SGRState.Colour?] = []
+        fields.reserveCapacity(max(0, width))
+        var state = SGRState()
+        var field: SGRState.Colour?
+        _ = record.forEachANSISegment { segment in
+            switch segment {
+            case .ansi(let sequence, isSGR: true):
+                switch state.applyReportingBackground(sequence) {
+                case .reset: field = nil
+                case .terminalDefault: field = .named(49)
+                case .colour: field = state.backgroundColour
+                case nil: break
+                }
+            case .ansi:
+                break
+            case .visible(let character):
+                for _ in 0..<max(1, character.terminalWidth) where fields.count < width { fields.append(field) }
+            }
+            return fields.count < width
+        }
+        while fields.count < width { fields.append(field) }
+        return fields
+    }
+
     /// The field under each of this run's cells, left to right, on a row built on
     /// `page` — `nil` for the terminal's own.
     ///

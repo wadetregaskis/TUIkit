@@ -813,7 +813,7 @@ struct OpacityForeignRunTests {
         #expect(second.lines[1] == "ab")
     }
 
-    @Test("A repeating fade still yields a foreign run — two clocks, one cell")
+    @Test("A repeating fade still yields a foreign run at a speed of its own — two clocks, one cell")
     func aCyclingFadeStillDropsForeignRuns() {
         // The fade's phases and the run's frames tick independently, and
         // their product is not representable as one run. The run yields; its
@@ -822,7 +822,7 @@ struct OpacityForeignRunTests {
         var buffer = FrameBuffer(lines: [ANSIRenderer.colorize("hello", foreground: .green)])
         buffer.animatedCells = [
             AnimatedCellRun(
-                offsetX: 0, offsetY: 0, width: 5, frames: ["aaaaa", "bbbbb"], clock: .cursor)
+                offsetX: 0, offsetY: 0, width: 5, frames: ["aaaaa", "bbbbb"], frameTicks: 5, clock: .cursor)
         ]
         var region = OpacityRegion(offsetX: 0, offsetY: 0, width: 5, height: 1, opacity: 1)
         region.cycle = OpacityCycle(phases: [1, 0.6], clock: .cursor)
@@ -830,6 +830,7 @@ struct OpacityForeignRunTests {
         let resolved = buffer.resolvingOpacity(surface: .black, palette: palette())
         // The fade's own runs replace it; the foreign run itself is gone.
         #expect(!resolved.animatedCells.contains { $0.frames.contains { $0.stripped == "bbbbb" } })
+        #expect(resolved.animatedCells.count == 1, "the fade still animates")
     }
 
     @Test("A run beside the region is left alone")
@@ -847,12 +848,12 @@ struct OpacityForeignRunTests {
         #expect(resolved.animatedCells.first?.offsetX == 6)
     }
 
-    /// Two cycling fades on one row each built a WHOLE-ROW run, and
-    /// `patchingAnimatedRun` replaces the span a run claims rather than merging
-    /// into it — so the run the replay applied second reverted the first's region
-    /// to the static opacity its rebuild had pinned, on every tick, and one of
-    /// the two fades never moved.
-    @Test("Two cycling fades on one row become one run, not two")
+    /// Two cycling fades that OVERLAP on one row are one run. Two runs over one
+    /// cell fight: `patchingAnimatedRun` replaces the span a run claims rather than
+    /// merging into it, so the run the replay applied second reverted the first's
+    /// cells to the static opacity its rebuild had pinned, on every tick, and one
+    /// of the two fades never moved.
+    @Test("Two cycling fades that overlap on one row become one run, not two")
     func twoCyclingFadesOnOneRowMerge() throws {
         // Characters rather than colours as the oracle: over a destination that
         // paints its own glyphs, alpha at or above 1/2 draws the source's
@@ -861,20 +862,21 @@ struct OpacityForeignRunTests {
         var buffer = FrameBuffer(lines: ["AB"])
         var left = OpacityRegion(offsetX: 0, offsetY: 0, width: 1, height: 1, opacity: 0.9)
         left.cycle = OpacityCycle(phases: [0.9, 0.1], clock: .content)
-        var right = OpacityRegion(offsetX: 1, offsetY: 0, width: 1, height: 1, opacity: 0.9)
-        right.cycle = OpacityCycle(phases: [0.9, 0.9, 0.1], clock: .content)
-        buffer.opacityRegions = [left, right]
+        var whole = OpacityRegion(offsetX: 0, offsetY: 0, width: 2, height: 1, opacity: 0.9)
+        whole.cycle = OpacityCycle(phases: [0.9, 0.9, 0.1], clock: .content)
+        buffer.opacityRegions = [left, whole]
 
         let resolved = buffer.resolvingOpacity(
             over: FrameBuffer(lines: ["xy"]), at: (x: 0, y: 0), surface: .black,
             palette: palette())
 
-        #expect(resolved.animatedCells.count == 1, "one row, one run")
+        #expect(resolved.animatedCells.count == 1, "one group of fades, one run")
         let run = try #require(resolved.animatedCells.first)
         #expect(run.offsetY == 0)
         #expect(run.width == 2)
         // Two phases and three share a six-tick space, and each region reads its
-        // own phase at every tick of it.
+        // own phase at every tick of it — the left cell at the first region's
+        // phase, the layer being the first claim's (`foldedAlphas`).
         #expect(
             run.frames.map(\.stripped) == ["AB", "xB", "Ay", "xB", "AB", "xy"],
             "\(run.frames.map(\.stripped))")

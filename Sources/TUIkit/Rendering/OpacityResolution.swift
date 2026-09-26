@@ -153,9 +153,9 @@ extension FrameBuffer {
         // One row at a time, and each row rebuilt by the SAME function whatever
         // it is being rebuilt for — the current picture, or a phase of a
         // repeating fade. That is what makes the pre-rendered cycle sound: the
-        // frame the loop splices at the tick just drawn is byte-identical to
-        // the line the render produced, because it came out of this call with
-        // the same argument.
+        // frame the loop splices at the tick just drawn is cut from the line the
+        // render produced, because it came out of this call with the same
+        // argument.
         func rebuild(
             _ row: Int, _ line: String, substituting: (OpacityRegion) -> FrameBuffer.CellAlpha?
         ) -> String? {
@@ -246,20 +246,21 @@ extension FrameBuffer {
         // animation, so with the run gone nothing kept the clock alive and
         // they sat motionless at one faded frame.
         //
-        // The one case that still yields is a run under a REPEATING fade: the
-        // fade's phases and the run's frames tick independently, and their
-        // product is not representable as one run. The run's cells freeze at
-        // the frame the lines were drawn with, inside a fade that itself
-        // keeps animating — a bounded compromise where the alternative was a
-        // full render per tick.
-        result.animatedCells = result.animatedCells.compactMap { run in
+        // A run under a REPEATING fade is not faded here: the fade's own run
+        // carries its cells, and folds its frames in where the two step together
+        // (``cyclingRuns(of:over:folding:rebuilding:)``). Where they do not, their
+        // product is not representable as one run, and the run's cells freeze at
+        // the frame the lines were drawn with, inside a fade that itself keeps
+        // animating — a bounded compromise where the alternative was a full
+        // render per tick.
+        result.animatedCells = animatedCells.compactMap { run in
             Self.faded(
                 run, covering: regionsForRuns, destination: destination,
                 position: position, surface: resolvedSurface,
                 defaultForeground: resolvedForeground, fillingStatedTerminalField: fillingStatedTerminalField)
         }
         result.animatedCells += Self.cyclingRuns(
-            of: translucent, over: lines, rebuilding: rebuild)
+            of: translucent, over: lines, folding: animatedCells, rebuilding: rebuild)
         return result
     }
 

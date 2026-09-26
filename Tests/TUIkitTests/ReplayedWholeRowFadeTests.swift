@@ -1,12 +1,14 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  ReplayedWholeRowFadeTests.swift
 //
-//  A repeating `.opacity` fade replays as ONE run over its whole row (the
-//  resolution builds it that way — see `OpacityResolution.cyclingRuns`), so the
-//  run's cells sit on whatever the row has beneath each of them: a coloured label
-//  for some, the page for the rest. Every tick is replayed against a render at
-//  the same instant, on a page the palette paints and on the terminal's own
-//  (`Color.default`, no RGB while the terminal has not reported one).
+//  A repeating `.opacity` fade replays as a run cut from its row as rebuilt at
+//  each phase (`FrameBuffer.cyclingRuns`) — over the whole row until 2026-09-26,
+//  over the columns its fades cover since (`Opacity as composition.md` §6b.1) —
+//  so the run's cells sit on whatever the row has beneath each of them: a
+//  coloured label for some, the page for the rest. Every tick is replayed against
+//  a render at the same instant, on a page the palette paints and on the
+//  terminal's own (`Color.default`, no RGB while the terminal has not reported
+//  one).
 //
 //  Two rows. `REC` opens on a label with a background of its own and fades the
 //  text after it: the shape a single field for the whole run got wrong — the

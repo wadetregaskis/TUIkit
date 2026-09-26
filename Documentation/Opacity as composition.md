@@ -369,6 +369,66 @@ Two consequences for the implementation:
 So the fast path is keepable, and keeping it is a matter of moving one call
 rather than redesigning the replay.
 
+### 6b.1 A repeating fade's run is as wide as its fades (2026-09-26)
+
+The resolution built a repeating fade's runs one per ROW, each frame the whole row
+rebuilt at a phase (`FrameBuffer.cyclingRuns`). A tick replaces the span a run
+claims rather than merging into it, so anything else that animated on that row was
+put back at the frame the render had drawn it with on every tick. Two shapes:
+
+- **A run beside the fade** was frozen. `HStack(spacing: 0) { Spinner(); Text(" B ")
+  .opacity(dim ? 0.2 : 1); Spacer() }` under a `repeatForever` fade held the
+  spinner's glyph between renders while a render at the same instant turned it, on
+  every tick of the walk (23 of 24, `ReplayOracle`). The code comment on the
+  function named it: "the spinner still freezes. Same cause, separate fix."
+- **A run under the fade** was dropped: a run covered by a repeating fade was
+  dropped outright, since its steps and the fade's are not one run in general. That
+  includes a fade some painter has already spent into a run of its own. A
+  `.listRowBackground` spends its content's fades against its fill (§22), so
+  `Text(" A ").opacity(pulse).listRowBackground(blue).opacity(pulse)` dropped the
+  inner breath's run under the outer one, and the label held the phase of its own
+  breath it was drawn at (23 ticks of 24).
+
+**The rule.** A run covers the columns its fades cover. The repeating fades on a
+row are grouped where their columns overlap, and each group is one run from its
+first covered column to its last. Its frames are cut from the rows the resolution
+rebuilds (`ansiAwareSlice`, the styling in force where they begin carried in
+front), so the frame at the tick the render drew shows exactly the cells it drew.
+Fades that overlap still share one run, walked in a combined step space as before:
+two runs over one cell would fight. Fades beside each other, and every other run
+on the row, animate on their own.
+
+A run the group covers that steps with it joins the same combined space: on its
+clock, at the standard frame a cycle steps at, and saying nothing about alpha frame
+by frame. At each step its frame is spliced into the row before the row is rebuilt,
+within the budget one cycle is held to — over the fields its painters left under each
+cell as a row still to be built reads them (`AnimatedCellRun.fieldsInAnUnbuiltRow()`):
+a painter's stated 49 is the terminal's own there, not the page a reset leaves for the
+writer. Read on a page, as the tick reads a row already on screen
+(`AnimatedCellRun.fields(onPage:)`), the two were one field, and a spinner inside
+`.background(Color.default)` under the fade was spliced onto no field: the fade's frame
+at the step the render drew was not the row it drew, and every tick replayed it on the
+page where the render has the terminal's own. The fields are read once per folded run,
+not at every step: they are the same at each. A run that steps at a speed of its own, such as a spinner's
+80 ms, has no product within that budget. It still yields: its cells freeze at the
+frame the lines were drawn with, inside a fade that keeps animating.
+
+What it costs: the same rebuilds as before, one per phase per group. A row with
+two groups now rebuilds per group, where it rebuilt once for all of them, and a
+covered run that folds in multiplies its group's phases up to the budget. Each
+frame is cut from its row, which is one more walk of the row per phase.
+
+`RepeatingFadeRunWidthTests` replays both shapes through the run loop against a
+render at every tick. Before, both failed (23 issues each). `OpacityResolutionTests`
+pins the resolution: two fades beside each other are a run each over its own
+column, with a run beside them kept; two that overlap are one run in six steps;
+a run stepping with the fade is folded in, `aaaaa`/`bbbbb` through three phases in
+six steps; and a run at a speed of its own still yields. With the folding taken
+out, the folded run and the nested fade fail and the rest pass. A spinner inside a
+`.background(Color.default)` under a fade is folded, and the fade's frame at the drawn
+step replayed over the row is the row, cell for cell; read on a page, its two cells
+were on the page where the row has the terminal's own.
+
 ## 7. Staging, and whether it wants a branch
 
 Four steps, each shippable and each verifiable on its own:
@@ -546,7 +606,7 @@ found by it.
   before any layer is drawn over it. Left pending, a region would go on naming
   cells a layer had since replaced, and the LAYER's cells would be faded at
   the root.
-- **A baked run covers the whole ROW, not the region's columns.** That is what
+- ~~**A baked run covers the whole ROW, not the region's columns.** That is what
   makes the frame the loop splices byte-identical to the line the render drew
   rather than merely equivalent to it — a narrower frame would be a SLICE of
   the line, and a slice re-establishes SGR state at its start, so the bytes
@@ -557,7 +617,13 @@ found by it.
   If it ever matters, the fix is in `AnimatedBufferCycle`, not here: trim the
   common prefix and suffix across a row's frames and re-state the style at the
   trimmed start, which would narrow every cycle producer's runs and not just
-  this one.
+  this one.~~ Revised 2026-09-26 (§6b.1): a whole-row run put every other run on
+  its row back at the frame it was drawn with, on every tick, so a spinner
+  beside a breathing label froze. A run now covers its fades' columns and is cut
+  from the rebuilt row, the styling in force at its start carried in front. Its
+  bytes differ from the line's where the cells do not, and nothing compares the
+  bytes: the replay's checks, and the loop's own skip of a tick that changes
+  nothing, compare frames with frames.
 
 ## 10. The refined blend (2026-08-24)
 
