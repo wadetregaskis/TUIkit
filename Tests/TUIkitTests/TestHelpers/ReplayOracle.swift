@@ -18,6 +18,9 @@
 //  row the replay started from, because only a render knows what the screen
 //  should show at a later step; the row the replay starts from is what it
 //  patches, and asking it would only check that the replay reads what it reads.
+//  And every row a render at the instant has moved is compared as well, run or
+//  no run — a glyph, or only a colour: a run the resolution dropped leaves its
+//  row with nothing to replay, frozen where a render moves it.
 //
 //  The replaying loop keeps the run loop's schedule, not just its ticks: a render
 //  may ask for another at a given instant (a wake, `RenderContext.requestWake`)
@@ -122,17 +125,21 @@ enum ReplayOracle {
                     driven.render(at: base)
                 }
             }
-            guard let first = replaying.loop.replayable, !first.runs.isEmpty else { continue }
+            // A stop with no run at all is walked too: nothing replays there, so the
+            // screen holds the last render until a firing it asked for, and a row a
+            // render at the instant has moved since is a row that froze.
+            guard replaying.loop.replayable != nil else { continue }
             let cursorAtBase = replaying.timer.elapsed(for: .cursor)
             for tickIndex in 1...max(1, ticks) {
                 let now = base + Int64(tickIndex) * step + tick / 2
                 let since = Double(now - base) / 1_000_000_000
                 findings.scheduledRenders += replaying.renderWhatFellDue(by: now)
-                guard
-                    replaying.loop.replayAnimations(elapsed: [
-                        .content: Double(now) / 1_000_000_000, .cursor: cursorAtBase + since,
-                    ])
-                else { continue }
+                // What it replays, if anything: a tick that lands on the picture
+                // already showing, or finds no run to replay, leaves the screen as it
+                // is, and that is still the screen to compare.
+                _ = replaying.loop.replayAnimations(elapsed: [
+                    .content: Double(now) / 1_000_000_000, .cursor: cursorAtBase + since,
+                ])
                 rendering.render(at: now)
                 if let colouring, colouring.renderedAt != replaying.renderedAt {
                     colouring.render(at: replaying.renderedAt)
@@ -140,9 +147,20 @@ enum ReplayOracle {
                 guard let replayed = replaying.loop.replayable, let rendered = rendering.loop.replayable
                 else { continue }
                 let coloured = colouring?.loop.replayable
-                // The rows of the frame being replayed: a render since the stop began
-                // may have moved a run.
-                let rows = Set(replayed.runs.map(\.offsetY)).sorted()
+                // The rows of the frame being replayed — a render since the stop began
+                // may have moved a run — and every row a render at this instant has
+                // moved since the render the replay patches: a glyph, or only how a
+                // cell looks. A run the resolution dropped leaves its row with nothing
+                // to replay, frozen there while a render moves it; only rows a run sits
+                // on were compared until 2026-09-26, so such a row was never looked at,
+                // and then only rows whose GLYPHS moved, so a fade that froze over a
+                // row's fill, moving no glyph, was not either.
+                let moved = rendered.contentLines.indices.filter { row in
+                    replayed.contentLines.indices.contains(row)
+                        && firstDifference(
+                            paintedCells(rendered.contentLines[row]), paintedCells(replayed.contentLines[row])) != nil
+                }
+                let rows = Set(replayed.runs.map(\.offsetY) + moved).sorted()
                 for row in rows where replayed.contentLines.indices.contains(row) {
                     findings.compared += 1
                     let shown = paintedCells(replayed.lastPatched[row]?.line ?? replayed.contentLines[row])
