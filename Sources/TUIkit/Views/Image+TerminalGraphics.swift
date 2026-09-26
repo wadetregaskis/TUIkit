@@ -54,9 +54,9 @@ private struct TerminalGraphicsKey: EnvironmentKey {
 
 extension EnvironmentValues {
 
-    /// The terminal cell's size in pixels, published at startup from
-    /// `TIOCGWINSZ`. Used to decide how many real pixels an ``Image`` is
-    /// transmitted with.
+    /// The terminal cell's size in pixels, published by the render loop every
+    /// frame from `TIOCGWINSZ`. Used to decide how many real pixels an
+    /// ``Image`` is transmitted with.
     public var imageCellPixels: TerminalCellPixels {
         get { self[TerminalCellPixelsKey.self] }
         set { self[TerminalCellPixelsKey.self] = newValue }

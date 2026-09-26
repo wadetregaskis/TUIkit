@@ -1086,7 +1086,12 @@ non-default setup.
   the 1.0…4.0 sanity band), and `.imageCellAspect(_:)` overrides
   explicitly. *Residual: if circles still look slightly tall on iTerm2,
   the CSI-derived 2.57 is the candidate correction — verify by eye with a
-  known-square image before switching sources.*
+  known-square image before switching sources.* The ioctl is read every
+  frame, and the aspect and the cell's pixel size are part of the render
+  loop's environment snapshot (2026-09-26), so a report that moves between
+  frames redraws memoized content rather than leaving it drawn for the old
+  cell. *Not yet measured: which hosts re-report the pixel fields on a font
+  change without a resize.*
 
 ---
 

@@ -52,6 +52,20 @@ internal struct EnvironmentSnapshot: Equatable {
     /// read `\.scenePhase` went on drawing the phase from before a suspend.
     let scenePhase: ScenePhase
 
+    /// The terminal cell's height-to-width ratio, which the render loop reads
+    /// from `TIOCGWINSZ` every frame and publishes at the root — before this
+    /// snapshot is taken, which it was not. A change of cell moves it (a 7x16
+    /// cell is 2.29, an 8x17 one 2.13), and nothing a memo keys on moves with
+    /// it, so without it here a memoized row kept an ASCII picture sized, and a
+    /// radial or angular ramp shaped, for the cell before the change, beside
+    /// fresh rows drawn for the new one.
+    let imageCellAspect: Double
+
+    /// The terminal cell's size in pixels, published beside the aspect from the
+    /// same `ioctl`, for the same reason: a picture transmitted to the
+    /// terminal is resampled to it.
+    let imageCellPixels: TerminalCellPixels
+
     /// Creates a snapshot from fully-built environment values.
     init(from environment: EnvironmentValues) {
         self.palette = ComparablePalette(environment.palette)
@@ -59,5 +73,7 @@ internal struct EnvironmentSnapshot: Equatable {
         self.resolvedAutomaticToggleCharacterSet = environment.resolvedAutomaticToggleCharacterSet
         self.localeIdentifier = environment.locale.identifier
         self.scenePhase = environment.scenePhase
+        self.imageCellAspect = environment.imageCellAspect
+        self.imageCellPixels = environment.imageCellPixels
     }
 }

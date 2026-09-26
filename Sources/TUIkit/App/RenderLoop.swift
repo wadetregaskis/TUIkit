@@ -502,6 +502,7 @@ extension RenderLoop {
         // and the bar can be sized for it in this pass rather than the next.
         resolveStatusBarTooltip(terminalWidth: terminalWidth, nowNanos: frameNowNanos)
         let statusBarHeight = statusBar.height
+        publishCellGeometry(into: &environment)
         invalidateCacheIfEnvironmentChanged(environment: environment)
 
         // Render the scene into the content area — resolving the app-header
@@ -692,20 +693,6 @@ extension RenderLoop {
         var environment = environment
         environment.terminalHeight = terminalHeight
         environment.terminalWidth = terminalWidth
-        // Auto-detect the terminal cell's pixel aspect for undistorted images;
-        // terminals that don't report their pixel size keep the 2.0 default (or
-        // a `.imageCellAspect(_:)` override deeper in the tree).
-        // A capability, not part of the protocol every host must implement:
-        // see `CellGeometryReporting`.
-        let geometry = terminal as? any CellGeometryReporting
-        if let cellAspect = geometry?.cellPixelAspect() {
-            environment.imageCellAspect = cellAspect
-        }
-        // …and the undivided version, which is what an image transmitted to
-        // the terminal's own graphics protocol is resampled to.
-        if let cellPixels = geometry?.cellPixelSize() {
-            environment.imageCellPixels = cellPixels
-        }
         // Determine header height. On the first frame, we perform a measurement
         // pass to discover the actual header height before outputting anything.
         // This prevents visible content jumping.
@@ -1315,13 +1302,39 @@ extension RenderLoop {
         tuiContext.renderCache.logFrameStats()
     }
 
+    /// Publishes the terminal cell's geometry, as the terminal reports it this
+    /// frame, at the root of the environment.
+    ///
+    /// The aspect keeps an image undistorted and a centred ramp round;
+    /// terminals that don't report their pixel size keep the 2.0 default (or a
+    /// `.imageCellAspect(_:)` override deeper in the tree). The undivided pixel
+    /// size is what an image transmitted to the terminal's own graphics
+    /// protocol is resampled to. A capability, not part of the protocol every
+    /// host must implement: see `CellGeometryReporting`.
+    ///
+    /// BEFORE ``invalidateCacheIfEnvironmentChanged(environment:)``, which is
+    /// the point: a font change moves the geometry with nothing a memo keys on
+    /// moving, so the snapshot has to see it. It was published inside
+    /// `renderContent`, after the snapshot had been taken, and a memoized row
+    /// went on drawing for the cell before the change.
+    fileprivate func publishCellGeometry(into environment: inout EnvironmentValues) {
+        let geometry = terminal as? any CellGeometryReporting
+        if let cellAspect = geometry?.cellPixelAspect() {
+            environment.imageCellAspect = cellAspect
+        }
+        if let cellPixels = geometry?.cellPixelSize() {
+            environment.imageCellPixels = cellPixels
+        }
+    }
+
     /// Clears the render cache when environment values affecting visual output changed.
     ///
     /// Compares this frame's `EnvironmentSnapshot` with the previous frame's. On
     /// mismatch, all `EquatableView`-cached subtrees are invalidated so they
-    /// re-render with the new palette, appearance, glyphs, locale or scene phase.
+    /// re-render with the new palette, appearance, glyphs, locale, scene phase
+    /// or cell geometry.
     ///
-    /// This runs once per frame (a palette comparison and four small ones) and
+    /// This runs once per frame (a palette comparison and six small ones) and
     /// ensures developers never need to manually invalidate the cache after theme
     /// changes — including a palette whose colours were edited under the same id.
     fileprivate func invalidateCacheIfEnvironmentChanged(environment: EnvironmentValues) {

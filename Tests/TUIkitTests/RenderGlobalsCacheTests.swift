@@ -8,6 +8,10 @@
 //  task-local pin changes them for one test. A memo served across the change
 //  drew the old answer. These pin that it no longer does.
 //
+//  So does the terminal's cell geometry, which the render loop reads from the
+//  tty every frame and publishes at the root: a font change moves it with
+//  nothing a memo keys on moving.
+//
 //  Created by Wade Tregaskis
 //  License: MIT
 
@@ -96,5 +100,67 @@ struct RenderGlobalsCacheTests {
         #expect(loop.tui.renderCache.stats.clears == before, "precondition: an unchanged answer clears nothing")
         pinned(true) { _ = loop.frame(view) }
         #expect(loop.tui.renderCache.stats.clears == before + 1, "the \(answer) answer moved and nothing was cleared")
+    }
+
+    /// The terminal's cell geometry is read from `TIOCGWINSZ` and published at
+    /// the root every frame, and a font change moves it with no view value and
+    /// no state changing — the case the render loop's snapshot is for. A
+    /// circle drawn in cells is one only at the aspect it was drawn for.
+    ///
+    /// Through the real loop, with a terminal that reports its geometry: the
+    /// snapshot's fields are necessary and not sufficient. The loop published
+    /// the geometry inside `renderContent`, AFTER it had taken the snapshot,
+    /// so a snapshot that carried the geometry would still have compared two
+    /// defaults.
+    @Test("A radial ramp drawn at one cell aspect is not served at another")
+    func cellAspect() {
+        func drawn(_ aspects: [Double]) -> [String] {
+            let harness = RenderLoopHarness()
+            let loop = harness.loop(DiscApp())
+            for aspect in aspects {
+                harness.terminal.reportedCellAspect = aspect
+                loop.render()
+            }
+            return loop.replayable?.contentLines ?? []
+        }
+        ColorDepth.withCurrent(.truecolor) {
+            let fresh = drawn([1])
+            #expect(fresh != drawn([2]), "precondition: the ramp must depend on the aspect or this proves nothing")
+            #expect(drawn([2, 2, 1]) == fresh, "served the disc drawn for the aspect before")
+        }
+    }
+
+    /// The loop's rule itself, for both halves of the geometry: the aspect an
+    /// ASCII picture and a centred ramp are drawn for, and the cell's pixels a
+    /// transmitted picture is resampled to. Compared as `Bool`s so a failure
+    /// does not print two whole palettes.
+    @Test("The snapshot carries the terminal's cell geometry", arguments: ["aspect", "pixels"])
+    func cellGeometryIsInTheSnapshot(_ field: String) {
+        var environment = EnvironmentValues()
+        let before = EnvironmentSnapshot(from: environment)
+        let unchanged = before == EnvironmentSnapshot(from: environment)
+        #expect(unchanged, "an unchanged geometry keeps the cache")
+        switch field {
+        case "aspect": environment.imageCellAspect = 2.125
+        default: environment.imageCellPixels = TerminalCellPixels(width: 8, height: 17)
+        }
+        let moved = before != EnvironmentSnapshot(from: environment)
+        #expect(moved, "the \(field) moved and the loop would clear nothing")
+    }
+}
+
+/// A memoized disc: a radial ramp behind three rows of eight cells.
+private struct DiscApp: App {
+    init() {}
+
+    var body: some Scene {
+        WindowGroup {
+            Card(
+                title: "disc",
+                content: Text(verbatim: "        \n        \n        ").background(
+                    RadialGradient(
+                        colors: [.rgb(255, 0, 0), .rgb(0, 0, 255)], center: .center, startRadius: 0, endRadius: 4))
+            ).equatable()
+        }
     }
 }

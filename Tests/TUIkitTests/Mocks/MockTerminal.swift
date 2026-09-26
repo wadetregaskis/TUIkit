@@ -39,6 +39,13 @@ final class MockTerminal: TerminalProtocol {
     /// The simulated terminal size.
     var size: (width: Int, height: Int) = (80, 24)
 
+    /// The cell geometry this terminal reports, as a real one reads it from
+    /// `TIOCGWINSZ` every frame. `nil`, the default, reports none — as a
+    /// terminal that fills the pixel fields with zeroes does — so the render
+    /// loop keeps its defaults.
+    var reportedCellAspect: Double?
+    var reportedCellPixels: TerminalCellPixels?
+
     /// All strings written via ``write(_:)``.
     private(set) var writtenOutput: [String] = []
 
@@ -167,4 +174,9 @@ extension MockTerminal {
     func outputContains(_ substring: String) -> Bool {
         writtenOutput.contains { $0.contains(substring) }
     }
+}
+
+extension MockTerminal: CellGeometryReporting {
+    func cellPixelAspect() -> Double? { reportedCellAspect }
+    func cellPixelSize() -> TerminalCellPixels? { reportedCellPixels }
 }
