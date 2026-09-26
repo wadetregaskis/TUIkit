@@ -3650,7 +3650,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 RenderedRow(
                     lines: background.stillLines { lines(over: $0) },
                     pulseFrames: nil, childRuns: Self.grounding(childRuns, on: background),
-                    claims: claims(over: fill), contentClaims: content.claims(leaving: droppedRunClaims)),
+                    claims: Self.cuttingTranslucentFill(claims(over: fill), fill: fill, rowWidth: rowWidth) { lines(over: nil) },
+                    contentClaims: content.claims(leaving: droppedRunClaims)),
                 of: background, row: row, badged: shouldRenderBadge, rowWidth: rowWidth, palette: palette)
         }
         // A breathing row repaints its WHOLE line every tick, so a narrower run
@@ -3963,6 +3964,27 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 line: line, width: rowWidth, cells: cells, ink: ink, mark: mark,
                 fill: backgroundColor)
         }
+    }
+
+    /// `claims` — a still row's own, from ``SelectableRowClaims`` — with those it owes
+    /// for a TRANSLUCENT `fill` said of the fill alone, cell by cell, over the row's
+    /// lines as it paints them (`unpainted`, asked only for such a fill): the fill the
+    /// cell shows where the row leaves it the field, beneath the content's own field
+    /// where it states one (`Opacity as composition.md` §105). One claim over both, the
+    /// row's fill — attached before its content's claims — gave a label faded in the
+    /// row its own layer, full strength, and faded a field the content stated.
+    private static func cuttingTranslucentFill(
+        _ claims: [OpacityRegion], fill: Color?, rowWidth: Int, unpainted: () -> [String]
+    ) -> [OpacityRegion] {
+        guard let fill, !fill.isOpaque else { return claims }
+        let lines = unpainted()
+        // The fill's own, as the one derivation made them among the rest.
+        let fills = lines.indices.flatMap { line in
+            SelectableRowClaims.claims(line: line, width: rowWidth, cells: 0..<0, ink: nil, mark: nil, fill: fill)
+        }
+        return claims.filter { !fills.contains($0) }
+            + FrameBuffer(lines: lines).claimingPainterField(
+                fills, spelled: ANSIRenderer.backgroundCode(for: fill.opaqueSpelling))
     }
 
     /// `runs`, the row's own content's, with their grounds painted as a still row

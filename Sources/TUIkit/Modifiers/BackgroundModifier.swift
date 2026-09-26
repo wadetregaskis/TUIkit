@@ -104,7 +104,12 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
             // lets `Text("x").background(.red.opacity(0.5))` fade the field and
             // leave the letter alone.
             let claim = OpacityRegion.claim(width: width, height: buffer.lines.count, field: resolved)
-            if let claim { filledBuffer.opacityRegions.append(claim) }
+            // Said of the fill alone, cell by cell: the fill the cell shows where the
+            // content leaves it the field, beneath the content's own field where it
+            // states one (§105). Folded with the content's fades as one claim, a label
+            // faded inside the fill scaled the fill under it, and the fill's alpha
+            // scaled a field the content stated itself.
+            filledBuffer.opacityRegions += buffer.claimingPainterField(claim.map { [$0] } ?? [], spelled: resolved.opaqueSpelling.backgroundEscape())
             // The content's runs are drawn on this fill wherever a frame leaves a
             // cell bare, and a replay has no line to read that off: the same fill
             // on their grounds (`AnimatedCellRun.ground`).
@@ -243,9 +248,11 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
         var ramped = buffer.replacingLines(lines)
         // FIELD claims only, as the flat arm makes: the content's own ink is
         // already in these lines and a background says nothing about it.
-        ramped.opacityRegions += Self.fieldClaims(
-            for: alphaShape, width: width, rows: buffer.lines.count, rowAlphas: rowFieldAlphas,
-            sampler: sampler)
+        //
+        // Said of the ramp alone, cell by cell, as the flat arm's are (§105).
+        ramped.opacityRegions += Self.saidOfTheRamp(
+            for: alphaShape, rowAlphas: rowFieldAlphas, over: buffer, sampler: sampler, width: width,
+            palette: palette, escape: escape(forEntry:))
         // And each run's ground, painted as its row was over the run's columns —
         // the ramp's cells differ across a row, so each piece gets its own entry,
         // exactly as the row's did (`AnimatedCellRun.ground`).
@@ -269,6 +276,27 @@ public struct BackgroundModifier<S: ShapeStyle>: ViewModifier {
         return ramped.resolvingOpacity(
             onOpaqueFill: { FrameBuffer(lines: buffer.lines.indices.map { paintedRow(blank, row: $0) }) },
             surface: palette.background, palette: palette)
+    }
+
+    /// The ramp's ``fieldClaims(for:width:rows:rowAlphas:sampler:)`` over `content`,
+    /// said of the ramp alone (`FrameBuffer.claimingPainterField(_:spelledAt:)`, §105):
+    /// beneath a field the content states itself, the ramp's entry at that cell, spelled
+    /// as the row painted it (`escape`, by entry).
+    private static func saidOfTheRamp(
+        for alphaShape: RampSampler.AlphaShape, rowAlphas: [UInt8], over content: FrameBuffer,
+        sampler: RampSampler, width: Int, palette: any Palette, escape: (Int) -> String
+    ) -> [OpacityRegion] {
+        let claims = fieldClaims(
+            for: alphaShape, width: width, rows: content.lines.count, rowAlphas: rowAlphas, sampler: sampler)
+        var entries: [Int: [(columns: Range<Int>, entry: Int)]] = [:]
+        return content.claimingPainterField(claims) { row, column in
+            guard sampler.variesAcrossRow else {
+                return ANSIRenderer.backgroundCode(for: sampler.colour(row: row).resolve(with: palette).opaqueSpelling)
+            }
+            let pieces = entries[row] ?? sampler.runs(row: row, cells: width)
+            entries[row] = pieces
+            return escape(pieces.first { $0.columns.contains(column) }?.entry ?? 0)
+        }
     }
 
     /// The FIELD claims a ramp of this shape owes over a `width` × `rows` block.

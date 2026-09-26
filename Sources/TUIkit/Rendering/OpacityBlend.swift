@@ -76,6 +76,12 @@ extension FrameBuffer {
         var ink: Double
         var field: Double
 
+        /// The translucent fields painters put under the content here, the TOPMOST
+        /// first — empty for every cell no such field is under. The three numbers
+        /// above are the content's alone: a painter's field is below the content,
+        /// and composited before it (`OpacityRegion.fieldUnderContent`, §105).
+        var painterFields: [PainterField] = []
+
         init(layer: Double, ink: Double = 1, field: Double = 1) {
             self.layer = layer
             self.ink = ink
@@ -84,6 +90,18 @@ extension FrameBuffer {
 
         /// The layer-only spelling, for a caller that has one number.
         static func layer(_ value: Double) -> Self { Self(layer: value) }
+    }
+
+    /// A painter's translucent field under a cell's content, and what its claim lets
+    /// through of it.
+    struct PainterField {
+        /// The field's colour, or `nil` where it is the field the cell SHOWS — the
+        /// content left it to the painter, and the line spells it there.
+        var colour: Color?
+        /// The claim's layer alpha: whatever fades enclose the painter.
+        var layer: Double
+        /// The field's own alpha.
+        var field: Double
     }
 
     /// The blended replacement for `columns` of `source`, as a self-contained
@@ -99,7 +117,9 @@ extension FrameBuffer {
     /// field for, and under one it puts on the terminal's own by stating `ESC[49m`
     /// — a run's two records (`AnimatedCellRun.ground`,
     /// `AnimatedCellRun.groundUnderStatedDefault`), which the splice draws those
-    /// cells over, so each is blended as the cell the splice will show.
+    /// cells over, so each is blended as the cell the splice will show. And
+    /// `drawnLine`, the line the render drew with the run's drawn frame in it, which
+    /// spells the field a painter's claim says the cell SHOWS.
     static func blendedSpan(
         source: String,
         destination: String,
@@ -107,6 +127,7 @@ extension FrameBuffer {
         destinationShift: Int,
         fieldsFrom: String? = nil,
         fieldsUnderStatedDefault: String? = nil,
+        drawnLine: String? = nil,
         alpha: (Int) -> CellAlpha?,
         surface: Color,
         defaultForeground: Color,
@@ -141,6 +162,9 @@ extension FrameBuffer {
         let behindCells = cells(
             in: destination, through: columns.upperBound + destinationShift,
             defaultForeground: defaultForeground, surface: surface)
+        // The drawn line's cells, read the first time a painter's claim under a
+        // frame's cell says it is about the field the line shows there.
+        var drawnCells: [RowCell?]?
 
         var span = ""
         var emitted = SGRState()
@@ -175,37 +199,14 @@ extension FrameBuffer {
                     // the painter's field.
                     leavesFieldUnsaid: lastSourceCell?.leavesFieldUnsaid ?? true)
             if sourceCells[column] != nil { lastSourceCell = cell }
-            // A frame's stated 49 is on whatever the painters made of one — the
-            // terminal's own where they let it through, which is what the cell
-            // already says, and their field where they filled it — and a bare cell
-            // is on what they painted.
-            //
-            // In the background SLOT, both, and a reversed cell shows that slot as
-            // its ink: its field is its foreground, which no painter touches (§95).
-            // The record's own slot likewise: in a row that reverses — which the
-            // frame is drawn in, reversed, by `restatingGroundStyle` — the field the
-            // painters left under a cell is in the record's background slot, which
-            // the record, reversed too, shows as its ink.
-            //
-            // And whether the field the cell then shows is the terminal's own, stated:
-            // by the cell, or by the painters where it takes theirs. Not under a
-            // reversal, whose 49 is in the slot it shows as ink.
-            var statesTheTerminals = cell.statesTerminalField && !cell.isReversed
-            if cell.statesTerminalField, let record = statedDefaultFieldCells?[column],
-                let field = Self.fieldSlot(record)
-            {
-                Self.fill(&cell, with: field)
-                statesTheTerminals = statesTheTerminals && record.statesTerminalField && !record.isReversed
-            } else if cell.leavesFieldUnsaid, let record = fieldCells?[column], let field = Self.fieldSlot(record) {
-                Self.fill(&cell, with: field)
-                statesTheTerminals = !cell.isReversed && record.statesTerminalField && !record.isReversed
-            }
+            let (painted, statesTheTerminals) = Self.takingRecordedField(
+                &cell, underStatedDefault: statedDefaultFieldCells?[column], ground: fieldCells?[column])
             // Bounds-checked rather than trusted: a negative shift is legal —
             // `composited` accepts one — and would index before the start.
             let behindColumn = column + destinationShift
             let behind =
                 behindCells.indices.contains(behindColumn) ? behindCells[behindColumn] : nil
-            let coverage = alpha(column)
+            var coverage = alpha(column)
             // A compositor reads a layer's stated 49 as naming no field, and fills it
             // with the field under its column (`String.paintedOver(background:)`): the
             // cell unfaded shows the base's field wherever the base has one. Faded, it
@@ -223,9 +224,43 @@ extension FrameBuffer {
             if fillingStatedTerminalField, statesTheTerminals, coverage != nil, let behind,
                 let field = behind.background
             {
-                cell.background = field
-                cell.style = cell.style.settingBackground(field)
+                Self.fill(&cell, with: field)
                 cell.statesTerminalField = false
+            }
+            // A frame is not the line its painters' claims were cut to: one frame
+            // leaves a cell's field to the innermost painter where the drawn one
+            // stated its own, or the other way round (a block caret's two frames).
+            // So each frame says which, of the painter's field under it: the one it
+            // shows where its cell took that painter's colour from the records, and
+            // beneath its own, in that colour, where it shows another (§105).
+            //
+            // The records hold the painter's colour only where no painter inside it
+            // reached the cell first: an OPAQUE painter between them (a `.background`,
+            // a `.listRowBackground`) puts its own colour in the ground, and a bare
+            // cell shows that colour over the translucent field, as the line's cell
+            // does, whose claim names the translucent colour beneath it. And a stated
+            // 49 an opaque persistent painter lets through is filled by the
+            // translucent painter itself where it composites, so there the frame's
+            // cell shows the translucent field while the ground holds the opaque one.
+            // So a cell shows the painter's field only where the colour it took is
+            // the painter's: the one its claim names, or, where the claim is about
+            // the field the line's cell SHOWS, the one the drawn line spells there.
+            // Taken for the painter's wherever a cell took the ground, the bare cells
+            // of a run inside the opaque painter replayed on it mixed at the
+            // translucent alpha; and taken for it only where a cell took the ground,
+            // the frame stating 49 inside a `.background` inside a translucent
+            // `.listRowBackground` replayed on the colour's opaque spelling.
+            if fieldsFrom != nil, let adjusted = coverage, !adjusted.painterFields.isEmpty {
+                coverage = Self.placingInnermostPainter(
+                    adjusted, under: cell, painted: painted, ground: fieldCells?[column]
+                ) {
+                    if drawnCells == nil {
+                        drawnCells = drawnLine.map {
+                            cells(in: $0, through: columns.upperBound, defaultForeground: defaultForeground, surface: surface)
+                        } ?? []
+                    }
+                    return drawnCells?.indices.contains(column) == true ? drawnCells?[column] : nil
+                }
             }
             var blended = blend(
                 source: cell, destination: behind, alpha: coverage,
@@ -311,6 +346,70 @@ extension FrameBuffer {
         return span
     }
 
+    /// `cell` — a cell of a run's frame — given the field its records say it is drawn
+    /// on: a stated 49 whatever the painters made of one — the terminal's own where
+    /// they let it through, which is what the cell already says, and their field where
+    /// they filled it — and a bare cell what they painted. A cell of a line, which has
+    /// no records, as it is.
+    ///
+    /// In the background SLOT, both, and a reversed cell shows that slot as its ink:
+    /// its field is its foreground, which no painter touches (§95). The record's own
+    /// slot likewise: in a row that reverses — which the frame is drawn in, reversed,
+    /// by `restatingGroundStyle` — the field the painters left under a cell is in the
+    /// record's background slot, which the record, reversed too, shows as its ink.
+    ///
+    /// A stated 49 a painter FILLED — a compositor, which reads it as no field — took
+    /// that painter's colour, as a bare cell takes the ground's. Taken as a field of the
+    /// frame's own, a spinner's frame stating 49 inside a translucent
+    /// `.listRowBackground` replayed on the fill's opaque spelling, where a render drew
+    /// it on the fill at its alpha.
+    ///
+    /// - Returns: The painter's colour the cell's field now is — the ground's, or the
+    ///   one a compositor filled its stated 49 with — `nil` where the field is the
+    ///   cell's own; and whether the field it shows is the terminal's own, stated — by
+    ///   the cell, or by the painters where it takes theirs; never under a reversal,
+    ///   whose 49 is in the slot it shows as ink.
+    private static func takingRecordedField(
+        _ cell: inout RowCell, underStatedDefault statedDefault: RowCell?, ground: RowCell?
+    ) -> (painted: Color?, statesTheTerminals: Bool) {
+        if cell.statesTerminalField, let record = statedDefault, let field = fieldSlot(record) {
+            fill(&cell, with: field)
+            return (
+                record.statesTerminalField ? nil : field,
+                !cell.isReversed && record.statesTerminalField && !record.isReversed
+            )
+        }
+        if cell.leavesFieldUnsaid, let record = ground, let field = fieldSlot(record) {
+            fill(&cell, with: field)
+            return (field, !cell.isReversed && record.statesTerminalField && !record.isReversed)
+        }
+        return (nil, cell.statesTerminalField && !cell.isReversed)
+    }
+
+    /// `alpha` with its innermost painter's field said as the place `cell` — a run's
+    /// frame's cell, its field `painted` from the records where it took a painter's —
+    /// shows of it: the field the cell shows where the colour it took is the
+    /// painter's, and beneath the cell's own field, in that colour, anywhere else.
+    /// The painter's colour is the one its claim names, or, where the claim is about
+    /// the field the line's cell SHOWS, the one the `drawn` line's cell spells there,
+    /// or failing that the `ground`'s. Where there is none, the painter's field goes.
+    private static func placingInnermostPainter(
+        _ alpha: CellAlpha, under cell: RowCell, painted: Color?, ground: RowCell?, drawn: () -> RowCell?
+    ) -> CellAlpha {
+        var placed = alpha
+        let painter =
+            alpha.painterFields[0].colour
+            ?? drawn().flatMap { $0.isReversed ? nil : $0.background } ?? ground.flatMap(fieldSlot)
+        if let painted, painted == painter, !cell.isReversed {
+            placed.painterFields[0].colour = nil
+        } else if let painter {
+            placed.painterFields[0].colour = painter
+        } else {
+            placed.painterFields.removeFirst()
+        }
+        return placed
+    }
+
     /// What `record` — a cell of one of a run's records — has in its background
     /// SLOT: its field, or, reversed, its ink. `nil` where it says nothing there.
     private static func fieldSlot(_ record: RowCell) -> Color? {
@@ -389,7 +488,55 @@ extension FrameBuffer {
     }
 
     /// One cell's answer.
+    ///
+    /// Where painters' translucent fields are under the content (§105), each is
+    /// composited first, bottom up, as the blank it is — a pane over what is behind,
+    /// at what its claim lets through — and the content over the result at its own
+    /// alphas: a fade inside a translucent fill fades toward the fill as it lands,
+    /// and leaves the fill alone. A field the cell shows is taken off the content
+    /// first, being the painter's; a field of the content's own stays, over them.
     private static func blend(
+        source: RowCell, destination: RowCell?, alpha: CellAlpha?,
+        surface: Color, defaultForeground: Color
+    ) -> RowCell {
+        guard let alpha, !alpha.painterFields.isEmpty else {
+            return blendLayer(
+                source: source, destination: destination, alpha: alpha,
+                surface: surface, defaultForeground: defaultForeground)
+        }
+        var below = destination
+        var content = source
+        for painter in alpha.painterFields.reversed() {
+            let colour: Color
+            if let spelled = painter.colour {
+                colour = spelled
+            } else {
+                // The field the cell shows is this painter's: the content's is none.
+                guard let shown = content.background, !content.isReversed else { continue }
+                colour = shown
+                content.background = nil
+                content.style = content.style.settingBackground(nil)
+                content.statesTerminalField = false
+                content.leavesFieldUnsaid = true
+            }
+            let pane = RowCell(
+                character: " ", style: SGRState().settingBackground(colour),
+                foreground: nil, background: colour)
+            below = blendLayer(
+                source: pane, destination: below,
+                alpha: CellAlpha(layer: painter.layer, field: painter.field),
+                surface: surface, defaultForeground: defaultForeground)
+        }
+        var own = alpha
+        own.painterFields = []
+        return blendLayer(
+            source: content, destination: below, alpha: own,
+            surface: surface, defaultForeground: defaultForeground)
+    }
+
+    /// One layer's answer over what is behind it: the whole of the blend for a cell
+    /// no painter's translucent field is under.
+    private static func blendLayer(
         source: RowCell, destination: RowCell?, alpha: CellAlpha?,
         surface: Color, defaultForeground: Color
     ) -> RowCell {

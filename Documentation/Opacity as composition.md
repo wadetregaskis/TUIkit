@@ -1608,6 +1608,13 @@ implements. `OpacityBlend` takes a cell's FIELD first, within its own layer, and
 then its INK against that field — which is precisely a field claim and an ink claim
 stacked on one cell. Two channels, folded separately, in the right order.
 
+**Revised 2026-09-26 (§105).** Two channels, but not two layers, and that was the
+flaw: the fill and the row's content are two layers in one cell, one above the other,
+and folded as one claim the content's fade scaled the fill and the fill's alpha scaled
+a field the content stated itself. Both claims still travel up; the fill's now says it
+is the fill's (`OpacityRegion.fieldUnderContent`), and the resolution composites the
+fill first and the content over it.
+
 ### 22.1 The claim goes on *after* the composite
 
 `composited(with:at:)` punches the destination's regions by the overlay's
@@ -6194,7 +6201,8 @@ full strength a cell with a field of its own is the source outright (§9.7).
 
 A translucent fill is still not a backdrop (§22), and carries both claims up. That leaves one
 shape as it was: a layer fade inside a translucent fill fades the fill too, because the
-resolver cannot tell the two apart once they are one cell.
+resolver cannot tell the two apart once they are one cell. (Fixed 2026-09-26, §105: the fill's
+claim says it is the fill's, and the two are composited in their places.)
 
 **Only a fade that asks what is behind it.** A layer's opacity, a cycle of one, a field's
 own alpha, a run whose frames owe a translucent field: each is answered by what is behind the
@@ -6901,7 +6909,8 @@ toast's content is strings; a tooltip's, text. A lifted drag preview is built fr
 outside this section's: a label faded in a row that is dragged is lifted at full strength. The
 known issue in `FadeInsideAPainterTests` stays as the pin for a hand-built layer.
 
-**A fade inside a translucent fill** (§22, §96): draws wrong. `HStack(spacing: 0) { Text("ab")
+**A fade inside a translucent fill** (§22, §96): draws wrong. (Fixed 2026-09-26 with the exact
+answer, §105.) `HStack(spacing: 0) { Text("ab")
 .opacity(0.3); Text("cd") }.padding(.horizontal, 1).background(Color.rgb(0, 0, 200).opacity(0.5))`
 on the default page draws the fill under `ab` as `rgb(4, 9, 34)` beside `rgb(2, 5, 103)` under
 the rest — a dark patch the size of the faded label (`rgb(3, 7, 64)` at 0.6). The fill's own claim
@@ -6943,3 +6952,125 @@ sees, so its bytes are as they were.
 0.75 over red text: the letters in blue mixed over red by that alpha, the field over the surface)
 and through the public API (the colour as a view and as a `.background` on blanks, over text in a
 `ZStack`). Before, all five failed with the letters in the veil's colour.
+
+## 105. A translucent fill is composited under its content (2026-09-26)
+
+§103's second limit, fixed with the exact answer it priced, and the shapes it did not name.
+A painter whose field is TRANSLUCENT — a `.background` of a translucent colour or ramp, a
+translucent `.listRowBackground`, a list's own row fill where a palette's wash is translucent —
+is not a backdrop yet (§22), so its field and its content's fades both travel to where what is
+behind the painter is known. There they meet in one cell, the field below and the content above
+it, and a line holds one field per cell: the painter's where the content leaves the field to it,
+the content's own where it states one. Folded as one claim — the layer from the first claim over
+the cell, the field alphas multiplied — each layer's alpha reached the other's colour. Measured on
+this tree before the fix, truecolor, the default page:
+
+- **A fade inside the fill scaled the fill.** `HStack(spacing: 0) { Text("a b").opacity(0.3);
+  Text("cd") }.padding(.horizontal, 1).background(Color.rgb(0, 0, 200).opacity(0.5))` drew the
+  fill under the label, its space included, as `rgb(4, 9, 34)` beside `rgb(2, 5, 103)`
+  (`rgb(3, 7, 64)` at 0.6), and the letters' ink faded toward the page rather than the fill
+  (`19;84;19` where `17;80;87` is due). The same under a translucent ramp, and under a translucent
+  `.listRowBackground` in a focused list's cursor row (there spent at the cursor's own fill, §96.1,
+  so the patch was the row's colour mixed with the fill).
+- **The fill's alpha scaled a field the content states itself.** Inside `.background(Color.rgb(0,
+  0, 200).opacity(0.4))`, `Text("r").background(Color.rgb(200, 40, 40))` was `rgb(83, 22, 19)`,
+  not its red; `Text("d").background(Color.default)` — the terminal's own, a colour with no RGB —
+  lost to the page below one half (§75's rule 9); and a faded red, or a translucent fill inside the
+  translucent one, was mixed over the page with no fill under it (`44;16;12` where `102;23;62` is
+  due; red at one half inside blue at one half, `54;7;4` where `101;2;51` is).
+- **A list row lost its label's fade.** A cursor row painting a translucent wash (a palette whose
+  `focusBackground` is translucent, a list drawing no selection mark) attaches its fill's claim
+  before its content's, and the fold took the LAYER from the first claim over a cell: the label
+  faded to 0.3 inside the row was drawn at full strength (`51;255;51`).
+- **A fade around the fill stepped the ink toward the page.** `HStack { Text("ab"); Text("cd") }
+  .background(blue.opacity(0.5)).opacity(0.6)` put the letters' ink 60% of the way from the page,
+  where the fill is under them (`33;157;33` where `32;156;56` is due).
+- **Over a glyph, the fill was no veil.** In a `ZStack` over `Text("######")`, the faded label's
+  cells took the patch for a field and the text behind in its own ink, unveiled by the fill.
+
+**The rule.** A painter's claim on its translucent field says which place of that field it is
+about (`OpacityRegion.fieldUnderContent`): `shown`, where the content leaves the cell's field to
+the painter and the line spells the painter's colour; `beneath`, where the content states a field
+of its own over it, with the painter's colour carried in the claim — the line spells the content's
+there. The painter cuts its claim so (`FrameBuffer.claimingPainterField(_:spelledAt:)`), from one
+read of each line of its content (`String.columnsLeavingFieldToPainter(width:)`: no background
+said since the last reset, and not reversed); content that states no field of its own gets the
+claim back whole. The resolution folds a painter's claims apart from every other (their LAYER is
+the painter's, carrying the fades that enclose it, and their field alpha its own) and composites
+each cell in its places: each painter's field bottom up, as the blank pane it is, over what is
+behind — a veil over any glyph there (§104) — and then the content over the result at its own
+alphas, a field the cell shows taken off the content first, as the painter's. So a fade inside the
+fill fades toward the fill as it lands and leaves the fill alone; a field the content states stands
+over the fill, opaque, or mixed over the fill as it lands where it is faded or translucent; a glyph
+behind the painter contests the content's through the fill; and a fill inside a fill is over it.
+That is §22's decision revised: both claims still travel up, and now say which is above which.
+
+It is the composite SwiftUI's `.opacity` makes without `.compositingGroup()` — each layer over what
+is under it — and every number above is its arithmetic in encoded sRGB (§10 rule 5).
+
+**A run says it frame by frame.** The claims are cut to the line, which holds the frame the render
+drew, and a run's other frames need not agree with it — a block caret states a field in one frame
+and none in the next. So the blend of a run's frame asks the frame: a cell that takes its field
+from the ground (`AnimatedCellRun.ground`) shows the innermost painter's field, and one that states
+its own has that painter's field beneath it, in the ground's colour.
+
+**A painter that composites.** A translucent `.listRowBackground` composites its content over
+its fill (`composited(with:at:)`) rather than restating its colour after resets, and a
+compositor fills a stated 49 as it fills a cell that says nothing. So its claim reads the
+content that way (`claimingPainterField(_:fillingStatedTerminalField:spelled:)`,
+`String.columnsLeavingFieldToPainter(width:fillingStatedTerminalField:)`): read as the content's
+own, a stated 49 had the claim beneath it and showed the fill's opaque spelling —
+`HStack(spacing: 0) { Text("d").background(Color.default); Text("cd") }.listRowBackground(
+Color.rgb(0, 0, 200).opacity(0.5))` drew `d` on `48;2;0;0;200` beside `48;2;2;5;103`. A run's
+frame stating 49 there takes the field the compositor filled it with, which its records hold
+under a stated 49 as they hold under a bare cell: the ground's (`takingRecordedField`). Read as
+the frame's own, the run's stated-49 frame replayed on the fill's opaque spelling where a render
+drew it on the fill at one half.
+
+**The ground is the painter's only where it paints it.** A frame's bare cell shows the
+innermost translucent painter's field where it takes the ground — unless a painter INSIDE that
+one filled the cell first: an opaque `.background` or `.listRowBackground` puts its own colour
+in the run's ground, and the line's cell shows that colour, over the translucent field, whose
+claim names the translucent colour beneath it. Taken for the translucent painter's field
+anyway, a spinner inside `.background(Color.rgb(40, 160, 40))` inside a translucent
+`.background` replayed its bare cells on the green mixed at the outer alpha (`rgb(23, 85, 23)`)
+where a render drew the green. And a translucent painter that COMPOSITES fills a stated 49 the
+opaque `.background` inside it lets through with its own colour, so there a frame stating 49
+shows the translucent field while the ground holds the green. So the painter's colour is the
+one its claim names, or, where the claim is about the field the line's cell SHOWS, the one the
+line the render drew spells there (`blendedSpan`'s `drawnLine`), and a frame's cell is the
+painter's field only where the colour it took from the records is that. Taken for it only where
+a cell took the GROUND, the spinner's frame stating 49 inside the green
+inside a translucent `.listRowBackground` replayed on the fill's opaque spelling,
+`rgb(0, 0, 200)`, where a render drew `rgb(2, 5, 103)`, at every drawn frame; and over the row
+drawn at that frame, the bare frame replayed on the green mixed at the fill's alpha.
+
+**What it leaves alone.** A reversed cell of the content inside a translucent fill: it shows its
+foreground slot as its field, and the painter's colour, in its background slot, as its INK — drawn
+at the fill's opaque spelling, the field being the content's own. A translucent fill under an
+`.overlay` is still punched where the overlay's cells land (`FrameBuffer.opacityRegionsPunched`):
+`Text("hello").background(Color.rgb(0, 0, 200).opacity(0.5)).overlay { Text("x") }` draws `x` on
+the fill's opaque spelling in a row of the fill at one half, a limit of the compositor's that
+predates this and is not about which layer a claim is. A `Table`'s own translucent row fill is left
+as a plain claim: a table draws its cells' text itself, with no fade or field of the content's to
+tell apart from it.
+
+**What it costs where no such shape is present: nothing.** The fold asks each region one more
+question; the blend asks each covered cell whether a painter is under it. The read is made only by
+a painter whose field is translucent. Counted with temporary counters over every `Stress --bench`
+scenario (10 frames and the warm-up): the painters' read ran only in `alpharamp`, whose ramps are
+translucent — 528 claims, 1,584 lines read, none cut (its content states no field) — and in every
+other scenario no painter's claim, no fold of one and no two-stage blend at all. The bench resolves
+no root, and its lines are unchanged by construction.
+
+`TranslucentFillFieldTests` pins each shape above — the label at 0.3 and 0.6, the content's own
+fields (opaque, the terminal's own, faded, a translucent fill inside), a translucent ramp, a
+translucent `.listRowBackground`, a list's own translucent wash, a fade around the fill, the glyph
+contest through it at 0.3 and 0.6 — and a run inside the fill whose frames state a field of their
+own, none, and the terminal's own, faded inside it at 1, 0.6 and 0.3: every frame replayed over the
+row drawn at every other, against the row a render draws at it, as the cells look. Before, every
+shape failed (e.g. the run's own field at 1, `48;2;103;25;23` where its red is due); the replays
+agreed with their renders, wrong alike. With the claims told apart but the frame-by-frame answer
+taken out, eleven replays failed instead (at 1, frame 1 over frame 0: `rgb(0, 0, 200)` — the
+fill's opaque spelling — where the render has `rgb(2, 5, 103)`). `FadeInsideAPainterTests` drops the
+known issue it held.

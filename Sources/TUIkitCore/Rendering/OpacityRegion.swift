@@ -93,10 +93,24 @@ public struct OpacityRegion: Equatable, Sendable {
     /// known — which is the same reason the region exists.
     public var cycle: OpacityCycle?
 
+    /// Where this is a PAINTER's claim on the translucent field it put under content it
+    /// did not draw — a `.background`, a list row's fill — which of that field's two
+    /// places it is about; `nil` for every other claim: a layer's fade, a colour's own
+    /// alpha, a painter's content's fades.
+    ///
+    /// A painter's field and its content share each cell, one above the other, and a
+    /// line holds one field per cell. Folded as one claim, the content's fade scaled the
+    /// field too — a label faded to 0.3 inside `.background(blue.opacity(0.5))` drew a
+    /// dark patch of the fill the size of the label — and the fill's alpha scaled a field
+    /// the content stated itself: a red badge inside the same fill came out half red.
+    /// Told apart, the resolution composites the painter's field first and the content
+    /// over it (`Opacity as composition.md` §105).
+    public var fieldUnderContent: FieldUnderContent?
+
     public init(
         offsetX: Int, offsetY: Int, width: Int, height: Int, opacity: Double,
         inkOpacity: Double = 1, fieldOpacity: Double = 1,
-        cycle: OpacityCycle? = nil
+        cycle: OpacityCycle? = nil, fieldUnderContent: FieldUnderContent? = nil
     ) {
         self.offsetX = offsetX
         self.offsetY = offsetY
@@ -108,6 +122,7 @@ public struct OpacityRegion: Equatable, Sendable {
         self.inkOpacity = min(max(inkOpacity, 0), 1)
         self.fieldOpacity = min(max(fieldOpacity, 0), 1)
         self.cycle = cycle
+        self.fieldUnderContent = fieldUnderContent
     }
 
     /// Whether this region says anything at all — the test that decides whether
@@ -188,6 +203,20 @@ public struct OpacityRegion: Equatable, Sendable {
         column >= offsetX && column < offsetX + width
             && row >= offsetY && row < offsetY + height
     }
+}
+
+/// Which place of a painter's translucent field a claim is about
+/// (``OpacityRegion/fieldUnderContent``).
+public enum FieldUnderContent: Hashable, Sendable {
+    /// The field the cell shows: the content leaves the cell's field to the painter,
+    /// so the line spells the painter's colour there, and the claim's alpha is that
+    /// field's and nothing else's.
+    case shown
+
+    /// Beneath a field the content states itself, which the line spells in the
+    /// painter's place: the painter's colour, as the background escape it painted,
+    /// and the claim's alpha is what it lets through under the content's field.
+    case beneath(String)
 }
 
 /// A repeating opacity animation, laid out as the values it passes through.

@@ -460,23 +460,22 @@ struct FadeInsideAPainterTests {
         #expect(stated.first == blue && stated.last?.isEmpty == true && changes == 1, "the stated 49 was on \(stated)")
     }
 
-    // MARK: - The limits
+    // MARK: - The shapes §103 left (fixed: §105)
 
     /// A fade inside a TRANSLUCENT fill: the fill's own claim and the label's layer
-    /// fade reach the root over one cell, and the fold scales the field by the layer's
-    /// alpha — a dark patch the size of the label in the fill. Not done: the fix is a
-    /// choice between two answers (`Opacity as composition` §103).
-    @Test("A label faded inside a translucent fill leaves the fill under it as it is beside it (known issue)")
+    /// fade reach the root over one cell, where the fold scaled the field by the
+    /// layer's alpha — a dark patch the size of the label in the fill — until the
+    /// fill's claim was told apart from its content's fades (`Opacity as composition`
+    /// §105; `TranslucentFillFieldTests` holds the rest of it).
+    @Test("A label faded inside a translucent fill leaves the fill under it as it is beside it")
     func aFadeInsideATranslucentFill() throws {
         let view = HStack(spacing: 0) { Text("ab").opacity(0.3); Text("cd") }
             .padding(.horizontal, 1)
             .background(Color.rgb(0, 0, 200).opacity(0.5))
         let row = try #require(writtenRows(of: view).first)
         #expect(row.prefix(6).map(\.glyph) == [" ", "a", "b", "c", "d", " "])
-        withKnownIssue("the layer's alpha scales the translucent fill under it (§103)") {
-            #expect(
-                row[1].background == row[3].background,
-                "a is on \(row[1].background.debugDescription), c on \(row[3].background.debugDescription)")
-        }
+        #expect(
+            row[1].background == row[3].background,
+            "a is on \(row[1].background.debugDescription), c on \(row[3].background.debugDescription)")
     }
 }

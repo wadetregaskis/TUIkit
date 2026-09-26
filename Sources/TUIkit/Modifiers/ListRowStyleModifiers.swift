@@ -152,8 +152,18 @@ extension _ListRowColorView: Renderable {
             // replaced, and wrong here: the text sits ON the fill and those cells
             // still show it. Punched, a faded row would render opaque under its own
             // words and faded either side of them.
+            //
+            // Said of the fill alone, cell by cell (§105): the fill the cell shows where
+            // the row's content leaves it the field, beneath the content's own field
+            // where it states one. One claim over both, a fade inside the row scaled the
+            // fill under it, and the fill's alpha scaled a field the content stated. A
+            // stated 49 is one the composite FILLS, as it fills a cell that says nothing:
+            // read as the content's own, it was on the fill's opaque spelling in a row of
+            // the fill at its alpha.
             filled = filled.composited(with: foreground, at: (x: 0, y: 0))
-            filled.opacityRegions.append(fill)
+            filled.opacityRegions += foreground.claimingPainterField(
+                [fill], fillingStatedTerminalField: true,
+                spelled: ANSIRenderer.backgroundCode(for: color.opaqueSpelling))
         } else {
             // An opaque fill IS a backdrop, so the content's own translucency
             // resolves against it here and nowhere else — that is what makes

@@ -268,7 +268,8 @@ extension FrameBuffer {
         }
         result.animatedCells = animatedCells.compactMap { run in
             Self.faded(
-                run, covering: regionsForRuns, destination: destination,
+                run, drawnLine: lines.indices.contains(run.offsetY) ? lines[run.offsetY] : "",
+                covering: regionsForRuns, destination: destination,
                 position: position, surface: resolvedSurface,
                 defaultForeground: resolvedForeground, fillingStatedTerminalField: fillingStatedTerminalField)
         }
@@ -347,11 +348,14 @@ extension FrameBuffer {
     /// one: everything here is about a RUN, and nothing about it is about the lines.
     ///
     /// - Parameters:
+    ///   - drawnLine: The line the run sits on, as the render drew it: with the drawn
+    ///     frame in it, spelling the field a painter's claim says a cell shows.
     ///   - covering: What covers the run from OUTSIDE it, and only that. A run's own
     ///     per-frame statement must not be in this list or every frame would be folded
     ///     with the drawn frame's alpha as well as its own.
     private static func faded(
         _ run: AnimatedCellRun,
+        drawnLine: String,
         covering regions: [OpacityRegion],
         destination: FrameBuffer,
         position: (x: Int, y: Int),
@@ -470,6 +474,7 @@ extension FrameBuffer {
                 destinationShift: position.x,
                 fieldsFrom: groundLine,
                 fieldsUnderStatedDefault: statedDefaultLine,
+                drawnLine: drawnLine,
                 alpha: { perColumn[$0 - columns.lowerBound] },
                 surface: resolvedSurface,
                 defaultForeground: resolvedForeground,
@@ -491,11 +496,11 @@ extension FrameBuffer {
                         // enclosing fade applies to a run's cells as it does to
                         // everything else, and the layer channel stays the outer
                         // region's because the payload has none.
-                        let outer = perColumn[column]
-                        perColumn[column] = Self.CellAlpha(
-                            layer: outer?.layer ?? 1,
-                            ink: (outer?.ink ?? 1) * span.ink,
-                            field: (outer?.field ?? 1) * span.field)
+                        // The painters' fields under it ride along (§105).
+                        var merged = perColumn[column] ?? Self.CellAlpha(layer: 1)
+                        merged.ink *= span.ink
+                        merged.field *= span.field
+                        perColumn[column] = merged
                     }
                 }
                 return blend(run.frames[index], at: perColumn)
@@ -538,16 +543,43 @@ extension FrameBuffer {
         substituting: (OpacityRegion) -> FrameBuffer.CellAlpha?
     ) -> [FrameBuffer.CellAlpha?] {
         var result = [Self.CellAlpha?](repeating: nil, count: columns.count)
+        // A painter's claim on the translucent field under its content is folded
+        // apart from every other claim (§105): it says what the painter's field lets
+        // through, and the content's fades — the layer from the first of them, ink and
+        // field multiplied — say nothing about that field. Where only painters' claims
+        // cover a cell, its content stands at full strength until a claim of its own
+        // gives it a layer, which is what `layerless` remembers.
+        var layerless: [Bool]?
         for region in regions where region.spans(row: row) {
             guard let cell = substituting(region) else { continue }
             let from = max(columns.lowerBound, region.offsetX)
             let upTo = min(columns.upperBound, region.offsetX + region.width)
             guard from < upTo else { continue }
+            if let under = region.fieldUnderContent {
+                let painted = Self.PainterField(
+                    colour: Self.colour(of: under), layer: cell.layer, field: cell.field)
+                if layerless == nil { layerless = [Bool](repeating: false, count: columns.count) }
+                for column in from..<upTo {
+                    let index = column - columns.lowerBound
+                    if result[index] == nil {
+                        result[index] = Self.CellAlpha(layer: 1)
+                        layerless?[index] = true
+                    }
+                    // In the list's order, which is the painters' from the innermost
+                    // out — the topmost first.
+                    result[index]?.painterFields.append(painted)
+                }
+                continue
+            }
             for column in from..<upTo {
                 let index = column - columns.lowerBound
                 guard var accumulated = result[index] else {
                     result[index] = cell
                     continue
+                }
+                if layerless?[index] == true {
+                    accumulated.layer = cell.layer
+                    layerless?[index] = false
                 }
                 accumulated.ink *= cell.ink
                 accumulated.field *= cell.field
@@ -555,6 +587,18 @@ extension FrameBuffer {
             }
         }
         return result
+    }
+
+    /// The colour a painter's claim names for its field: `nil` where it is the field
+    /// the cell shows, which the line spells.
+    private static func colour(of under: FieldUnderContent) -> Color? {
+        guard case .beneath(let escape) = under else { return nil }
+        var field: Color?
+        SGRColorRewrite.readingColors(escape) { which, color in
+            // A stated 49 is the terminal's own field (§95).
+            if case .background = which { field = color ?? .terminalBackground }
+        }
+        return field
     }
 }
 
