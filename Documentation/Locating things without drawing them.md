@@ -794,13 +794,22 @@ That walk is Ω(rows) per measure, and it is priced by who reads it:
   a section drawn.
 - **In a view that also scrolls horizontally** neither bullet's arithmetic
   holds. The content is asked how wide it is as well — the horizontal probe —
-  and a nested stack answers every width ask there with the whole-content
-  width its kept record holds (`contentWidthOverAllRows`). That answer reads
-  the budget to classify itself, so it claims no natural size
-  (`anchoredSizeThatFits` claims one only for the prefix answer), and every
-  rung of the ladder and every later ask at a width walks every row again:
-  nine measures of each nested stack a frame. The same forty rows of 300
-  build 103,762 rows a frame after a write, where the estimate built 7,002.
+  and then how tall at every width the view considers: the viewport's width
+  and one less, the scrollbar's two rounds, and, where a column asks the view
+  its ideal size, the content's own width. A nested stack answers the probe
+  from its kept width record (`contentWidthOverAllRows`), which counts rows
+  the probe's height budget can stop short of, and claims no natural size
+  there; every other ask it answers from the rows it walks, as the eager
+  column does, and the claim serves the rest at that width
+  (`anchoredSizeThatFits`). One walk per width, then: for the same forty rows
+  of 300 under a column, whose content is narrower than the viewport, four
+  widths and 52,642 rows a frame after a write, where the estimate built
+  7,002; with rows wider than the viewport the widths coincide, two walks,
+  26,922 against 4,402. The same rows in eager `VStack`s build 65,102 and
+  39,542. What is left is the scroll view's, not the stack's: a view that
+  scrolls only vertically asks its first round one line past the viewport,
+  and nothing yet asks a two-axis view's first round, or its ideal size,
+  for less than every row.
 
 Every count here is rows built — calls of a row's builder — on the frame after
 a write, and each was the same on every such frame and in three runs of the
@@ -810,10 +819,13 @@ view's bytes (`viewValueHash`), among them the heap addresses of its `ForEach`
 closure's context and of its element's box; where a freed row's address comes
 straight back, the memo serves a measure the count would otherwise show. So a
 probe whose rows capture differently can read less, and move from frame to
-frame: the two-axis forty groups, in a probe whose rows capture less, read
-anywhere from 52,342 to 80,195 across runs and allocator settings
-(`MallocScribble`, `MallocNanoZone`), where the probe above read 103,762 under
-every one. What moves is which measures are served, never what one answers.
+frame: the forty groups, in a probe whose rows capture less, read anywhere
+from 14,361 to 14,662 across runs, where the probe above read 14,662 on every
+frame. (Before a nested stack answered a two-axis view's asks from its walk,
+that probe's two-axis forty groups read anywhere from 52,342 to 80,195 across
+runs and allocator settings, `MallocScribble` and `MallocNanoZone`, where the
+probe above read 103,762 under every one.) What moves is which measures are
+served, never what one answers.
 
 Walking only the nested stacks someone can see is not a change to this arm.
 The outer stack places its rows at exact line positions, so a row above the

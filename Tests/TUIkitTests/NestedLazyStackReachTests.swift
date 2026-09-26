@@ -83,21 +83,24 @@ private final class RowBuilds: @unchecked Sendable {
 /// are drawn whole whenever their group is. A `@State` above the scroll view
 /// (`t`) writes on demand, so every memo beneath it is cleared and the next
 /// frame measures from scratch: the frame a live app pays on every write.
+/// `axes` is the scroll view's: `[.horizontal, .vertical]` scrolls both ways.
 private struct GroupsApp: App {
     let groups: Int
     let tallAfterSixteen: Bool
+    let axes: Axis.Set
     let builds: RowBuilds
 
     init() { self.init(groups: 1, tallAfterSixteen: false, builds: RowBuilds()) }
-    init(groups: Int, tallAfterSixteen: Bool, builds: RowBuilds) {
+    init(groups: Int, tallAfterSixteen: Bool, axes: Axis.Set = .vertical, builds: RowBuilds) {
         self.groups = groups
         self.tallAfterSixteen = tallAfterSixteen
+        self.axes = axes
         self.builds = builds
     }
 
     var body: some Scene {
         WindowGroup {
-            GroupsPage(groups: groups, tallAfterSixteen: tallAfterSixteen, builds: builds)
+            GroupsPage(groups: groups, tallAfterSixteen: tallAfterSixteen, axes: axes, builds: builds)
         }
     }
 }
@@ -105,13 +108,14 @@ private struct GroupsApp: App {
 private struct GroupsPage: View {
     let groups: Int
     let tallAfterSixteen: Bool
+    let axes: Axis.Set
     let builds: RowBuilds
     @State private var tick = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("tick \(tick)")
-            ScrollView {
+            ScrollView(axes) {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(0..<groups, id: \.self) { group in
                         VStack(alignment: .leading, spacing: 0) {
@@ -462,6 +466,49 @@ struct NestedLazyStackReachTests {
         #expect(screen.contains { $0.contains("tick 1") }, "precondition: the write landed: \(screen)")
         #expect(screen.contains { $0.contains("g0 r0") }, "precondition: the first group is drawn: \(screen)")
         #expect(perFrame * 2 < 3 * rows, "an invalidated frame built \(perFrame) rows of \(rows)")
+    }
+
+    @Test("In a view that scrolls both ways, a nested stack is measured once per width, not once per ask")
+    func twoAxisNestedStackIsMeasuredOncePerWidth() {
+        // A view that scrolls both ways asks its content how wide it is (the
+        // horizontal probe), and then how tall at each width it considers —
+        // every rung of the natural-extent ladder, and the canvas the render
+        // lays it out on. There a nested stack answered a whole-content width
+        // from its kept record, an answer that reads the budget to classify
+        // itself and so may not claim a natural size: no later ask at the same
+        // width was served, and each walked every row again — nine measures of
+        // every group a frame. It answers from the rows it walks now, as a
+        // nested stack of 256 rows or fewer does, and the claim serves the
+        // rest: five a frame, one per width (the probe, the content's own
+        // width, which the scroll view's ideal size asks at, and the bar's
+        // two rounds at the viewport's width and one less) and the screenful
+        // the ideal size asks first.
+        //
+        // Twenty groups, 6,190 rows, on the frame after a write: the nested
+        // measure ran 182 times and built 50,882 rows before; 102 and 26,122
+        // now. Counted by measure as well as by row built, because a row's
+        // measure-memo key carries heap addresses (`viewValueHash`), and a
+        // freed row's address handed straight back can serve a measure the
+        // count would otherwise show.
+        let builds = RowBuilds()
+        let groups = 20
+        let app = HeadlessApp(
+            GroupsApp(groups: groups, tallAfterSixteen: false, axes: [.horizontal, .vertical], builds: builds),
+            width: 30, height: 10)
+        app.frame(atNanos: 0)
+        app.frame(atNanos: Self.frame)
+        let before = builds.count
+        let measuresBefore = app.renderCache.nestedStackWalks
+        app.send(KeyEvent(key: .character("t")))
+        app.frame(atNanos: 2 * Self.frame)
+        let perFrame = builds.count - before
+        let measures = app.renderCache.nestedStackWalks - measuresBefore
+        let rows = (0..<groups).reduce(0) { $0 + 300 + $1 }
+        let screen = visible(app)
+        #expect(screen.contains { $0.contains("tick 1") }, "precondition: the write landed: \(screen)")
+        #expect(screen.contains { $0.contains("g0 r0") }, "precondition: the first group is drawn: \(screen)")
+        #expect(measures < 7 * groups, "the nested stacks were measured \(measures) times")
+        #expect(perFrame < 6 * rows, "an invalidated frame built \(perFrame) rows of \(rows)")
     }
 
     @Test(

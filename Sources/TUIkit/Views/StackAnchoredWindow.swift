@@ -789,8 +789,23 @@ extension _VStackCore {
         // can find the widest row moved and drop that row's memoized sizes, and
         // a sample taken first had already been served the old one — so the
         // ask that corrected the record answered with the width it corrected.
-        let ask = context.contentWidthAsk(
-            proposal: proposal, widthLimit: widthLimit, heightLimit: heightLimit)
+        //
+        // Not asked of a NESTED stack outside the ideal-width probe. It is drawn
+        // whole, every row its budget reaches (`reachedRows`), so the rows it
+        // measures below are the rows it draws, and their width is the width
+        // the question wants — which is how the eager column and a nested stack
+        // of 256 rows or fewer (`windowSizeThatFits`) answer it too, whatever
+        // the canvas. Asked here, the kept record made every such answer a
+        // whole-content one, which reads the budget to classify itself and so
+        // may not claim a natural size: in a view that scrolls both ways every
+        // ask walked the stack again. The probe itself still asks, because its
+        // budget can stop the walk short of rows the record has counted.
+        let isNested = isNestedInScrollContent(context: context)
+        let ask =
+            isNested && !context.asksIdealWidth
+            ? .prefix
+            : context.contentWidthAsk(
+                proposal: proposal, widthLimit: widthLimit, heightLimit: heightLimit)
         let exact =
             ask == .prefix
             ? nil
@@ -802,7 +817,7 @@ extension _VStackCore {
         let counted: ArraySlice<ViewSize>
         let height: Int
         var isNatural = false
-        if isNestedInScrollContent(context: context) {
+        if isNested {
             guard
                 let reached = reachedRows(
                     children, built: sampleChildren, proposal: sampleProposal,
@@ -816,7 +831,8 @@ extension _VStackCore {
             context.renderCache?.nestedStackWalks &+= 1
             (counted, height) = (reached.counted, reached.height)
             // A whole-content width ask reads the budget to classify itself
-            // (`contentWidthAsk`), so only the prefix answer may claim it.
+            // (`contentWidthAsk`), so only the prefix answer may claim it —
+            // for a nested stack, every answer but the probe's (above).
             isNatural = reached.isNatural && exact == nil
         } else {
             (counted, height) = sampledRows(
