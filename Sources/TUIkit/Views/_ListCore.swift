@@ -3553,33 +3553,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             ).columns
             : 0..<0
 
-        /// The mark, the badge and the fill this row owes, per line, from the one
-        /// derivation `Table` also calls. `cells` is the BADGE's columns and nothing
-        /// else: the rest of a list row's content is a child buffer that claims for
-        /// itself, and the attach carries those up (`PopulatedRenderState.contentClaims`).
+        /// The mark, the badge and the fill this row owes, per line (``rowClaims(over:lines:rowWidth:indicator:badgeColumns:palette:)``).
         func claims(over backgroundColor: Color?) -> [OpacityRegion] {
-            // Asked before the walk, so a row with nothing translucent — every row of
-            // nearly every list — allocates nothing at all. The `flatMap` below built
-            // an empty array per row per frame without this, which `megalist` is
-            // precisely the shape to notice.
-            guard (!indicator.isBlank && !indicator.color.isOpaque)
-                || backgroundColor?.isOpaque == false
-                || !badgeColumns.isEmpty
-            else { return [] }
-            return (0..<row.buffer.lines.count).flatMap { line -> [OpacityRegion] in
-                // Named and typed one at a time, not written inline as arguments.
-                // Inline, three ternaries whose arms are `0..<0` and `nil` left
-                // Swift 6.2's type checker to solve them together, and it gave up
-                // ("unable to type-check this expression in reasonable time"). 6.3
-                // manages it, but the package has to build on 6.2.
-                let isFirst = line == 0
-                let cells: Range<Int> = isFirst ? badgeColumns : 0..<0
-                let ink: Color? = isFirst && !badgeColumns.isEmpty ? palette.foregroundTertiary : nil
-                let mark: Color? = isFirst && !indicator.isBlank ? indicator.color : nil
-                return SelectableRowClaims.claims(
-                    line: line, width: rowWidth, cells: cells, ink: ink, mark: mark,
-                    fill: backgroundColor)
-            }
+            Self.rowClaims(
+                over: backgroundColor, lines: row.buffer.lines.count, rowWidth: rowWidth,
+                indicator: indicator, badgeColumns: badgeColumns, palette: palette)
         }
 
         /// The row's lines over a given background — the ONE description of what
@@ -3776,6 +3754,38 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                     ground: run.ground, groundUnderStatedDefault: run.groundUnderStatedDefault))
         }
         return (runs, droppedClaims)
+    }
+
+    /// The mark, the badge and the fill a row of `lines` lines owes, per line, from the
+    /// one derivation `Table` also calls. `badgeColumns` is the BADGE's columns and
+    /// nothing else: the rest of a list row's content is a child buffer that claims for
+    /// itself, and the attach carries those up (`PopulatedRenderState.contentClaims`).
+    private static func rowClaims(
+        over backgroundColor: Color?, lines: Int, rowWidth: Int, indicator: RowSelectionIndicator,
+        badgeColumns: Range<Int>, palette: any Palette
+    ) -> [OpacityRegion] {
+        // Asked before the walk, so a row with nothing translucent — every row of
+        // nearly every list — allocates nothing at all. The `flatMap` below built
+        // an empty array per row per frame without this, which `megalist` is
+        // precisely the shape to notice.
+        guard (!indicator.isBlank && !indicator.color.isOpaque)
+            || backgroundColor?.isOpaque == false
+            || !badgeColumns.isEmpty
+        else { return [] }
+        return (0..<lines).flatMap { line -> [OpacityRegion] in
+            // Named and typed one at a time, not written inline as arguments.
+            // Inline, three ternaries whose arms are `0..<0` and `nil` left
+            // Swift 6.2's type checker to solve them together, and it gave up
+            // ("unable to type-check this expression in reasonable time"). 6.3
+            // manages it, but the package has to build on 6.2.
+            let isFirst = line == 0
+            let cells: Range<Int> = isFirst ? badgeColumns : 0..<0
+            let ink: Color? = isFirst && !badgeColumns.isEmpty ? palette.foregroundTertiary : nil
+            let mark: Color? = isFirst && !indicator.isBlank ? indicator.color : nil
+            return SelectableRowClaims.claims(
+                line: line, width: rowWidth, cells: cells, ink: ink, mark: mark,
+                fill: backgroundColor)
+        }
     }
 
     /// `runs`, the row's own content's, with their grounds painted as a still row
