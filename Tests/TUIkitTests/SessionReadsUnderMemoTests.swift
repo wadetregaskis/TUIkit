@@ -2,9 +2,9 @@
 //  SessionReadsUnderMemoTests.swift
 //
 //  What a view reads from a per-app SESSION while it renders — the drag in
-//  flight — is state no memo keys on and no `@State` write reports. A row
-//  memoized above such a read was served as it was stored when the session
-//  moved. Each test here plays one gesture against two apps, one keeping its
+//  flight, the tooltip being hovered — is state no memo keys on and no `@State`
+//  write reports. A row memoized above such a read was served as it was stored
+//  when the session moved. Each test here plays one gesture against two apps, one keeping its
 //  render cache and one emptying it before every frame, and holds them to
 //  drawing the same thing on every frame: the oracle the Stress sessions use,
 //  for gestures no session plays. The gestures whose state IS written where the
@@ -105,6 +105,31 @@ private struct CardsApp: App {
 @MainActor
 private enum Drops {
     static var taken = 0
+}
+
+/// A column of rows with help text, shown in `style` once the pointer rests on
+/// the row it explains.
+private struct HelpApp: App {
+    let style: TooltipStyle
+
+    init() { self.init(style: .popover) }
+
+    init(style: TooltipStyle) { self.style = style }
+
+    var body: some Scene {
+        WindowGroup {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(cards) { card in
+                    Text(verbatim: card.title).help("about \(card.title)")
+                }
+                Spacer()
+            }
+            .tooltipStyle(style)
+        }
+        // Motion reporting, which a live app turns on for the frame after a
+        // view asks; a headless one applies only what the scene says.
+        .mouseSupport(.full)
+    }
 }
 
 /// A column of buttons, each lit by the pointer over it.
@@ -211,6 +236,42 @@ struct SessionReadsUnderMemoTests {
         twin.frames(24)
         #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
         #expect(twin.warm.screen.map(\.stripped).contains { $0.contains("card 1") }, "the card never came back")
+    }
+
+    /// A tooltip appears once the pointer has rested on the view it explains.
+    /// The hover lands in the tooltip session, which no memo keys on, so a row
+    /// memoized above the view was served as stored: no wake declared for the
+    /// end of the delay — the run loop slept past it — and, as a popover, no
+    /// popover when a frame came anyway.
+    ///
+    /// The wake is asked of each app's scheduler, because a harness draws
+    /// whenever it is told to and so cannot see a frame the app would not have
+    /// drawn; in the status bar, where the loop draws the tooltip itself, the
+    /// wake is all there is to lose.
+    @Test(
+        "A tooltip appears over a memoized row the pointer rests on, on time",
+        arguments: [TooltipStyle.popover, .statusBar])
+    func helpTooltip(style: TooltipStyle) throws {
+        let twin = Twin { HelpApp(style: style) }
+        twin.frames(3)
+        let row = try #require(twin.position(of: "card 2"))
+        twin.send(MouseEvent(button: .none, phase: .moved, x: row.x + 1, y: row.y))
+        twin.frame()
+        // The delay runs from the hover's own arrival, on the real clock, and
+        // the two apps took it microseconds apart: the same wake, to a
+        // millisecond.
+        let coldWake = try #require(twin.cold.nextWake(after: twin.now), "precondition: the cold app asks to be woken")
+        let warmWake = twin.warm.nextWake(after: twin.now)
+        #expect(
+            warmWake.map { abs($0 - coldWake) < 1_000_000 } == true,
+            "the kept app did not ask to be woken for the tooltip: \(String(describing: warmWake)) against \(coldWake)")
+        twin.frames(60)
+        #expect(
+            twin.cold.screen.map(\.stripped).contains { $0.contains("about card 2") },
+            "precondition: the cold app shows the tooltip, or this proves nothing")
+        twin.send(MouseEvent(button: .none, phase: .moved, x: row.x + 1, y: row.y + 6))
+        twin.frames(10)
+        #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
     }
 
     /// A button's hover face is the button's own state, written as the pointer

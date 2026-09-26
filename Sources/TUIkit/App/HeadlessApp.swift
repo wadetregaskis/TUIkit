@@ -133,6 +133,15 @@ package final class HeadlessApp<A: App> {
     /// transition that is on screen, and every removal still playing. A removal
     /// that has played out is no longer counted.
     package var departureCount: Int { tuiContext.stateStorage.departures.count }
+
+    /// The soonest instant after `nanos` that anything the last frame declared
+    /// — a lattice or a one-shot wake — asks to be drawn at: what the app's run
+    /// loop would sleep until. `nil` when nothing asked, and a real loop would
+    /// idle. A harness renders whenever it is told to, so a wake nobody
+    /// declared shows only here.
+    package func nextWake(after nanos: Int64) -> Int64? {
+        animationScheduler.nextFiring(after: nanos)
+    }
 }
 
 // MARK: - In-Memory Terminal

@@ -98,12 +98,17 @@ extension HelpModifier: Renderable {
         // the smallest thing that closes the loop; the id is written before any
         // event can arrive, because events are dispatched between frames.
         let idBox = HandlerIDBox()
+        // Where the arrival is reported, and for which view: see `.entered`.
+        // Weakly, since a stored buffer's journal keeps this closure and the
+        // cache keeps the buffer.
+        let invalidation = context.renderCache
+        let identity = context.identity
         // An OBSERVER, as `.onHover` is. This region goes on after the
         // content's, so as an ordinary region it took the `.entered` /
         // `.exited` the control it explains needs for its own hover face —
         // `Button("Save") {}.help("…")` never lit up under the pointer. See
         // `MouseEventDispatcher.registerHoverObserver(in:_:)`.
-        let handlerID = dispatcher.registerHoverObserver(in: context) { event in
+        let handlerID = dispatcher.registerHoverObserver(in: context) { [weak invalidation] event in
             switch event.phase {
             case .entered:
                 // The event's own arrival time, not this frame's clock: the
@@ -113,6 +118,23 @@ extension HelpModifier: Renderable {
                 tooltips.hovering(
                     captured, handlerID: idBox.id, nowNanos: FrameClock.nowNanos,
                     style: capturedStyle, delaySeconds: capturedDelay)
+                // This view is the candidate now, which is tooltip-session
+                // state no memo keys on: a row memoized above it was served as
+                // it was stored, so nothing asked for the wake at the end of
+                // the delay — the loop slept past it — and no popover was
+                // attached when a frame came anyway. So its own buffers and
+                // those containing it are dropped, and the view draws on the
+                // next frame, which an arrival always asks for, and asks for
+                // its wake. Its sizes are kept: a candidate moves no cell, since
+                // the popover is an overlay and the status-bar tooltip is drawn
+                // at the root. Dropped as a `@State` write drops a view, sizes
+                // and all, an arrival sent every windowed stack in the app
+                // back to re-measure its widest row. Applied at once, as
+                // a focus move is: events arrive on the main actor, between
+                // frames. Nothing is stored while the tooltip is pending (the
+                // wake is a side effect) or up (a popover is an overlay), so
+                // its leaving needs no report.
+                invalidation?.clearAffected(by: identity, keepingSizes: true, includingDescendants: false)
                 return true
             case .exited:
                 tooltips.leaving(captured)
