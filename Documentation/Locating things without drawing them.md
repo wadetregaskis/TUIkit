@@ -1348,12 +1348,16 @@ question.
   Rung 3 is why the record lives in `@State` (`StackWindowState.contentWidth`)
   and not in `sizeEntries`: an arriving row is a write, a write clears the cache
   from the app root down, and a record that is gone before it can be extended is
-  no record at all. Three events make it stale outright —
-  `TerminalWidthTraits.generation`, `measureGeneration`, and
+  no record at all. Four events make it stale outright —
+  `TerminalWidthTraits.generation`, `measureGeneration`,
   `RenderCache.clearGeneration` for the whole-cache drops a `@State` payload
-  cannot otherwise see.
+  cannot otherwise see, and `lapsesAt`, the next entry of a live `TimelineView`
+  a row holds, before which the clock cannot have moved any row's width. A
+  timeline's measure says when that is (`VolatileReadTracker.recordClockedRead`).
+  Refused outright, as every other memo refuses a live timeline's size, a log
+  with a "5 min ago" on every line would walk every row on every frame.
 
-  **The fourth it survives on purpose, and has to answer another way.** A
+  **The fifth it survives on purpose, and has to answer another way.** A
   write that changes what rows DRAW without changing their data — a units
   toggle, a "show details" — clears the cache's own width memos, and would have
   left this one standing with the old width and the new tails unreachable.

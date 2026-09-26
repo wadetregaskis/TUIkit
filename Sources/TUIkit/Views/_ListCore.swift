@@ -496,8 +496,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// `@State` write in any row clears it (the list is the row's ancestor),
     /// an environment change above the list clears it (the list is below the
     /// modifier), and a row that read a per-frame value declines it — the
-    /// same three rules as a row's own memo. Sources that cannot say what
-    /// their data is (sections, eager fallbacks) walk every time.
+    /// same three rules as a row's own memo. A fourth is this memo's and not
+    /// the row's: a row holding a live `TimelineView` keeps it only until the
+    /// timeline's next entry, and each serve says so to whatever measures
+    /// above the list, which would otherwise keep it for good. Sources that
+    /// cannot say what their data is
+    /// (sections, eager fallbacks) walk every time.
     private func widestRowWidth(source: RowSource<SelectionValue>, context: RenderContext) -> Int {
         let key = RenderCache.SizeKey(
             identityHash: context.identity.structuralHash,
@@ -523,7 +527,10 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             // this the entry would be pruned at the end of the pass it was
             // stored in.
             memo.cache.markActive(context.identity)
-            if let cached = memo.cache.lookupSize(key: key, view: memo.signature) {
+            if let (cached, lapsesAt) = memo.cache.lookupHeldSize(key: key, view: memo.signature) {
+                // Held only until a row's timeline moves, and what measures
+                // above the list must not hold it longer.
+                context.environment.volatileReadTracker?.recordServedHold(lapsingAt: lapsesAt)
                 return cached.width
             }
         }
@@ -534,7 +541,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             walkContext = context.withEnvironment(
                 context.environment.setting(\.volatileReadTracker, to: tracker))
         }
-        let unsafeBefore = tracker.cacheUnsafeCount
+        let mark = tracker.beginScope()
+        defer { tracker.endScope(mark) }
         let widest = (0..<source.count).map { index in
             // The content alone: a width needs no selection value, and the
             // row's type is asked below only of a row showing a badge.
@@ -560,10 +568,15 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                 }
             return (content.widthWithoutRendering ?? content.buffer.width) + badgeCells
         }.max() ?? 0
-        if let memo, tracker.cacheUnsafeCount == unsafeBefore,
+        // Kept until the clock next moves a row's timeline, when that is all
+        // that stood in the way: refused, a list of "5 min ago" rows would walk
+        // every row on every frame it hugged (`VolatileReadTracker.clockedReads`).
+        if let memo, let hold = tracker.sizeHold(since: mark),
             !walkContext.environment.hasUncomparableEnvironmentValue
         {
-            memo.cache.storeSize(key: key, identity: context.identity, view: memo.signature, size: ViewSize.fixed(widest, 0))
+            memo.cache.storeSize(
+                key: key, identity: context.identity, view: memo.signature, size: ViewSize.fixed(widest, 0),
+                lapsingAt: hold.lapsesAt)
         }
         return widest
     }

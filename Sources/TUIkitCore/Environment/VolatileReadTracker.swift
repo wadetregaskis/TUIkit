@@ -4,6 +4,8 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Foundation
+
 // MARK: - Volatile Read Tracker
 
 /// Records reads of per-frame-volatile environment values (e.g. `pulsePhase`)
@@ -121,17 +123,55 @@ public final class VolatileReadTracker: @unchecked Sendable {
     public private(set) var replayableEffects: Int = 0
 
     /// Monotonic count of reads of a value that no memo KEYS on and that no
-    /// modifier reports a change of — the enclosing `ScrollView`'s visible
-    /// viewport, which an `Image` fitted to it sizes itself by. The keys see
-    /// the extent a view is offered, and under a two-axis view whose content
-    /// is wider than its viewport that extent does not move when the terminal
-    /// is resized, so a size or a picture memoized against one viewport was
-    /// served at another. Like ``reads``, only ever compared as a delta.
+    /// modifier reports a change of. Recorded by:
+    /// - the enclosing `ScrollView`'s visible viewport, which an `Image` fitted
+    ///   to it sizes itself by. The keys see the extent a view is offered, and
+    ///   under a two-axis view whose content is wider than its viewport that
+    ///   extent does not move when the terminal is resized, so a size or a
+    ///   picture memoized against one viewport was served at another;
+    /// - a `TimelineView`'s MEASURE, while its schedule has an entry ahead —
+    ///   asked for its size, or rendered under `isMeasuring` as a plain
+    ///   button's label is: the clock moves the entry its content is sized for.
+    ///   Its render declares a wake instead (a side effect), but a measure
+    ///   declares none. Recorded through ``recordClockedRead(movingAt:)``,
+    ///   which also says when the entry moves (``clockedReads``).
+    ///
+    /// Like ``reads``, only ever compared as a delta.
     ///
     /// Counted apart from ``reads``, which alone drives the pulse timer: a
     /// viewport is not a function of time, and a view that read one would
     /// otherwise keep the run loop ticking for as long as it was on screen.
     package private(set) var unkeyedReads: Int = 0
+
+    /// Of ``unkeyedReads``, those a live `TimelineView`'s measure made. The
+    /// clock moves such a timeline's entry, and with it its size, but only at
+    /// instants the timeline knows in advance. ``clockMovesAt`` is the earliest
+    /// of those instants.
+    ///
+    /// Counted apart so that the two memos that keep ONE width for a whole
+    /// collection of views — a windowed stack's widest row and a hugging
+    /// `List`'s — can keep what a walk measured until the clock next moves.
+    /// Refused, as every other memo refuses it, such a memo walks every row
+    /// on every frame whenever each row holds a live timeline: a log of 400
+    /// lines with a "5 min ago" on each rebuilt 824 rows a frame in a two-axis
+    /// scroll view, and 800 in a hugging `List`. Kept until the next entry,
+    /// 24 and 10: the rows on screen. See ``sizeHold(since:)``.
+    /// (A `Table`'s `.fit` column is the third such memo, and needs nothing:
+    /// it measures cell STRINGS, which no timeline can be read into.)
+    package private(set) var clockedReads: Int = 0
+
+    /// The earliest instant at which a read counted in ``clockedReads`` since
+    /// the innermost open scope began (``beginScope()``) moves, or `nil` when
+    /// there has been none.
+    ///
+    /// Per scope, not per tracker, because a tracker is shared: the frame's own
+    /// is installed at the root and every walk measures under it. Kept for the
+    /// tracker's life, a clock ticking each second in a header would lapse the
+    /// width of a log whose rows move once a minute every second, and an
+    /// `.animation` timeline anywhere would lapse it every frame. A tracker
+    /// kept across frames (the Stress harness installs one per context) would
+    /// hold an instant long past, and nothing it measured could be kept at all.
+    package private(set) var clockMovesAt: Date?
 
     /// The combined count a value-memoizing view snapshots around a scoped
     /// render: any delta means the subtree is unsafe to cache.
@@ -168,6 +208,94 @@ public final class VolatileReadTracker: @unchecked Sendable {
     /// Records a read of a value no memo keys on — see ``unkeyedReads``.
     package func recordUnkeyedRead() {
         unkeyedReads &+= 1
+    }
+
+    /// Records a read of the clock that moves at `instant` and not before — a
+    /// live timeline's measure, and its next entry. It is an unkeyed read
+    /// (``unkeyedReads``), so every memo that refuses one refuses this too; see
+    /// ``clockedReads`` for the memos that need not.
+    package func recordClockedRead(movingAt instant: Date) {
+        unkeyedReads &+= 1
+        clockedReads &+= 1
+        clockMovesAt = SizeHold.earlier(clockMovesAt, instant)
+    }
+
+    /// Records that an answer kept until `instant` was served, as the clocked
+    /// read it stands for; nothing when it does not lapse.
+    ///
+    /// The two memos that keep a width for a whole collection until a row's
+    /// timeline moves answer from what they kept, with no timeline measured,
+    /// so a served answer read no clock. Said nothing, the memo above it — a
+    /// `ForEach` row or an `.equatable()` view around the stack or the list —
+    /// stored it from the second frame on with no lapse, and kept it after the
+    /// width it was taken from had lapsed: an answer over several parts must
+    /// hold no longer than any part (``SizeHold/earlier(_:_:)``), and the
+    /// served answer is one of the parts.
+    package func recordServedHold(lapsingAt instant: Date?) {
+        guard let instant else { return }
+        recordClockedRead(movingAt: instant)
+    }
+
+    /// Where a scope whose answer a memo may keep across frames began: the
+    /// counts then, and the enclosing scopes' ``clockMovesAt``, set aside while
+    /// this one collects its own.
+    package struct Mark {
+        fileprivate let unsafe: Int
+        fileprivate let clocked: Int
+        fileprivate let enclosing: Date?
+    }
+
+    /// Begins a scope whose answer a memo may keep across frames, for
+    /// ``sizeHold(since:)``. Pair it with ``endScope(_:)`` in a `defer`, so
+    /// every way out of the scope ends it: a scope left open would hide the
+    /// instants measured before it from the scopes enclosing it, and one of
+    /// them could keep an answer past the instant it lapses at.
+    package func beginScope() -> Mark {
+        defer { clockMovesAt = nil }
+        return Mark(unsafe: cacheUnsafeCount, clocked: clockedReads, enclosing: clockMovesAt)
+    }
+
+    /// Ends the scope `mark` began. What it collected joins what the scopes
+    /// enclosing it collected, since they measured it too.
+    package func endScope(_ mark: Mark) {
+        clockMovesAt = SizeHold.earlier(mark.enclosing, clockMovesAt)
+    }
+
+    /// How long a size measured since `mark` holds, for a memo that keeps
+    /// one answer for a whole collection across frames and lets it lapse:
+    /// `nil` when it must not be kept at all, because the scope read something
+    /// or did something that ``cacheUnsafeCount`` counts, and it was not only
+    /// the clock.
+    package func sizeHold(since mark: Mark) -> SizeHold? {
+        let clocked = clockedReads &- mark.clocked
+        guard cacheUnsafeCount &- mark.unsafe == clocked else { return nil }
+        guard clocked > 0, let clockMovesAt else { return .indefinitely }
+        return .until(clockMovesAt)
+    }
+}
+
+/// How long a kept size holds — see ``VolatileReadTracker/sizeHold(since:)``.
+package enum SizeHold: Equatable {
+    /// Until something the memo's own invalidation sees moves.
+    case indefinitely
+    /// Until the frame drawn at this instant or later, when the clock moves
+    /// a timeline that was measured for it.
+    case until(Date)
+
+    /// The instant it lapses, if it does.
+    package var lapsesAt: Date? {
+        switch self {
+        case .indefinitely: nil
+        case .until(let instant): instant
+        }
+    }
+
+    /// The earlier of two lapses, where `nil` never lapses: an answer over
+    /// several parts holds no longer than any part of it.
+    package static func earlier(_ lhs: Date?, _ rhs: Date?) -> Date? {
+        guard let lhs else { return rhs }
+        guard let rhs else { return lhs }
+        return min(lhs, rhs)
     }
 }
 

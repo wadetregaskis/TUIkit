@@ -146,16 +146,46 @@ private struct _TimelineViewCore<Schedule: TimelineSchedule, Content: View>: Vie
         context.renderCache?.frameDate ?? Date()
     }
 
+    /// Declares a MEASURE of a timeline with an entry still ahead, and the
+    /// instant that entry moves
+    /// (``VolatileReadTracker/recordClockedRead(movingAt:)``): its size is its
+    /// current entry's, and the clock moves the entry without anything a memo
+    /// keys on moving. The render declares itself through the wake it
+    /// requests, but a measure requests nothing (`requestWake` is a no-op while
+    /// measuring), so the cross-frame size memo above a `.equatable()` view or
+    /// a `ForEach` row stored the first entry's size and served it at every
+    /// later one — a timer counting from "9s" to "100s" was laid out two cells
+    /// wide and drew "1…". A finished timeline declares nothing: its entry can
+    /// no longer move, and its size is safe to keep.
+    ///
+    /// Both ways a timeline is measured declare: through ``sizeThatFits(proposal:context:)``,
+    /// and by being rendered under `isMeasuring` — a plain `Button` measures
+    /// its label that way, so a timer in one went undeclared.
+    ///
+    /// Not a volatile read, which would keep the pulse clock running for a
+    /// timeline that wakes once a minute; and it costs the per-pass measure
+    /// memo too, above a live timeline, since the two gates count the same
+    /// reads — the price the viewport read already pays. The two memos that
+    /// keep one width for a whole collection (a windowed stack's widest row, a
+    /// hugging `List`'s) keep it until `next` instead, because refusing it
+    /// walks every row on every frame.
+    private func declareMeasure(next: Date?, context: RenderContext) {
+        guard let next else { return }
+        context.environment.volatileReadTracker?.recordClockedRead(movingAt: next)
+    }
+
     /// The timeline is exactly its content, flexibility included — forwarded
     /// rather than measured by rendering, so a flexible child stays flexible.
     func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        let (timeline, _) = timelineContext(now: frameDate(context))
+        let (timeline, next) = timelineContext(now: frameDate(context))
+        declareMeasure(next: next, context: context)
         return measureChild(content(timeline), proposal: proposal, context: context)
     }
 
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let now = frameDate(context)
         let (timeline, next) = timelineContext(now: now)
+        if context.isMeasuring { declareMeasure(next: next, context: context) }
         if let next {
             // One wake, for the next entry only. The frame it produces declares
             // the one after it, so an irregular schedule stays exact and a

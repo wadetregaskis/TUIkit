@@ -524,7 +524,15 @@ declines when it:
 - **read a time-varying value** or requested an animation (a view that builds
   its picture from the phase as it renders would freeze — an animation carried
   in cell runs does not decline, and is served only while its frames are
-  current: see above);
+  current: see above). A ``TimelineView`` with an entry still ahead declines
+  its SIZE as well as its picture, however it is measured — asked for its
+  size, or rendered under a measure as a plain button renders its label: the
+  clock moves the entry its content is measured for, and a size kept across
+  frames would lay a timer counting from "9s" to "100s" out two cells wide.
+  The two memos that keep one width for a whole collection of views — a
+  windowed stack's widest row and a hugging `List`'s — keep such a size until
+  the timeline's next entry instead, because refusing it sends them over
+  every row on every frame;
 - **registered an effect** — `onAppear`, `.task`, `onChange`, a focus
   registration, a preference write. A cache hit skips the body that registers
   them, so the frame the cache answers is a frame on which the effect does not

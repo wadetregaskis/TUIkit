@@ -105,12 +105,13 @@
 //
 //  What this is NOT free of is invalidation duty, and the duty is larger than a
 //  render-cache entry's, because this record survives what those do not — see
-//  ``ContentWidthRecord`` for the three events that make it stale, and
-//  `challenge` for the fourth, which it can only ask about.
+//  ``ContentWidthRecord`` for the four events that make it stale, and
+//  `challenge` for the fifth, which it can only ask about.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import TUIkitCore
 import TUIkitView
 
@@ -121,7 +122,7 @@ import TUIkitView
 ///
 /// Held in ``StackWindowState`` — `@State`, so it outlives the render cache —
 /// which means this type owns its own invalidation where a `SizeKey` entry gets
-/// the cache's for free. Three events make a record stale outright, none of
+/// the cache's for free. Four events make a record stale outright, none of
 /// which this stack could observe for itself:
 ///
 /// * ``TerminalWidthTraits/generation`` — the terminal's reported glyph widths
@@ -131,8 +132,10 @@ import TUIkitView
 ///   below it must not be reused.
 /// * ``RenderCache/clearGeneration`` — the cache was dropped whole: a moved
 ///   `EnvironmentSnapshot`, a moved colour claim.
+/// * ``lapsesAt`` — the clock reached the next entry of a live `TimelineView`
+///   a row holds, which moves that row's width with nothing written.
 ///
-/// A fourth is carried and does NOT make it stale: a subtree clear that drops
+/// A fifth is carried and does NOT make it stale: a subtree clear that drops
 /// sizes (``RenderCache/sizeClearGeneration``), which every `@State` write is.
 /// The record is keyed on the rows' DATA, and a row draws more than its data —
 /// a units toggle, a "show details" — which is the `ForEach` captured-data hole
@@ -188,12 +191,24 @@ struct ContentWidthRecord {
     /// every frame (measured). When it is behind, `challenge` runs before the
     /// record answers.
     var verifiedGeneration: Int
+    /// The frame instant from which this record no longer holds, when a row
+    /// it measured holds a live `TimelineView`: the earliest next entry any of
+    /// them named (`SizeHold`). `nil` when no row's width moves with the clock.
+    ///
+    /// Refused outright instead, as the row memos refuse a live timeline's
+    /// size, a stack whose every row held one — a log with a "5 min ago" on
+    /// each line — would walk every row on every frame. Kept until the next
+    /// entry, it walks once per entry. Passed on whenever the record answers
+    /// (`VolatileReadTracker.recordServedHold(lapsingAt:)`), so the memos
+    /// around the stack refuse what it answers, as they refuse the timeline.
+    var lapsesAt: Date?
 
     /// Whether this record was taken under the same world as `context`.
     func isCurrent(in context: RenderContext) -> Bool {
         widthGeneration == TerminalWidthTraits.generation
             && measureGeneration == context.generationIgnoringIdealWidth
             && clearGeneration == (context.renderCache?.clearGeneration ?? 0)
+            && RenderCache.holds(lapsingAt: lapsesAt, in: context.renderCache)
     }
 }
 
@@ -253,6 +268,9 @@ extension _VStackCore {
         // challenge's measure read something that moves on its own. `nil` for a
         // walk from nothing, which has just measured every row.
         var inheritedVerification: Int?
+        // And when the prefix lapses, which an extension's own rows can only
+        // bring forward.
+        var inheritedLapse: Date?
         if var record = state.contentWidth, record.isCurrent(in: context) {
             let whole = record.rows == signature && record.covered == count
             // Challenged only once it is known to be USABLE: a record for other
@@ -269,6 +287,10 @@ extension _VStackCore {
                 let drawn = whole ? state.drawnOrdinals : 0..<0
                 if challenge(&record, children: children, drawn: drawn, context: context) {
                     state.contentWidth = record
+                    // Whole or extended, the answer is the record's too, and
+                    // what measures above the stack must not keep it past the
+                    // instant the record lapses at.
+                    context.environment.volatileReadTracker?.recordServedHold(lapsingAt: record.lapsesAt)
                     if whole {
                         return answer(
                             widest: record.widest, isFlexible: record.isFlexible,
@@ -281,6 +303,7 @@ extension _VStackCore {
                     runnerUp = record.runnerUp
                     isFlexible = record.isFlexible
                     inheritedVerification = record.verifiedGeneration
+                    inheritedLapse = record.lapsesAt
                 } else {
                     // Falsified, so gone: a record known to be wrong answers
                     // nothing, and kept it would only be challenged again.
@@ -292,7 +315,8 @@ extension _VStackCore {
 
         // RUNG 4 — the walk, and RUNG 1, the ceiling it stops at.
         let (measureContext, tracker) = rowWidthContext(context, width: widthLimit)
-        let unsafeBefore = tracker.cacheUnsafeCount
+        let mark = tracker.beginScope()
+        defer { tracker.endScope(mark) }
 
         // Unproposed, under the mark: each row is asked its IDEAL width, which
         // is the question — a filling frame answers with its content rather
@@ -335,8 +359,10 @@ extension _VStackCore {
 
         // A partial maximum must not be filed as if it were the whole one, and
         // a subtree that read a per-frame value or carries an environment that
-        // cannot be compared must not be filed at all.
-        if !clamped, tracker.cacheUnsafeCount == unsafeBefore,
+        // cannot be compared must not be filed at all. One whose rows read
+        // nothing of that kind but a live timeline's clock is filed until the
+        // clock next moves one of them.
+        if !clamped, let hold = tracker.sizeHold(since: mark),
             !measureContext.environment.hasUncomparableEnvironmentValue
         {
             state.contentWidth = ContentWidthRecord(
@@ -347,7 +373,8 @@ extension _VStackCore {
                 measureGeneration: context.generationIgnoringIdealWidth,
                 clearGeneration: context.renderCache?.clearGeneration ?? 0,
                 verifiedGeneration: inheritedVerification
-                    ?? (context.renderCache?.sizeClearGeneration ?? 0))
+                    ?? (context.renderCache?.sizeClearGeneration ?? 0),
+                lapsesAt: SizeHold.earlier(inheritedLapse, hold.lapsesAt))
         }
         return answer(widest: widest, isFlexible: isFlexible, limit: widthLimit)
     }
@@ -502,7 +529,8 @@ extension _VStackCore {
         guard record.verifiedGeneration != (context.renderCache?.sizeClearGeneration ?? 0)
         else { return true }
         let (measureContext, tracker) = rowWidthContext(context, width: record.measuredAt)
-        let unsafeBefore = tracker.cacheUnsafeCount
+        let mark = tracker.beginScope()
+        defer { tracker.endScope(mark) }
         // Asked as the walk asks — unproposed, under the mark — or the answers
         // are not comparable with the record's.
         let unproposed = ProposedSize(width: nil, height: nil)
@@ -555,10 +583,13 @@ extension _VStackCore {
         record.runnerUp = runnerUp
         // Read AFTER the measures: a clear a measure itself caused — a row's
         // environment modifier noting a change — is one this answer reflects.
-        if tracker.cacheUnsafeCount == unsafeBefore,
+        // A row whose live timeline was read is checked until that timeline
+        // moves, as a walk over it is filed.
+        if let hold = tracker.sizeHold(since: mark),
             !measureContext.environment.hasUncomparableEnvironmentValue
         {
             record.verifiedGeneration = context.renderCache?.sizeClearGeneration ?? 0
+            record.lapsesAt = SizeHold.earlier(record.lapsesAt, hold.lapsesAt)
         }
         return true
     }

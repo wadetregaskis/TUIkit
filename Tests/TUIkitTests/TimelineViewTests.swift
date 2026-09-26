@@ -337,6 +337,89 @@ struct TimelineViewTests {
         scheduler.endFrame()
         #expect(scheduler.nextFiring(after: nanos) == nanos + second, "the wake missed the entry it was counted to")
     }
+
+    // MARK: - The size, across frames
+
+    /// A timer beside a bar, memoized by a title that never changes: the shape
+    /// of a `ForEach` row over a timer that counts up. The timer's text grows
+    /// from "9s" to "100s" with the clock, and nothing else about the row does.
+    private func timerRow(_ clock: SteppedClock) -> some View {
+        HStack(spacing: 0) {
+            TitledTimer(title: "t", schedule: SteppedSchedule(clock: clock)).equatable()
+            Text("|")
+        }
+    }
+
+    /// The same, with the timer as a plain button's label — which the button
+    /// measures by RENDERING it, under `isMeasuring`, rather than by asking its
+    /// size.
+    private func buttonedTimerRow(_ clock: SteppedClock) -> some View {
+        HStack(spacing: 0) {
+            ButtonedTimer(title: "t", schedule: SteppedSchedule(clock: clock)).equatable()
+            Text("|")
+        }
+    }
+
+    /// The picture was never kept for a timeline with an entry ahead — the wake
+    /// it declares is a side effect no memo can replay — but its SIZE was: the
+    /// measure declared nothing, so the cross-frame size memo stored the width
+    /// the first entry measured and served it at every later one.
+    @Test("A timeline with an entry ahead is measured again on every frame, not served its first size")
+    func liveTimelineSizeIsNotServed() {
+        let (tui, context, scheduler) = harness()
+        let clock = SteppedClock(seconds: 9)
+        let row = timerRow(clock)
+        #expect(render(row, tui: tui, context: context, scheduler: scheduler).lines[0].stripped == "9s|")
+        _ = render(row, tui: tui, context: context, scheduler: scheduler)
+        clock.seconds = 100
+        let later = render(row, tui: tui, context: context, scheduler: scheduler).lines[0].stripped
+        #expect(later == "100s|", "the row was laid out at the width of the entry before")
+    }
+
+    /// A measure that renders asks for no wake — `requestWake` is a no-op while
+    /// measuring — so a timeline measured that way declared nothing at all, and
+    /// the size memo above the button kept the first entry's width.
+    @Test("A timeline measured by being rendered, as a plain button's label is, is not served its first size")
+    func liveTimelineMeasuredByRenderingIsNotServed() {
+        let (tui, context, scheduler) = harness()
+        let clock = SteppedClock(seconds: 9)
+        let row = buttonedTimerRow(clock)
+        // After the focus mark, which the one button on the page wears.
+        #expect(render(row, tui: tui, context: context, scheduler: scheduler).lines[0].stripped.hasSuffix(" 9s|"))
+        _ = render(row, tui: tui, context: context, scheduler: scheduler)
+        clock.seconds = 100
+        let later = render(row, tui: tui, context: context, scheduler: scheduler).lines[0].stripped
+        #expect(later.hasSuffix(" 100s|"), "the button was laid out at the width of the entry before: \(later)")
+    }
+
+    /// What the fix declares, asked of the tracker: a timeline with an entry
+    /// ahead reads the clock when it measures — either way it is measured — and
+    /// says so; one that has run out of entries is finished changing, and stays
+    /// memoizable.
+    @Test("Only a timeline with an entry ahead declares its measure unkeyed, however it is measured")
+    func onlyALiveTimelineDeclaresItsMeasure() {
+        let (_, context, _) = harness()
+        func declares(_ view: some View, byRendering: Bool) -> Bool {
+            var tracked = context
+            let tracker = VolatileReadTracker()
+            tracked.environment.volatileReadTracker = tracker
+            if byRendering {
+                tracked.isMeasuring = true
+                _ = renderToBuffer(view, context: tracked)
+            } else {
+                _ = measureChild(view, proposal: ProposedSize(width: 40, height: 8), context: tracked)
+            }
+            return tracker.cacheUnsafeCount > 0
+        }
+        let seen = Seen()
+        let past = Date().addingTimeInterval(-600)
+        for byRendering in [false, true] {
+            #expect(declares(timeline(SteppedSchedule(clock: SteppedClock(seconds: 9)), into: seen), byRendering: byRendering))
+            #expect(
+                !declares(timeline(.explicit([past]), into: seen), byRendering: byRendering),
+                "a finished timeline declared a read")
+        }
+    }
 }
 
 // MARK: - A clock that crosses a boundary mid-frame
@@ -381,5 +464,58 @@ private struct WakeApp: App {
                 Text("tick")
             }
         }
+    }
+}
+
+// MARK: - A clock a test can step
+
+/// The instant a ``SteppedSchedule`` puts its current entry at — a stand-in for
+/// the clock, which a test cannot step.
+private final class SteppedClock {
+    var seconds: Double
+
+    init(seconds: Double) { self.seconds = seconds }
+}
+
+/// A schedule whose current entry is wherever its clock says, with one more
+/// always ahead: to the view, a `.periodic` schedule the clock has moved
+/// along, wake and all.
+private struct SteppedSchedule: TimelineSchedule {
+    let clock: SteppedClock
+
+    func entries(from startDate: Date, mode: TimelineScheduleMode) -> [Date] {
+        [Date(timeIntervalSinceReferenceDate: clock.seconds), .distantFuture]
+    }
+}
+
+/// A timer memoized by a title that ignores it, so only the clock moves it.
+private struct TitledTimer: View, @preconcurrency Equatable {
+    let title: String
+    let schedule: SteppedSchedule
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.title == rhs.title }
+
+    var body: some View {
+        TimelineView(schedule) { context in
+            Text(verbatim: "\(Int(context.date.timeIntervalSinceReferenceDate))s")
+        }
+    }
+}
+
+/// The same timer as a plain button's label, memoized the same way.
+private struct ButtonedTimer: View, @preconcurrency Equatable {
+    let title: String
+    let schedule: SteppedSchedule
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.title == rhs.title }
+
+    var body: some View {
+        Button {
+        } label: {
+            TimelineView(schedule) { context in
+                Text(verbatim: "\(Int(context.date.timeIntervalSinceReferenceDate))s")
+            }
+        }
+        .buttonStyle(.plain)
     }
 }

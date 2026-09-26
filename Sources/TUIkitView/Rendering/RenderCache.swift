@@ -266,10 +266,16 @@ public final class RenderCache: @unchecked Sendable {
         /// both prunes compare identities structurally, so that is the same
         /// answer to the same question.
         let identity: ViewIdentity
-        init(viewSnapshot: Any, size: ViewSize, identity: ViewIdentity) {
+        /// The first frame instant the size no longer holds at, when a live
+        /// timeline's clock was read measuring it (`SizeHold`); `nil`, for
+        /// almost every entry, when nothing but this cache's own invalidation
+        /// can move it.
+        let lapsesAt: Date?
+        init(viewSnapshot: Any, size: ViewSize, identity: ViewIdentity, lapsesAt: Date?) {
             self.viewSnapshot = viewSnapshot
             self.size = size
             self.identity = identity
+            self.lapsesAt = lapsesAt
         }
     }
 
@@ -941,19 +947,33 @@ extension RenderCache {
     ///   - key: Identity plus the proposal the size was measured under.
     ///   - view: The current view value, compared against the stored snapshot.
     /// - Returns: The cached size, or `nil` on a miss.
+    ///   A size stored with a lapse is a miss from the frame drawn at that
+    ///   instant on (`holds(lapsingAt:)`).
     public func lookupSize<V: Equatable>(key: SizeKey, view: V) -> ViewSize? {
-        guard let entry = sizeEntries[key], let old = entry.viewSnapshot as? V, old == view else {
+        lookupHeldSize(key: key, view: view)?.size
+    }
+
+    /// ``lookupSize(key:view:)`` with the instant the size lapses at, for a
+    /// store that kept one: whoever serves such a size passes the lapse on
+    /// (`VolatileReadTracker.recordServedHold(lapsingAt:)`), or a memo above it
+    /// keeps it for good.
+    package func lookupHeldSize<V: Equatable>(key: SizeKey, view: V) -> (size: ViewSize, lapsesAt: Date?)? {
+        guard let entry = sizeEntries[key], let old = entry.viewSnapshot as? V, old == view, holds(lapsingAt: entry.lapsesAt) else {
             stats.misses += 1
             return nil
         }
         stats.hits += 1
-        return entry.size
+        return (entry.size, entry.lapsesAt)
     }
 
-    /// Stores a memoized measurement — see ``lookupSize(key:view:)`` for who asks.
-    public func storeSize<V: Equatable>(key: SizeKey, identity: ViewIdentity, view: V, size: ViewSize) {
+    /// Stores a memoized measurement — see ``lookupSize(key:view:)`` for who
+    /// asks. `lapsingAt` is `SizeHold.lapsesAt`, for the stores that honour
+    /// one; every other store keeps the size until the cache drops it.
+    public func storeSize<V: Equatable>(
+        key: SizeKey, identity: ViewIdentity, view: V, size: ViewSize, lapsingAt: Date? = nil
+    ) {
         stats.stores += 1
-        sizeEntries[key] = SizeEntry(viewSnapshot: view, size: size, identity: identity)
+        sizeEntries[key] = SizeEntry(viewSnapshot: view, size: size, identity: identity, lapsesAt: lapsingAt)
     }
 
     /// Whether every memo hit is checked against a fresh measurement.
