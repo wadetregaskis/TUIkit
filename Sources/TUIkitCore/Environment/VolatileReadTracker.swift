@@ -134,7 +134,9 @@ public final class VolatileReadTracker: @unchecked Sendable {
     ///   button's label is: the clock moves the entry its content is sized for.
     ///   Its render declares a wake instead (a side effect), but a measure
     ///   declares none. Recorded through ``recordClockedRead(movingAt:)``,
-    ///   which also says when the entry moves (``clockedReads``).
+    ///   which also says when the entry moves (``clockedReads``);
+    /// - a notification host's read of its service's toasts, which a `post`
+    ///   changes without writing anything the render cache sees.
     ///
     /// Like ``reads``, only ever compared as a delta.
     ///

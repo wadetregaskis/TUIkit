@@ -49,6 +49,15 @@ extension NotificationHostModifier: Renderable {
         guard let service = context.environment.notificationService else {
             return baseBuffer
         }
+        // The service is a process-wide object that no memo keys on, and a post
+        // writes nothing the render cache sees. So the read DECLARES itself
+        // (`recordUnkeyedRead`), as a view sizing itself to the scroll viewport
+        // does, and a memo above the host declines to keep a buffer drawn with
+        // no toast in it: it served that buffer after `post`, and the toast
+        // never appeared. Declared whether or not there are toasts, because
+        // "none" is the answer a post invalidates. Where a host usually sits —
+        // around the whole scene — there is no memo above it to decline.
+        context.environment.volatileReadTracker?.recordUnkeyedRead()
         let activeEntries = service.activeEntries()
 
         guard !activeEntries.isEmpty else {

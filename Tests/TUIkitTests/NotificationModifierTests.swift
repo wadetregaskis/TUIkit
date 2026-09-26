@@ -272,6 +272,43 @@ struct NotificationTests {
         }
     }
 
+    // MARK: - A host under a memo
+
+    /// A page memoized by a title, whose body hosts the toasts. Nothing about
+    /// the page changes when a toast is posted — the service is not part of
+    /// its value, and a post writes no state the render cache sees — so the
+    /// host's read of the service is the only thing that can say it moved.
+    @Test("A toast posted under a memoized page is drawn on the next frame")
+    func toastUnderAMemoIsDrawn() {
+        let lifecycle = LifecycleManager(firesEffects: false)
+        let tui = TUIContext(
+            lifecycle: lifecycle, keyEventDispatcher: KeyEventDispatcher(),
+            preferences: PreferenceStorage())
+        let service = NotificationService()
+        let page = HostedPage(title: "Base").equatable()
+        func frame() -> String {
+            var env = EnvironmentValues()
+            env.applyRuntimeServices(from: tui)
+            env.installVolatileReadTracker(VolatileReadTracker())
+            env.notificationService = service
+            let context = RenderContext(
+                availableWidth: 60, availableHeight: 12, environment: env, tuiContext: tui)
+            lifecycle.beginRenderPass()
+            tui.stateStorage.beginRenderPass()
+            tui.renderCache.beginRenderPass()
+            let buffer = renderToBuffer(page, context: context)
+            tui.stateStorage.endRenderPass()
+            tui.renderCache.removeInactive()
+            lifecycle.endRenderPass()
+            return buffer.compositingOverlays(maxWidth: 60, maxHeight: 12, palette: env.palette)
+                .lines.joined(separator: "\n")
+        }
+        #expect(frame().contains("Base"))
+        _ = frame()
+        service.post("Saved")
+        #expect(frame().contains("Saved"), "the memo served the page from before the post")
+    }
+
     // MARK: - The clock a toast fades on
 
     /// The screen a host over `Text("Base")` draws for `service`, with the frame
@@ -392,5 +429,14 @@ struct OverlayLevelStackingTests {
         let joined = screen([toast, modal])
         #expect(joined.contains("TOAST-TEXT"), "the toast must survive the modal's dimming pass")
         #expect(joined.contains("DIALOG"))
+    }
+}
+
+/// A page memoized by its title, hosting the toasts over it.
+private struct HostedPage: View, @preconcurrency Equatable {
+    let title: String
+
+    var body: some View {
+        Text(verbatim: title).notificationHost()
     }
 }

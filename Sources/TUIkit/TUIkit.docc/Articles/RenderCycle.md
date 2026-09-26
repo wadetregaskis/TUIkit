@@ -535,6 +535,10 @@ declines when it:
   windowed stack's widest row and a hugging `List`'s — keep such a size until
   the timeline's next entry instead, because refusing it sends them over
   every row on every frame;
+- **read something no key sees change** — the enclosing scroll view's
+  viewport, or the toasts a `.notificationHost()` draws, which a `post`
+  changes without writing any state: a page memoized above a host was served
+  without the toast;
 - **registered an effect** — `onAppear`, `.task`, `onChange`, a focus
   registration, a preference write. A cache hit skips the body that registers
   them, so the frame the cache answers is a frame on which the effect does not
