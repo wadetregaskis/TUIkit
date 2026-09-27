@@ -21,6 +21,15 @@ import TUIkitCore
 //  argument for one copy — not tidiness, but that the next clause added to one
 //  half would have gone the same way.
 //
+//  The memo BUILDS what it draws. A caller hands it two closures, `build`, which
+//  makes the row's view, and `render` (or `measure`), which draws a built view,
+//  and the memo calls `build` at most once per call, only on a path that draws
+//  or measures the row, and hands what it built to the draw. So the one place
+//  that needs the built value — a serve that has to compare the value it would
+//  draw before it serves, and draws that same value when the comparison fails —
+//  already holds it, and the row is never built twice in one call. The built
+//  row lives for the call and no longer: nothing here keeps it.
+//
 //  Generic functions taking the key by value, rather than a protocol with a
 //  `var memoKey` requirement. A get-only property requirement returns `@out`,
 //  and the production key on the row path is `AnyEquatableBox`, which stores an
@@ -45,8 +54,12 @@ import TUIkitCore
 ///     over a metatype, so neither the metadata read nor `String(describing:)` is
 ///     paid on the paths that never report — which is all of them, almost always.
 ///   - context: The render context.
-///   - render: Renders the memoized content. Called ONLY on a miss, which is
-///     what lets `_MemoizedRow` defer building the row view at all.
+///   - build: Builds the memoized content's view. Called at most once per call,
+///     and only where it is drawn — on a miss, or for the verifier's fresh
+///     render — which is what lets `_MemoizedRow` defer building the row view
+///     at all.
+///   - render: Renders a built view. Called on the same paths, with what
+///     `build` returned.
 ///
 /// `@inline(__always)`: both callers are in this module, and the MISS path calls
 /// `render` once per row per pass. Left out of line it cost **+3.3% on the
@@ -56,17 +69,18 @@ import TUIkitCore
 /// out of line below, behind a count check.
 @inline(__always)
 @MainActor
-func renderValueMemoized<Key: Equatable>(
+func renderValueMemoized<Key: Equatable, Row>(
     key: Key,
     viewType: @autoclosure () -> Any.Type,
     context: RenderContext,
-    render: (RenderContext) -> FrameBuffer
+    build: () -> Row,
+    render: (Row, RenderContext) -> FrameBuffer
 ) -> FrameBuffer {
     // No cache: standalone rendering, outside a render loop. Render straight
     // through rather than trapping — `EquatableView.renderToBuffer` used to force
     // unwrap here while its own `sizeThatFits` guarded, so the type contradicted
     // itself; the guard is the half that is right.
-    guard let cache = context.renderCache else { return render(context) }
+    guard let cache = context.renderCache else { return render(build(), context) }
     let identity = context.identity
     cache.markActive(identity)
 
@@ -105,7 +119,8 @@ func renderValueMemoized<Key: Equatable>(
         // served subtree is a row a control did not have to compose.
         cache.rowWork.served += 1
         if RenderCache.verifiesRenderMemo {
-            return verifyServe(entry, viewType: viewType, context: context, cache: cache, render: render)
+            return verifyServe(
+                entry, viewType: viewType, context: context, cache: cache, render: { render(build(), $0) })
         } else if !entry.effects.isEmpty, !context.isMeasuring {
             // A measure pass registers nothing when it renders, so it replays
             // nothing when it is served.
@@ -156,7 +171,7 @@ func renderValueMemoized<Key: Equatable>(
     let journal = cache.effectJournal
     let journalStart = journal.beginRecording()
 
-    let buffer = render(renderContext)
+    let buffer = render(build(), renderContext)
 
     if RenderCache.isStorable(
         buffer: buffer, context: context,
@@ -315,16 +330,19 @@ package func verifyServedSize(
 ///   - key: As the buffer half's.
 ///   - proposal: The proposed size, which is part of the key here.
 ///   - context: The render context.
-///   - measure: Measures the memoized content. Called only on a miss.
+///   - build: As the buffer half's: called at most once per call, and only
+///     where the content is measured — on a miss, or for the verifier.
+///   - measure: Measures a built view.
 @inline(__always)
 @MainActor
-func measureValueMemoized<Key: Equatable>(
+func measureValueMemoized<Key: Equatable, Row>(
     key: Key,
     proposal: ProposedSize,
     context: RenderContext,
-    measure: (RenderContext) -> ViewSize
+    build: () -> Row,
+    measure: (Row, RenderContext) -> ViewSize
 ) -> ViewSize {
-    guard let cache = context.renderCache else { return measure(context) }
+    guard let cache = context.renderCache else { return measure(build(), context) }
     // The generation is in the key for the same reason `measureChild`'s is (see
     // `measureIdentityHash`), and it has to be in BOTH or the pair is worse than
     // useless. A container that changed an environment value its subtree's size
@@ -341,7 +359,8 @@ func measureValueMemoized<Key: Equatable>(
         measureGeneration: context.measureGeneration)
     if let cached = cache.lookupSize(key: sizeKey, view: key) {
         if RenderCache.verifiesMeasureMemo {
-            return verifyServedSize(cached, label: "\(Key.self)", proposal: proposal, context: context, measure: measure)
+            return verifyServedSize(
+                cached, label: "\(Key.self)", proposal: proposal, context: context, measure: { measure(build(), $0) })
         }
         return cached
     }
@@ -360,7 +379,7 @@ func measureValueMemoized<Key: Equatable>(
         ? context.withEnvironment(context.environment.setting(\.volatileReadTracker, to: tracker))
         : context
     let unsafeBefore = tracker.cacheUnsafeCount
-    let size = measure(measureContext)
+    let size = measure(build(), measureContext)
     // The uncomparable-environment clause. A non-Equatable environment value in
     // force cannot be seen by the key, so a change to it could never invalidate a
     // stored size. This half is why the two memos are now one: the clause was

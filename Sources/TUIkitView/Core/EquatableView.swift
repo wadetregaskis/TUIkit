@@ -86,7 +86,7 @@ public struct EquatableView<Content: View & Equatable>: View {
 
 extension EquatableView: Renderable {
     /// Memoized by the whole VIEW value, through the shared value memo — see
-    /// `renderValueMemoized(key:viewType:context:render:)`.
+    /// `renderValueMemoized(key:viewType:context:build:render:)`.
     ///
     /// The soundness argument is this type's own, and it is the strong form: the
     /// key IS the view, so a hit means the very thing that would have been
@@ -96,8 +96,8 @@ extension EquatableView: Renderable {
     /// at that type rather than once in the shared code.
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
         renderValueMemoized(
-            key: content, viewType: Content.self, context: context
-        ) { TUIkitView.renderToBuffer(content, context: $0) }
+            key: content, viewType: Content.self, context: context, build: { content },
+            render: { TUIkitView.renderToBuffer($0, context: $1) })
     }
 }
 
@@ -116,9 +116,9 @@ extension EquatableView: Layoutable {
     /// value comparison is exactly why this is safe where an identity-keyed
     /// measure memo is not.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureValueMemoized(key: content, proposal: proposal, context: context) {
-            measureChild(content, proposal: proposal, context: $0)
-        }
+        measureValueMemoized(
+            key: content, proposal: proposal, context: context, build: { content },
+            measure: { measureChild($0, proposal: proposal, context: $1) })
     }
 }
 

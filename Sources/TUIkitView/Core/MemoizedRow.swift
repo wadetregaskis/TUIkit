@@ -157,7 +157,7 @@ public struct _MemoizedRow<Element: Equatable, Source, Content: View>: View, Ren
     }
 
     /// Memoized by the row's DATA ELEMENT, through the shared value memo — see
-    /// `renderValueMemoized(key:viewType:context:render:)`.
+    /// `renderValueMemoized(key:viewType:context:build:render:)`.
     ///
     /// The soundness argument is this type's own, and it is the weaker of the
     /// two the shared memo serves. `EquatableView` keys on the whole view value,
@@ -176,23 +176,23 @@ public struct _MemoizedRow<Element: Equatable, Source, Content: View>: View, Ren
     /// `.equatable()`). It now checks 4,565 of them across 14 of the 21
     /// scenarios.
     public func renderToBuffer(context: RenderContext) -> FrameBuffer {
-        renderValueMemoized(key: element, viewType: Content.self, context: context) {
-            TUIkitView.renderToBuffer(content, context: $0)
-        }
+        renderValueMemoized(
+            key: element, viewType: Content.self, context: context, build: { content },
+            render: { TUIkitView.renderToBuffer($0, context: $1) })
     }
 
     /// The size twin, same shared implementation.
     ///
     /// `content` is a computed property that BUILDS the row, so it must be
-    /// touched only inside the closure — which the memo calls only on a miss.
+    /// touched only inside `build` — which the memo calls only on a miss.
     /// That is the whole reason the row view is not a stored property: 94% of
     /// rows hit in the `fanout` stress scenario, and building the view eagerly
     /// once per row per pass was `ForEach.makeChild`'s 21% of that frame, nearly
     /// all of it thrown away.
     public func sizeThatFits(proposal: ProposedSize, context: RenderContext) -> ViewSize {
-        measureValueMemoized(key: element, proposal: proposal, context: context) {
-            measureChild(content, proposal: proposal, context: $0)
-        }
+        measureValueMemoized(
+            key: element, proposal: proposal, context: context, build: { content },
+            measure: { measureChild($0, proposal: proposal, context: $1) })
     }
 }
 
