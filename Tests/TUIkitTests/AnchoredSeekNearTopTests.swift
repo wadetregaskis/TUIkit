@@ -8,7 +8,9 @@
 //  header an offset in the header took the rows from row 0 instead, and the
 //  target was left off screen. Placed exactly, the target's place must then
 //  be read in the same coordinates by what the seek asks of it: the clamp to
-//  the stack's end, and a minimal-movement seek's choice of edge.
+//  the stack's end, and a minimal-movement seek's choice of edge — which, as
+//  a near seek's walk does, reads the rows on screen from the anchor, and so
+//  from the anchor at the frame's offset, not where the last frame left it.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -19,12 +21,12 @@ import Testing
 @testable import TUIkitCore
 @testable import TUIkitView
 
-/// Row `index`: rows 0 to `tall - 1` are `lines` lines each, every other row
+/// Row `index`: the rows in `tall` are `lines` lines each, every other row
 /// one line — so once the view has scrolled into the one-line rows, the
 /// running pitch prices the tall rows at a line or two.
 @MainActor
-private func tallHeadRow(_ index: Int, tall: Int = 3, lines: Int = 5) -> Text {
-    guard index < tall else { return Text("row \(index)") }
+private func tallHeadRow(_ index: Int, tall: Range<Int> = 0..<3, lines: Int = 5) -> Text {
+    guard tall.contains(index) else { return Text("row \(index)") }
     return Text((["row \(index)"] + Array(repeating: "  of \(index)", count: lines - 1)).joined(separator: "\n"))
 }
 
@@ -36,7 +38,7 @@ private struct TallHeadPage: View {
     let header: Bool
     let flat: Bool
     var count = 300
-    var tall = 3
+    var tall = 0..<3
     var lines = 5
     var glued = false
 
@@ -139,7 +141,7 @@ struct AnchoredSeekNearTopTests {
         // screen showed rows in the twenties, and row 7 was nowhere on it.
         var count = 250
         let pair = TallHeadPair {
-            TallHeadPage(box: $0, header: false, flat: $1, count: count, tall: 7, lines: 60, glued: true)
+            TallHeadPage(box: $0, header: false, flat: $1, count: count, tall: 0..<7, lines: 60, glued: true)
         }
         pair.frame()
         pair.frame()
@@ -167,7 +169,7 @@ struct AnchoredSeekNearTopTests {
         // and nothing moved but the anchor — row 7 was drawn on line 5.
         var count = 250
         let pair = TallHeadPair {
-            TallHeadPage(box: $0, header: false, flat: $1, count: count, tall: 7, lines: lines, glued: true)
+            TallHeadPage(box: $0, header: false, flat: $1, count: count, tall: 0..<7, lines: lines, glued: true)
         }
         pair.frame()
         pair.frame()
@@ -180,6 +182,69 @@ struct AnchoredSeekNearTopTests {
         let seek = pair.frame().lazy
         let settled = pair.frame().lazy
         #expect(seek.first == "row 7", "\(seek)")
+        #expect(seek == settled, "the frame after: \(settled)")
+    }
+
+    @Test(
+        "A minimal-movement seek on the frame the stack first takes the anchored window moves from the rows on screen",
+        arguments: [5, 100])
+    func minimalSeekOnTheFirstAnchoredFrame(target: Int) {
+        // Row 0 one line and rows 1-3 five, glued to the end at 250 rows (the
+        // exact walk, which keeps no anchor), then grown to 300 in the frame
+        // that seeks: the anchored window's first, which starts from the
+        // anchor it has never walked, row 0. Row 5 and row 100 are above the
+        // screen, so the column puts each on the top line. Before, row 100
+        // was far from row 0 and after it, so it was taken for a row below
+        // the screen and put on the bottom line; row 5 was near row 0 and
+        // measured from it as if row 0 were at the top, found below the
+        // screen, and the offset was moved down from the tail, not up to it.
+        var count = 250
+        let pair = TallHeadPair {
+            TallHeadPage(box: $0, header: false, flat: $1, count: count, tall: 1..<4, glued: true)
+        }
+        pair.frame()
+        pair.frame()
+        count = 300
+        pair.apply { $0.proxy?.scrollTo(target) }
+        let seek = pair.frame()
+        let settled = pair.frame()
+        #expect(seek.flat.first == "row \(target)", "precondition: the column puts the row on line 0: \(seek.flat)")
+        #expect(seek.lazy == seek.flat, "\(seek.lazy) vs \(seek.flat)")
+        #expect(settled.lazy == settled.flat, "the frame after: \(settled.lazy) vs \(settled.flat)")
+    }
+
+    @Test(
+        "A minimal-movement seek to a row above the screen puts it on the top line, when the jump that took the screen past it is in the same frame too",
+        arguments: [false, true], [12, 100])
+    func minimalSeekAfterAJump(sameFrame: Bool, target: Int) {
+        // As in the far seek above: from line 30 (rows 30 to 37), then a jump
+        // to line 200 (rows from 200) and `scrollTo(target)`, in one frame or
+        // the jump a frame first. Both rows are above the screen the jump
+        // shows. Before, in the same frame, the seek moved from rows 30 to 37,
+        // where the anchor was last drawn: row 100 was far from row 30 and
+        // after it, so it went on the bottom line; row 12 was near and above
+        // it, so the offset went up from 200 by the lines from row 12 to row
+        // 30, and the screen showed rows from 182.
+        var count = 250
+        let pair = TallHeadPair {
+            TallHeadPage(box: $0, header: false, flat: $1, count: count, tall: 0..<7, lines: 10, glued: true)
+        }
+        pair.frame()
+        pair.frame()
+        count = 300
+        for _ in 0..<3 { pair.frame() }
+        pair.apply { $0.position.scrollTo(y: 30) }
+        let before = pair.frame().lazy
+        #expect(before.first == "row 30", "precondition: the jump shows rows from 30: \(before)")
+        pair.apply { $0.position.scrollTo(y: 200) }
+        if !sameFrame {
+            let jumped = pair.frame().lazy
+            #expect(jumped.first == "row 200", "precondition: the jump shows rows from 200: \(jumped)")
+        }
+        pair.apply { $0.proxy?.scrollTo(target) }
+        let seek = pair.frame().lazy
+        let settled = pair.frame().lazy
+        #expect(seek.first == "row \(target)", "\(seek)")
         #expect(seek == settled, "the frame after: \(settled)")
     }
 }

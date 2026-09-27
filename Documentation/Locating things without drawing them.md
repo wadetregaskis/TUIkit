@@ -781,11 +781,15 @@ the stack is priced on from it, since priced whole at the pitch it could end
 above the row and clamp the seek short of it, and a far minimal-movement seek
 takes the top edge for a row before the anchor and the bottom edge for one
 after it, rather than comparing the place with the offset, which is at the
-pitch (`AnchoredSeekNearTopTests`). Handed an offset a screen or more above
-its first row — the viewport inside a header at least as tall as it — every
-path draws row 0 as the margin row below the viewport, so its controls join
-the focus ring and the lines it drew are named for the scroll view to follow
-rows arriving there (`SectionTallHeaderTests`). It is a
+pitch. The anchor it reads, as a near seek's walk does, is the one at this
+frame's offset, walked there before the seek: left where the last frame drew
+it, it was row 0 on the frame a stack grows onto the anchored window, or rows
+behind a jump made with the seek, and a row above the screen went on the
+bottom line (`AnchoredSeekNearTopTests`). Handed an offset a screen or more
+above its first row — the viewport inside a header at least as tall as it —
+every path draws row 0 as the margin row below the viewport, so its controls
+join the focus ring and the lines it drew are named for the scroll view to
+follow rows arriving there (`SectionTallHeaderTests`). It is a
 push, not the pull above, and it works because the section knows its lines
 before its content is drawn — its header's by drawing it first, its footer's
 by measuring it. A wrapper that adds lines the same way and does not relay the

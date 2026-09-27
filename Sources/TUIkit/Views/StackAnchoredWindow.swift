@@ -520,9 +520,11 @@ extension _VStackCore {
         //   lines, the rest priced at one, drew rows 29 to 36.
         // - A minimal-movement seek's edge. A far target (`nilAnchorSeekOffset`
         //   answers a near one) is off screen: above it when its ordinal is
-        //   before the anchor's, below it when after. Moving as little as it
-        //   can puts it on that edge — `.top` or `.bottom`, whose offsets are
-        //   the minimal movement's (`ScrollToRequest/windowOffset`).
+        //   before the anchor's, below it when after (the anchor at this
+        //   frame's offset, walked there first: `renderAnchoredWindow`).
+        //   Moving as little as it can puts it on that edge — `.top` or
+        //   `.bottom`, whose offsets are the minimal movement's
+        //   (`ScrollToRequest/windowOffset`).
         //   Compared with the offset, which is at the pitch, the exact place
         //   fell on the wrong side of it: from line 30 (rows 30 to 37), row 7
         //   under seven rows of ten lines was put on the bottom line, and
@@ -607,6 +609,23 @@ extension _VStackCore {
                 : anchorMode)
 
         var window = window
+        // A seek moves from the rows on screen, and reads them from the anchor:
+        // a near target is walked to from it (`nilAnchorSeekOffset`), a far one
+        // takes the edge its ordinal is on (`resolveAnchoredSeek`). The anchor
+        // is walked to the offset below, after the seek, so until then it is
+        // where the last anchored frame left it — the rows on screen only if
+        // the offset has not moved since. On the frame a stack first takes
+        // this path (grown past 256 rows: the exact walk keeps no anchor, so it
+        // was row 0), or whose offset jumped with the seek, a `scrollTo` of a
+        // far row above the screen put it on the bottom line, and of a near one
+        // moved the offset away from it. So a seek's frame walks the anchor to
+        // the offset first, as it would with no seek. A designated row owns the
+        // anchor, and is on screen by construction.
+        if designatedKey == nil, window.seek != nil {
+            frame.advanceAnchor(
+                to: window.offset, viewportHeight: window.viewportHeight,
+                linesBelow: window.linesBelow)
+        }
         let resolvedSeek = resolveAnchoredSeek(
             frame: frame, state: state, window: &window, children: children)
 
