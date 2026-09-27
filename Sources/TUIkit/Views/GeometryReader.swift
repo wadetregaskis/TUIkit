@@ -214,7 +214,7 @@ private struct _GeometryReaderCore<Content: View>: View, Renderable, Layoutable 
         let height = max(0, context.availableHeight)
         let proxy = GeometryProxy(width: width, height: height)
 
-        let buffer = TUIkitView.renderToBuffer(content(proxy), context: context)
+        let buffer = TUIkitView.renderToBuffer(content(proxy), context: contentContext(noting: proxy, in: context))
 
         // The reader occupies everything it was offered even when its content
         // does not, so a sibling below starts where the reader ends rather than
@@ -230,5 +230,40 @@ private struct _GeometryReaderCore<Content: View>: View, Renderable, Layoutable 
             padded.append(String(repeating: " ", count: width))
         }
         return buffer.replacingLines(padded, width: width, uniformWidth: true)
+    }
+
+    /// The context the content is built in, once the size handed to it is
+    /// NOTED at this identity.
+    ///
+    /// The content is a function of that size, and the size is moved by
+    /// layout, which no memo below keys on: a `ForEach` row that prints
+    /// `proxy.size.width` is memoized by its element and offered whatever its
+    /// own container offers it, so when a sidebar's `@State` narrowed the
+    /// reader — a write that clears the sidebar and what contains it, and
+    /// nothing inside the reader — the row was served as it was drawn at the
+    /// old width. So the size is noted as an environment modifier notes the
+    /// value it injects (a timeline notes its entry the same way), and a moved
+    /// size drops what the cache holds below it, sizes included, once.
+    ///
+    /// Noted only by a render that draws. A render made to measure — a plain
+    /// button's label is measured that way — can offer another size, and the
+    /// note answers the later visits of a pass without comparing; noted there,
+    /// it would compare that size with itself from frame to frame and never
+    /// see the one drawn move. `sizeThatFits` never builds the content.
+    ///
+    /// The depth goes up for the content, as a timeline's does, so a reader
+    /// whose content is another reader drawn at this identity notes under a
+    /// slot of its own.
+    private func contentContext(noting proxy: GeometryProxy, in context: RenderContext) -> RenderContext {
+        var contentContext = context
+        contentContext.environmentApplicationDepth += 1
+        if !context.isMeasuring, let cache = context.renderCache,
+            case .changed = cache.noteAppliedEnvironment(
+                proxy.size, identity: context.identity, keyPath: \GeometryProxy.size,
+                depth: context.environmentApplicationDepth)
+        {
+            cache.clearAffected(by: context.identity)
+        }
+        return contentContext
     }
 }
