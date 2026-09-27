@@ -149,8 +149,9 @@ struct PaletteContrastAuditTests {
         let selectedRowFill = palette.accent.opacity(ViewConstants.selectedBackground, over: background)
         let alternatingFill = palette.accent.opacity(
             ViewConstants.alternatingRowBackground, over: background)
-        let pulseDim = palette.accent.opacity(ViewConstants.focusPulseMin, over: background)
-        let pulseBright = palette.accent.opacity(ViewConstants.focusPulseMax, over: background)
+        // The breath's ends as `Palette.accentFillPulse(over:)` chooses them: the plain
+        // shares, or where those fail on 256 colours, the ones it walked to.
+        let (pulseDim, pulseBright) = palette.accentFillPulse()
         // The cursor row on a row the selection does not include breathes the focus
         // wash; its dim end is `focusBackground`, audited above, and its bright end is
         // floored for exactly this pair.
@@ -301,7 +302,7 @@ struct PaletteContrastAuditTests {
     // MARK: - The accent's breath has to hold on 256 colours
 
     /// What a breath can get wrong as a 256-colour terminal draws it.
-    private enum BreathCriterion: String {
+    private enum BreathCriterion: String, CaseIterable {
         /// The row's text falls under ``ViewConstants/rowBreathPeakContrastFloor`` on
         /// some shade.
         case text
@@ -314,7 +315,7 @@ struct PaletteContrastAuditTests {
         case page
     }
 
-    /// The shipped palettes whose accent breath fails a criterion on `main`, each as
+    /// The shipped palettes whose accent breath fails a criterion, each as
     /// "<palette>: <criterion>", taken out by the change that fixes it.
     ///
     /// A ledger rather than a failing test, so every commit on the way passes, and a
@@ -322,7 +323,7 @@ struct PaletteContrastAuditTests {
     /// (`withKnownIssue` with no issue recorded), so a fix that forgets to take its
     /// entry out fails here.
     private static let knownAccentBreathFailures: Set<String> = [
-        "Violet: text", "Red Sands: text", "Ocean: shades", "Silver Aerogel: mark",
+        "Red Sands: shades", "Ocean: shades", "Silver Aerogel: mark",
     ]
 
     /// `body`, whose failure is known where the ledger lists `criterion` for `palette`.
@@ -334,6 +335,51 @@ struct PaletteContrastAuditTests {
             body()
         } when: {
             knownAccentBreathFailures.contains(entry)
+        }
+    }
+
+    /// A breath as a 256-colour terminal draws it: the shades `Color.pulseRamp` walks
+    /// between its ends, each moved onto the cube, beside the row's text, its ● and the
+    /// page, all moved onto the cube too.
+    @MainActor
+    private struct DrawnBreath {
+        let name: String
+        let shades: [Color]
+        let text: Color
+        let mark: Color
+        let page: Color
+
+        init(dim: Color, bright: Color, in palette: some Palette) {
+            name = palette.name
+            shades = Color.pulseRamp(from: dim, to: bright, depth: .palette256)
+                .map { $0.downsampledToPalette256() }
+            text = palette.foreground.downsampledToPalette256()
+            mark = palette.accent.downsampledToPalette256()
+            page = palette.background.downsampledToPalette256()
+        }
+
+        /// What the breath gets wrong under `criterion`, or `nil` where it holds.
+        func failure(_ criterion: BreathCriterion) -> String? {
+            let names = shades.map(PaletteContrastAuditTests.hex)
+            switch criterion {
+            case .text:
+                let ratios = shades.map { PaletteContrastAuditTests.contrast(text, $0) }
+                guard let worst = ratios.min(), let at = ratios.firstIndex(of: worst),
+                    worst < ViewConstants.rowBreathPeakContrastFloor
+                else { return nil }
+                let ratio = String(format: "%.2f", worst)
+                return "\(name): the text \(PaletteContrastAuditTests.hex(text)) is \(ratio):1 on \(names[at]), of \(names)"
+            case .shades:
+                return shades.count >= 2 ? nil : "\(name): the breath holds one colour, \(names)"
+            case .mark:
+                return !shades.contains(mark)
+                    ? nil
+                    : "\(name): the ● \(PaletteContrastAuditTests.hex(mark)) is a shade of the breath, \(names)"
+            case .page:
+                return !shades.contains(page)
+                    ? nil
+                    : "\(name): the breath passes through the page's \(PaletteContrastAuditTests.hex(page)): \(names)"
+            }
         }
     }
 
@@ -354,33 +400,32 @@ struct PaletteContrastAuditTests {
     func accentBreathHoldsOn256Colours() {
         for palette in Self.statedPalettes {
             let ends = palette.accentFillPulse()
-            let shades = Color.pulseRamp(from: ends.dim, to: ends.bright, depth: .palette256)
-                .map { $0.downsampledToPalette256() }
-            let names = shades.map(Self.hex)
-            let text = palette.foreground.downsampledToPalette256()
-            let mark = palette.accent.downsampledToPalette256()
-            let page = palette.background.downsampledToPalette256()
-            let ratios = shades.map { Self.contrast(text, $0) }
-            let worst = ratios.min() ?? 0
-            let worstShade = ratios.firstIndex(of: worst).map { names[$0] } ?? "?"
-            let floor = ViewConstants.rowBreathPeakContrastFloor
-            let holdsMark = shades.contains(mark)
-            let holdsPage = shades.contains(page)
+            let drawn = DrawnBreath(dim: ends.dim, bright: ends.bright, in: palette)
+            for criterion in BreathCriterion.allCases {
+                let failure = drawn.failure(criterion)
+                Self.expecting(criterion, of: palette) {
+                    #expect(failure == nil, "\(failure ?? "")")
+                }
+            }
+        }
+    }
 
-            Self.expecting(.text, of: palette) {
-                #expect(
-                    worst >= floor,
-                    "\(palette.name): the text \(Self.hex(text)) is \(String(format: "%.2f", worst)):1 on \(worstShade), of \(names)")
-            }
-            Self.expecting(.shades, of: palette) {
-                #expect(shades.count >= 2, "\(palette.name): the breath holds one colour, \(names)")
-            }
-            Self.expecting(.mark, of: palette) {
-                #expect(!holdsMark, "\(palette.name): the ● \(Self.hex(mark)) is a shade of the breath, \(names)")
-            }
-            Self.expecting(.page, of: palette) {
-                #expect(!holdsPage, "\(palette.name): the breath passes through the page's \(Self.hex(page)): \(names)")
-            }
+    /// The breath's ends move only where the plain one — ``ViewConstants/focusPulseMin``
+    /// to ``ViewConstants/focusPulseMax`` of the accent over the page — fails as a
+    /// 256-colour terminal draws it. A palette whose plain breath holds keeps it exactly,
+    /// at every depth: twelve of the sixteen shipped palettes.
+    @Test("A breath that holds on 256 colours is left at the plain shares")
+    func holdingBreathIsNotMoved() {
+        for palette in Self.statedPalettes {
+            let dim = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
+            let bright = palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background)
+            let drawn = DrawnBreath(dim: dim, bright: bright, in: palette)
+            let holds = BreathCriterion.allCases.allSatisfy { drawn.failure($0) == nil }
+            guard holds else { continue }
+            let ends = palette.accentFillPulse()
+            #expect(
+                ends.dim == dim && ends.bright == bright,
+                "\(palette.name): moved to \(Self.hex(ends.dim))→\(Self.hex(ends.bright)) from \(Self.hex(dim))→\(Self.hex(bright))")
         }
     }
 

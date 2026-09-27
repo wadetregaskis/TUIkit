@@ -982,6 +982,14 @@ extension Palette {
     /// against — the pair `PaletteContrastAuditTests` measures. A mark drawn IN
     /// the accent has nothing on top of it and can go all the way.
     ///
+    /// Those two shares are where the breath starts, not always where it ends. A
+    /// 256-colour terminal draws the shades the cube can show between them, and the
+    /// cube moves those and the text alike, so the shares are chosen as it draws them:
+    /// kept wherever the breath holds there, and walked where it does not — the top
+    /// brought down until the row's text keeps ``ViewConstants/rowBreathPeakContrastFloor``
+    /// on every shade. The same on every terminal, so a breath looks the same everywhere.
+    /// `AccentFillBreath` has the walk and the palettes it moves.
+    ///
     /// When the accent or the ground has no RGB (``Color/default``, or a colour of
     /// the terminal's own that it has not reported), neither end can be mixed, and
     /// both are the bright one. For an opaque accent that is the accent: the bright
@@ -995,11 +1003,13 @@ extension Palette {
     /// - Parameter surface: What the fill sits on, when that is not the page.
     public func accentFillPulse(over surface: Color? = nil) -> (dim: Color, bright: Color) {
         let ground = surface ?? background
-        let bright = accent.opacity(ViewConstants.focusPulseMax, over: ground)
         // `Color.breathEnds(dimmedTo:over:)`'s rule for a side with no RGB, applied to
         // this pair's own bright end, which stops short of the accent.
-        guard accent.rgbComponents != nil, ground.rgbComponents != nil else { return (bright, bright) }
-        return (accent.opacity(ViewConstants.focusPulseMin, over: ground), bright)
+        guard accent.rgbComponents != nil, ground.rgbComponents != nil else {
+            let bright = accent.opacity(ViewConstants.focusPulseMax, over: ground)
+            return (bright, bright)
+        }
+        return AccentFillBreath.ends(accent: accent, ground: ground, text: foreground)
     }
 
     /// The two ends the focus wash breathes between: the cursor row of a list or

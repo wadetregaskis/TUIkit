@@ -19,7 +19,10 @@ public enum ViewConstants {
     ///
     /// The span to ``focusPulseMax`` is bounded at the bright end by
     /// readability: this fill sits behind arbitrary row content, which keeps its
-    /// own foreground, and `PaletteContrastAuditTests` measures that pair.
+    /// own foreground, and `PaletteContrastAuditTests` measures that pair. Where a
+    /// 256-colour terminal would draw a shade of the span that the text is not
+    /// readable on, the top is brought down until it would not
+    /// (``Palette/accentFillPulse(over:)``).
     ///
     /// How many *distinct* shades the span yields is a separate question and no
     /// longer this constant's problem — on a terminal without truecolor the
@@ -38,8 +41,10 @@ public enum ViewConstants {
     /// its own foreground, so the top of that breath is bounded by what the text
     /// stays readable against. Lower than ``labelContrastFloor``, which a label
     /// resting on a face is held to: the top of a breath is one moment of each
-    /// cycle, not a colour the row rests on. The accent's top
-    /// (``focusPulseMax``) is held to it by `PaletteContrastAuditTests`.
+    /// cycle, not a colour the row rests on. The accent's breath
+    /// (``Palette/accentFillPulse(over:)``) keeps it on every shade a 256-colour
+    /// terminal draws, and `PaletteContrastAuditTests` measures that and the
+    /// truecolour top.
     public static let rowBreathPeakContrastFloor: Double = 2.0
 
     /// Background opacity for selected (but unfocused) rows.
