@@ -121,6 +121,15 @@ extension _VStackCore {
     /// the stack's lines: those meeting it, plus one margin row past each edge
     /// of that run, so a directional focus move can step just beyond the
     /// window. A contiguous run, whose lines ``drawnLines(of:renders:)`` names.
+    ///
+    /// A viewport that ends at or above the first row — inside a section's
+    /// header at least as tall as it, which the section's relay hands the
+    /// stack as a negative offset (`ScrollContentWindow/offset`) — meets no
+    /// row, and row 0 is the margin row below it, as the uniform and anchored
+    /// windows draw it. Drawn nowhere, no row's control joined the focus ring,
+    /// so Tab from the header went past the rows, and no drawn lines were
+    /// named: rows arriving there were followed to the new end onto blank
+    /// placeholders the scroll view could not see were never drawn.
     static func windowRows(of slots: [RowSlot], top: Int, bottom: Int) -> [Bool] {
         var renders = slots.map { $0.y + $0.height > top && $0.y < bottom }
         if let first = renders.firstIndex(of: true), first > 0 {
@@ -128,6 +137,9 @@ extension _VStackCore {
         }
         if let last = renders.lastIndex(of: true), last < slots.count - 1 {
             renders[last + 1] = true
+        }
+        if !slots.isEmpty, bottom <= 0 {
+            renders[0] = true
         }
         return renders
     }
