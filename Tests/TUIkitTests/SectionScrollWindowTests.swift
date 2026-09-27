@@ -258,8 +258,12 @@ struct SectionScrollWindowTests {
             // The anchored window seeks by ESTIMATE (§5e): the row lands exactly
             // where the anchor walk puts it, but a bottom-edge clamp is priced
             // at the running pitch, and near the tail it is not the column's.
+            // Near the top it is exact: a `.bottom` or `.center` seek there,
+            // from mid-list, is placed by the rows above it, not the pitch.
             script = [
                 .line(100_000), .line(100_000), .row(middle, .top), .row(0, .top),
+                .row(middle, .top), .row(0, .bottom), .row(middle, .top), .row(4, .bottom),
+                .row(middle, .top), .row(2, .center),
                 .row(1, .center), .row(middle, nil), .row(5, .top), .row(0, nil), .line(1),
                 .row(0, nil), .row(last - 10, .top), .row(last, nil),
             ]

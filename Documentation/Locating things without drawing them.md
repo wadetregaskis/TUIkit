@@ -772,7 +772,16 @@ anchored window, which places rows outward from an anchor, reads the lines
 around it at its ends too: a jump to the end puts the last row above the
 footer rather than at the viewport's bottom, a footer taller than the viewport
 may take the last row wholly off screen, and a held row whose rows above fill
-its line leaves the header no room, so the hold scrolls the header off. It is a
+its line leaves the header no room, so the hold scrolls the header off. A seek
+to a row less than a screen of rows from the top places it by the rows above
+it, measured, not at the running pitch: an offset in the header draws the rows
+from row 0, so a `.bottom` seek priced into the header by rows taller than the
+pitch drew its row off screen. The rest of the seek reads that exact place too:
+the stack is priced on from it, since priced whole at the pitch it could end
+above the row and clamp the seek short of it, and a far minimal-movement seek
+takes the top edge for a row before the anchor and the bottom edge for one
+after it, rather than comparing the place with the offset, which is at the
+pitch (`AnchoredSeekNearTopTests`). It is a
 push, not the pull above, and it works because the section knows its lines
 before its content is drawn — its header's by drawing it first, its footer's
 by measuring it. A wrapper that adds lines the same way and does not relay the

@@ -482,7 +482,9 @@ extension _VStackCore {
     /// re-aims `window.offset`, returning the offset to report (or `nil` when
     /// there is no request or its key is absent). The estimated y positions
     /// only the scrollbar and the clamp; the target row itself lands exactly
-    /// where the anchor walk puts it, estimates notwithstanding.
+    /// where the anchor walk puts it, estimates notwithstanding — and near the
+    /// top, where the walk can be overruled, its y is exact (`seekTargetY`),
+    /// and so the clamp and a minimal-movement seek's edge are read from it.
     private func resolveAnchoredSeek(
         frame: AnchoredWindowFrame, state: StackWindowState,
         window: inout ScrollContentWindow, children: ChildViewCollection
@@ -505,17 +507,60 @@ extension _VStackCore {
             return nearOffset
         }
         let estimate = state.estimatedPitch(spacing: spacing)
-        let estimatedY = ordinal * estimate
+        let targetY = seekTargetY(ordinal: ordinal, estimate: estimate, frame: frame, window: window)
         let rowHeight = frame.pitch(of: ordinal) - (ordinal < children.count - 1 ? spacing : 0)
+        // What the seek asks of the target's place is read in its coordinates,
+        // which near the top are exact (`seekTargetY`):
+        //
+        // - The clamp. The stack runs on from the target at the running pitch.
+        //   Priced whole at that pitch, it could end above the target's exact
+        //   place: the offset was clamped back, and the walk from the target
+        //   took the gap for a jump and placed the rows by estimate
+        //   (`advanceAnchor`). A `.top` seek to row 7 under seven rows of sixty
+        //   lines, the rest priced at one, drew rows 29 to 36.
+        // - A minimal-movement seek's edge. A far target (`nilAnchorSeekOffset`
+        //   answers a near one) is off screen: above it when its ordinal is
+        //   before the anchor's, below it when after. Moving as little as it
+        //   can puts it on that edge — `.top` or `.bottom`, whose offsets are
+        //   the minimal movement's (`ScrollToRequest/windowOffset`).
+        //   Compared with the offset, which is at the pitch, the exact place
+        //   fell on the wrong side of it: from line 30 (rows 30 to 37), row 7
+        //   under seven rows of ten lines was put on the bottom line, and
+        //   under rows of five, on line 5, the offset unmoved.
+        var request = seek
+        if request.anchor == nil { request.anchor = ordinal < state.anchorOrdinal ? .top : .bottom }
         let newOffset = window.offset(
-            realising: seek, targetY: estimatedY, rowHeight: rowHeight,
-            stackHeight: children.count * estimate - spacing)
+            realising: request, targetY: targetY, rowHeight: rowHeight,
+            stackHeight: max(children.count * estimate, targetY + (children.count - ordinal) * estimate)
+                - spacing)
         state.anchorOrdinal = ordinal
         state.anchorKey = children.key(at: ordinal)
         state.anchorOffsetWithin = 0
-        state.lastDerivedOffset = estimatedY
+        state.lastDerivedOffset = targetY
         window.offset = newOffset
         return newOffset
+    }
+
+    /// Where a seek takes its target row's top to be: at the running pitch
+    /// (§5e), except for a row fewer than a viewport of rows from the top,
+    /// whose rows above are few and measured exactly — as the end is placed
+    /// exactly from the last row up (`tailAnchor(endingAt:)`).
+    ///
+    /// Only those rows can have their seek's offset above the stack's top,
+    /// where the anchor walk that places the target by exact pitches from its
+    /// priced place (`advanceAnchor`) is overruled: an offset there shows the
+    /// lines drawn above the stack — a section's header — and takes the rows
+    /// from row 0. Priced from rows taller than the running pitch, a `.bottom`
+    /// or `.center` seek to such a row landed in the header, and the row was
+    /// drawn where rows 0 up put it, off screen: row 3 under three rows of five
+    /// lines, at 8 lines, was nowhere on screen. With nothing above the stack
+    /// the offset clamps to its top, and the walk from the priced place drew
+    /// the row lines above where a column of the same rows puts it.
+    private func seekTargetY(
+        ordinal: Int, estimate: Int, frame: AnchoredWindowFrame, window: ScrollContentWindow
+    ) -> Int {
+        guard ordinal < window.viewportHeight else { return ordinal * estimate }
+        return (0..<ordinal).reduce(0) { $0 + frame.pitch(of: $1) }
     }
 
     /// Renders the window by anchored outward fill, or returns `nil` when a
