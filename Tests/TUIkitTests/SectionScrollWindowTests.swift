@@ -182,38 +182,6 @@ private struct FlatPage: View {
     }
 }
 
-@MainActor
-private func sectionFrame<V: View>(
-    _ view: V, tui: TUIContext, focusManager: FocusManager, height: Int = 8
-) -> [String] {
-    var environment = EnvironmentValues()
-    environment.focusManager = focusManager
-    environment.applyRuntimeServices(from: tui)
-    let context = RenderContext(
-        availableWidth: 30, availableHeight: height, environment: environment, tuiContext: tui)
-    tui.preferences.beginRenderPass()
-    tui.stateStorage.beginRenderPass()
-    tui.renderCache.beginRenderPass()
-    focusManager.beginRenderPass()
-    let buffer = renderToBuffer(view, context: context)
-    focusManager.endRenderPass()
-    tui.stateStorage.endRenderPass()
-    tui.renderCache.removeInactive()
-    return buffer.lines.map { line in
-        // Without the scrollbar's column, whose thumb a windowed stack places
-        // from an estimate by design, or the padding before it.
-        let text = String(
-            line.stripped.reversed().drop { $0 == " " || isScrollbarGlyph($0) }.reversed())
-        // The "N more" count is the stack's estimate on the anchored path.
-        return text.contains(" more ") ? "<more>" : text
-    }
-}
-
-private func isScrollbarGlyph(_ character: Character) -> Bool {
-    guard let scalar = character.unicodeScalars.first else { return false }
-    return (0x2500...0x259F).contains(scalar.value) || scalar == "▲" || scalar == "▼"
-}
-
 /// The number of the first row that starts on `screen`.
 private func firstRow(on screen: [String]) -> Int? {
     screen.lazy.compactMap { $0.firstMatch(of: /^row (\d+)/).flatMap { Int($0.1) } }.first
@@ -302,14 +270,14 @@ struct SectionScrollWindowTests {
         let flat = SeekPage(box: flatBox, content: FlatPage(path: path, chrome: chrome))
         let (sectionTUI, sectionFocus) = (TUIContext(), FocusManager())
         let (flatTUI, flatFocus) = (TUIContext(), FocusManager())
-        _ = sectionFrame(section, tui: sectionTUI, focusManager: sectionFocus)
-        _ = sectionFrame(flat, tui: flatTUI, focusManager: flatFocus)
+        _ = scrollFrame(section, tui: sectionTUI, focusManager: sectionFocus)
+        _ = scrollFrame(flat, tui: flatTUI, focusManager: flatFocus)
         var diverged: [String] = []
         for step in script {
             step.apply(to: sectionBox)
             step.apply(to: flatBox)
-            let inSection = sectionFrame(section, tui: sectionTUI, focusManager: sectionFocus)
-            let inFlat = sectionFrame(flat, tui: flatTUI, focusManager: flatFocus)
+            let inSection = scrollFrame(section, tui: sectionTUI, focusManager: sectionFocus)
+            let inFlat = scrollFrame(flat, tui: flatTUI, focusManager: flatFocus)
             if inSection != inFlat {
                 diverged.append("\(step): \(inSection) vs \(inFlat)")
             }
@@ -333,8 +301,8 @@ struct SectionScrollWindowTests {
             }
         }
         let (tui, focusManager) = (TUIContext(), FocusManager())
-        _ = sectionFrame(view, tui: tui, focusManager: focusManager, height: 10)
-        let screen = sectionFrame(view, tui: tui, focusManager: focusManager, height: 10)
+        _ = scrollFrame(view, tui: tui, focusManager: focusManager, height: 10)
+        let screen = scrollFrame(view, tui: tui, focusManager: focusManager, height: 10)
         #expect(screen.contains("row 8"), "precondition: the rows are drawn: \(screen)")
         #expect(appeared < 40, "appeared \(appeared) times")
     }
@@ -357,11 +325,11 @@ struct SectionScrollWindowTests {
         .scrollPosition(id: binding)
         .frame(height: 6)
         let (tui, focusManager) = (TUIContext(), FocusManager())
-        _ = sectionFrame(view, tui: tui, focusManager: focusManager, height: 6)
+        _ = scrollFrame(view, tui: tui, focusManager: focusManager, height: 6)
         #expect(visible == 0, "the first row is reported: \(String(describing: visible))")
 
         visible = 25
-        let after = sectionFrame(view, tui: tui, focusManager: focusManager, height: 6)
+        let after = scrollFrame(view, tui: tui, focusManager: focusManager, height: 6)
         #expect(after.contains { $0.hasPrefix("row 25") }, "the write seeks: \(after)")
         #expect(visible == topRow(on: after), "the top row is read back: \(after)")
     }
@@ -384,9 +352,9 @@ struct SectionScrollWindowTests {
         .scrollIndicatorStyle(.text)
         .frame(height: 6)
         let (tui, focusManager) = (TUIContext(), FocusManager())
-        _ = sectionFrame(view, tui: tui, focusManager: focusManager, height: 6)
+        _ = scrollFrame(view, tui: tui, focusManager: focusManager, height: 6)
         position.scrollTo(id: 1, anchor: .top)
-        let screen = sectionFrame(view, tui: tui, focusManager: focusManager, height: 6)
+        let screen = scrollFrame(view, tui: tui, focusManager: focusManager, height: 6)
         #expect(screen.first == "<more>" && firstRow(on: screen) == 1, "precondition: \(screen)")
         #expect(position.viewID(type: Int.self) == 1, "\(screen)")
     }
@@ -411,9 +379,9 @@ struct SectionScrollWindowTests {
         .scrollIndicatorStyle(.text)
         .frame(height: 6)
         let (tui, focusManager) = (TUIContext(), FocusManager())
-        _ = sectionFrame(view, tui: tui, focusManager: focusManager, height: 6)
+        _ = scrollFrame(view, tui: tui, focusManager: focusManager, height: 6)
         position.scrollTo(id: 35, anchor: .top)
-        let screen = sectionFrame(view, tui: tui, focusManager: focusManager, height: 6)
+        let screen = scrollFrame(view, tui: tui, focusManager: focusManager, height: 6)
         #expect(screen.last == "<more>" && screen.contains("row 38"), "precondition: \(screen)")
         #expect(position.viewID(type: Int.self) == 38, "\(screen)")
     }
@@ -441,10 +409,10 @@ struct SectionScrollWindowTests {
         .scrollIndicatorStyle(.text)
         .frame(height: 6)
         let (tui, focusManager) = (TUIContext(), FocusManager())
-        _ = sectionFrame(view, tui: tui, focusManager: focusManager, height: 6)
+        _ = scrollFrame(view, tui: tui, focusManager: focusManager, height: 6)
         position.scrollTo(edge: .bottom)
-        _ = sectionFrame(view, tui: tui, focusManager: focusManager, height: 6)
-        let bottom = sectionFrame(view, tui: tui, focusManager: focusManager, height: 6)
+        _ = scrollFrame(view, tui: tui, focusManager: focusManager, height: 6)
+        let bottom = scrollFrame(view, tui: tui, focusManager: focusManager, height: 6)
         #expect(bottom.last == "footer", "precondition: the footer is on screen: \(bottom)")
         // The first line is the "more above" indicator's.
         let expected = anchor == .top ? topRow(on: Array(bottom.dropFirst())) : path.count - 1
@@ -473,10 +441,10 @@ struct SectionScrollWindowTests {
         .scrollIndicatorStyle(.text)
         .frame(height: 6)
         let (tui, focusManager) = (TUIContext(), FocusManager())
-        _ = sectionFrame(view, tui: tui, focusManager: focusManager, height: 6)
+        _ = scrollFrame(view, tui: tui, focusManager: focusManager, height: 6)
         position.scrollTo(edge: .bottom)
-        _ = sectionFrame(view, tui: tui, focusManager: focusManager, height: 6)
-        let bottom = sectionFrame(view, tui: tui, focusManager: focusManager, height: 6)
+        _ = scrollFrame(view, tui: tui, focusManager: focusManager, height: 6)
+        let bottom = scrollFrame(view, tui: tui, focusManager: focusManager, height: 6)
         #expect(bottom.last == "footer 9", "precondition: the footer's end is on screen: \(bottom)")
         #expect(topRow(on: bottom) == nil, "precondition: no row is on screen: \(bottom)")
         #expect(position.viewID(type: Int.self) == path.count - 1, "\(bottom)")
@@ -510,10 +478,10 @@ struct SectionScrollWindowTests {
             .scrollIndicatorStyle(.text)
             .frame(height: 8)
             let (tui, focusManager) = (TUIContext(), FocusManager())
-            _ = sectionFrame(view, tui: tui, focusManager: focusManager)
+            _ = scrollFrame(view, tui: tui, focusManager: focusManager)
             position.scrollTo(edge: .bottom)
-            _ = sectionFrame(view, tui: tui, focusManager: focusManager)
-            return (sectionFrame(view, tui: tui, focusManager: focusManager), position.viewID(type: Int.self))
+            _ = scrollFrame(view, tui: tui, focusManager: focusManager)
+            return (scrollFrame(view, tui: tui, focusManager: focusManager), position.viewID(type: Int.self))
         }
         let blank = bottom(blankFooter: true)
         let bare = bottom(blankFooter: false)
@@ -647,9 +615,9 @@ struct SectionScrollWindowTests {
             .frame(height: 6)
         }
         let (tui, focusManager) = (TUIContext(), FocusManager())
-        _ = sectionFrame(view, tui: tui, focusManager: focusManager, height: 6)
+        _ = scrollFrame(view, tui: tui, focusManager: focusManager, height: 6)
         box.proxy?.scrollTo(500, anchor: .top)
-        let screen = sectionFrame(view, tui: tui, focusManager: focusManager, height: 6)
+        let screen = scrollFrame(view, tui: tui, focusManager: focusManager, height: 6)
         #expect(screen.contains { $0.hasPrefix("row 500") }, "the seek landed: \(screen)")
     }
 }
