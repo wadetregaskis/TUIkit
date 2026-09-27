@@ -29,9 +29,11 @@ private struct LadderItem {
 struct AnchorLadderTests {
     private static let viewport = 6
 
+    /// One frame at `offset`, holding `row` (`.anchorPosition(.row(id))`)
+    /// when one is given, as the viewport's lines.
     @discardableResult
     private func renderFrame(
-        items: [Int], tuiContext: TUIContext, offset: Int
+        items: [Int], tuiContext: TUIContext, offset: Int, holding row: Int? = nil
     ) -> [String] {
         let view = LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(items, id: \.self) { i in
@@ -40,6 +42,9 @@ struct AnchorLadderTests {
         }
         var environment = EnvironmentValues()
         environment.applyRuntimeServices(from: tuiContext)
+        if let row {
+            environment.anchorPosition = AnchorPositionBinding(.constant(.row(AnyHashable(row))))
+        }
         environment.scrollContentWindow = ScrollContentWindow(
             offset: offset, viewportHeight: Self.viewport)
         let context = RenderContext(
@@ -134,6 +139,36 @@ struct AnchorLadderTests {
         #expect(
             !Set(survivors).isDisjoint(with: visible.dropFirst()),
             "the view stayed in the anchored neighbourhood: was \(visible), now \(survivors)")
+    }
+
+    /// A held row that leaves the data hands its line to its nearest surviving
+    /// neighbour, and between the two equally near it — the rows either side
+    /// of it — to the one below, which the delete moved into its place, so
+    /// nothing else moves. Sorted by distance alone, the pair came in the order
+    /// of the dictionary they are remembered in, which the process's hash seed
+    /// sets: which of them took the line, and so the frame, changed from one
+    /// run to the next. Sixteen sets of ids, each pair in its own order: the
+    /// old tie-break passes them all by chance about once in 65,536 runs.
+    @Test("Deleting a held row hands its line to the row below it, in every run")
+    func deletedHeldRowHandsItsLineDown() {
+        for base in stride(from: 1_000, to: 1_048, by: 3) {
+            let tuiContext = TUIContext()
+            var items = Array(base..<(base + 400))
+            renderFrame(items: items, tuiContext: tuiContext, offset: 0)
+            let before = renderFrame(items: items, tuiContext: tuiContext, offset: 300)
+            // A row with a row above it on screen, held on its line.
+            guard
+                let line = before.indices.dropFirst(2).first(where: { before[$0].hasPrefix("row ") }),
+                let held = Int(before[line].dropFirst(4))
+            else {
+                Issue.record("no row starts below line 1: \(before)")
+                continue
+            }
+            for _ in 0..<2 { renderFrame(items: items, tuiContext: tuiContext, offset: 300, holding: held) }
+            items.removeAll { $0 == held }
+            let after = renderFrame(items: items, tuiContext: tuiContext, offset: 300, holding: held)
+            #expect(after.firstIndex(of: "row \(held + 1)") == line, "\(before) → \(after)")
+        }
     }
 
     @Test("Replacing the whole list degrades to the clamped index, no crash")

@@ -117,8 +117,14 @@ private final class AnchoredWindowFrame {
             state.anchorOrdinal = found
             return
         }
+        // Nearest first, and of the two equally near — the rows either side of
+        // a deleted one — the one below, which the delete moved into its place:
+        // nothing else moves. Ordered by distance alone, the pair came in the
+        // memo's order, which the process's hash seed sets, and which row took
+        // the anchor, and so the frame, changed from one run to the next.
         let neighbours = state.rowOrdinalMemo.sorted {
-            abs($0.value - state.anchorOrdinal) < abs($1.value - state.anchorOrdinal)
+            let distances = (abs($0.value - state.anchorOrdinal), abs($1.value - state.anchorOrdinal))
+            return distances.0 != distances.1 ? distances.0 < distances.1 : $0.value > $1.value
         }
         for (key, _) in neighbours where key != anchorKey {
             if let found = locate(key: key) {

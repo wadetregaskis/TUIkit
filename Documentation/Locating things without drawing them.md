@@ -459,8 +459,9 @@ Two rules make this safe:
 can be **deleted**, filtered out, or collapsed.
 
 - The anchor is a **ladder**: primary identity plus K neighbours captured
-  from last frame. On a miss, anchor to the nearest survivor, preserving
-  `offsetWithin`.
+  from last frame. On a miss, anchor to the nearest survivor — of two
+  equally near, the one below, which the deletion moved into the anchor's
+  place — preserving `offsetWithin`.
 - If the whole ladder is gone (list replaced), fall back to the last known
   *index*, clamped — approximate, and correct at the ends.
 - Empty content: anchor is nil; viewport renders empty; scroll is a no-op.
@@ -886,9 +887,10 @@ Same process monitor, anchored on PID 4821's row. The process exits and
 the data source drops it.
 
 - Next frame, `ordinal(of:)` misses. The ladder (§5f) holds the
-  neighbours captured last frame; the nearest survivor above becomes the
-  anchor, `offsetWithin` preserved. Visual result: the row below slides
-  up by one row height — which is exactly what happened to the data.
+  neighbours captured last frame; the nearest survivor becomes the anchor —
+  the row below, of the two either side of it — `offsetWithin` preserved.
+  Visual result: the row below slides up by one row height — which is
+  exactly what happened to the data.
 - Harder: the user flips a filter and 1M rows become 12. The whole ladder
   is gone. Fall back to the remembered *index*, clamped into 0..<12 —
   lands at the bottom of the short list. Approximate, correct at the
