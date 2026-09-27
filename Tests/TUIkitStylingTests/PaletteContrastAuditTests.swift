@@ -298,6 +298,92 @@ struct PaletteContrastAuditTests {
         }
     }
 
+    // MARK: - The accent's breath has to hold on 256 colours
+
+    /// What a breath can get wrong as a 256-colour terminal draws it.
+    private enum BreathCriterion: String {
+        /// The row's text falls under ``ViewConstants/rowBreathPeakContrastFloor`` on
+        /// some shade.
+        case text
+        /// The breath holds one shade, so the row does not breathe.
+        case shades
+        /// A shade is the cube entry the cursor row's ● is drawn in, so the mark goes
+        /// out for part of every cycle.
+        case mark
+        /// A shade is the page's own entry, so the cursor goes out once a cycle.
+        case page
+    }
+
+    /// The shipped palettes whose accent breath fails a criterion on `main`, each as
+    /// "<palette>: <criterion>", taken out by the change that fixes it.
+    ///
+    /// A ledger rather than a failing test, so every commit on the way passes, and a
+    /// strict one: a listed failure that no longer happens is an issue of its own
+    /// (`withKnownIssue` with no issue recorded), so a fix that forgets to take its
+    /// entry out fails here.
+    private static let knownAccentBreathFailures: Set<String> = [
+        "Violet: text", "Red Sands: text", "Ocean: shades", "Silver Aerogel: mark",
+    ]
+
+    /// `body`, whose failure is known where the ledger lists `criterion` for `palette`.
+    private static func expecting(
+        _ criterion: BreathCriterion, of palette: any Palette, _ body: () -> Void
+    ) {
+        let entry = "\(palette.name): \(criterion.rawValue)"
+        withKnownIssue("\(entry) is a known failure") {
+            body()
+        } when: {
+            knownAccentBreathFailures.contains(entry)
+        }
+    }
+
+    /// The cursor row on a selected row breathes the accent
+    /// (`Palette.accentFillPulse(over:)`), and the pairs above measure that breath's
+    /// two ends in truecolour only. A 256-colour terminal — Apple Terminal has nothing
+    /// else — draws the shades `Color.pulseRamp` walks between them instead, each
+    /// moved onto the cube, and the cube moves the text too. The wash's breath has
+    /// been measured that way since it learned to breathe
+    /// (``focusWashBreathesAwayFromThePage()``); the accent's never was.
+    ///
+    /// So, on every shade the terminal can draw — every entry of the ramp, a superset
+    /// of the frames the cycle shows — the row's text keeps
+    /// ``ViewConstants/rowBreathPeakContrastFloor``; the breath holds two shades or
+    /// more; none of them is the entry the ● on that row is drawn in, the accent; and
+    /// none is the page's, as for the wash.
+    @Test("The accent's breath holds on 256 colours: readable, moving, off its mark and the page")
+    func accentBreathHoldsOn256Colours() {
+        for palette in Self.statedPalettes {
+            let ends = palette.accentFillPulse()
+            let shades = Color.pulseRamp(from: ends.dim, to: ends.bright, depth: .palette256)
+                .map { $0.downsampledToPalette256() }
+            let names = shades.map(Self.hex)
+            let text = palette.foreground.downsampledToPalette256()
+            let mark = palette.accent.downsampledToPalette256()
+            let page = palette.background.downsampledToPalette256()
+            let ratios = shades.map { Self.contrast(text, $0) }
+            let worst = ratios.min() ?? 0
+            let worstShade = ratios.firstIndex(of: worst).map { names[$0] } ?? "?"
+            let floor = ViewConstants.rowBreathPeakContrastFloor
+            let holdsMark = shades.contains(mark)
+            let holdsPage = shades.contains(page)
+
+            Self.expecting(.text, of: palette) {
+                #expect(
+                    worst >= floor,
+                    "\(palette.name): the text \(Self.hex(text)) is \(String(format: "%.2f", worst)):1 on \(worstShade), of \(names)")
+            }
+            Self.expecting(.shades, of: palette) {
+                #expect(shades.count >= 2, "\(palette.name): the breath holds one colour, \(names)")
+            }
+            Self.expecting(.mark, of: palette) {
+                #expect(!holdsMark, "\(palette.name): the ● \(Self.hex(mark)) is a shade of the breath, \(names)")
+            }
+            Self.expecting(.page, of: palette) {
+                #expect(!holdsPage, "\(palette.name): the breath passes through the page's \(Self.hex(page)): \(names)")
+            }
+        }
+    }
+
     // MARK: - Hover has to be visible
 
     /// Hovering a control tints its face a step further into the accent. The
