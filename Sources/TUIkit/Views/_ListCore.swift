@@ -2766,23 +2766,33 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             handler.externalDropSlot = nil
             return
         }
+        // The gap is drawn from the handler's slot, which the drag moves from
+        // outside this render: every move of it is reported, or the row around
+        // a list that does not hold the focus is served with no gap in it.
+        let drawing = HandlerDrawing(context)
+        let slot = { handler.externalDropSlot }
         session.registerTarget(
             DragAndDropSession.Target(
                 handlerID: zoneID,
                 accepts: insertion.accepts,
                 perform: { payload, _ in
-                    insertion.perform(handler.takeExternalDropSlot(), [payload])
+                    drawing.reportingChanges(to: slot) {
+                        insertion.perform(handler.takeExternalDropSlot(), [payload])
+                    }
                     return true
                 },
                 setTargeted: { targeted in
-                    if !targeted { handler.externalDropSlot = nil }
+                    guard !targeted else { return }
+                    drawing.reportingChanges(to: slot) { handler.externalDropSlot = nil }
                 },
                 hovering: { _, y in
                     // The band under the pointer names the row it would land
                     // BEFORE; past the last row it appends. Through the handler
                     // so the line is remembered — an auto-scroll tick has to ask
                     // the same question again with no pointer event to go on.
-                    handler.hoverExternalDrop(atContentY: y - topInset)
+                    drawing.reportingChanges(to: slot) {
+                        handler.hoverExternalDrop(atContentY: y - topInset)
+                    }
                 }),
             in: context)
     }

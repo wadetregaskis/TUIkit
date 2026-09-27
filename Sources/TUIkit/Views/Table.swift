@@ -2481,16 +2481,23 @@ where Value.ID: Hashable {
             handler.externalDropSlot = nil
             return
         }
+        // Every move of the slot is reported, as `_ListCore`'s are: the gap is
+        // drawn from it, and the drag moves it from outside this render.
+        let drawing = HandlerDrawing(context)
+        let slot = { handler.externalDropSlot }
         session.registerTarget(
             DragAndDropSession.Target(
                 handlerID: zoneID,
                 accepts: insertion.accepts,
                 perform: { payload, _ in
-                    insertion.perform(handler.takeExternalDropSlot(), [payload])
+                    drawing.reportingChanges(to: slot) {
+                        insertion.perform(handler.takeExternalDropSlot(), [payload])
+                    }
                     return true
                 },
                 setTargeted: { targeted in
-                    if !targeted { handler.externalDropSlot = nil }
+                    guard !targeted else { return }
+                    drawing.reportingChanges(to: slot) { handler.externalDropSlot = nil }
                 },
                 hovering: { _, y in
                     // The band under the pointer names the row it would land
@@ -2499,7 +2506,9 @@ where Value.ID: Hashable {
                     // same space `_ListCore` publishes and reads in. Through the
                     // handler so the line is remembered for an auto-scroll tick,
                     // which has no pointer event to go on.
-                    handler.hoverExternalDrop(atContentY: y - interiorTopY)
+                    drawing.reportingChanges(to: slot) {
+                        handler.hoverExternalDrop(atContentY: y - interiorTopY)
+                    }
                 }),
             in: context)
     }

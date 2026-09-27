@@ -3,13 +3,15 @@
 //
 //  What a view reads from a per-app SESSION while it renders — the drag in
 //  flight, the tooltip being hovered — is state no memo keys on and no `@State`
-//  write reports. A row memoized above such a read was served as it was stored
-//  when the session moved. Each test here plays one gesture against two apps, one keeping its
-//  render cache and one emptying it before every frame, and holds them to
-//  drawing the same thing on every frame: the oracle the Stress sessions use,
-//  for gestures no session plays. The gestures whose state IS written where the
-//  cache sees it — a hover face, a list reorder, a menu — are pinned beside
-//  them as controls.
+//  write reports. So is what a control draws from its own HANDLER object when
+//  an input moves it without focusing the control: the gap a drag from
+//  elsewhere opens in a list. A row memoized above such a read was served as
+//  it was stored when the state moved. Each test here plays one gesture
+//  against two apps, one keeping its render cache and one emptying it before
+//  every frame, and holds them to drawing the same thing on every frame: the
+//  oracle the Stress sessions use, for gestures no session plays. The
+//  gestures whose state IS written where the cache sees it — a hover face, a
+//  list reorder, a menu — are pinned beside them as controls.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -174,6 +176,59 @@ private struct ReorderColumn: View {
     }
 }
 
+/// A card beside three columns, each a `ForEach` row memoized by its title,
+/// holding a list or a table whose rows take a drop between them. The "idle"
+/// column's drop takes nothing, so only the gap tells a drop happened there.
+private struct BoardApp: App {
+    let table: Bool
+
+    init() { self.init(table: false) }
+
+    init(table: Bool) { self.table = table }
+
+    var body: some Scene {
+        WindowGroup {
+            HStack(alignment: .top, spacing: 1) {
+                Text("card X").draggable("card X")
+                ForEach(["left", "right", "idle"], id: \.self) { title in
+                    DropColumn(title: title, table: table)
+                }
+            }
+        }
+    }
+}
+
+private struct Named: Identifiable, Hashable {
+    let id: String
+}
+
+private struct DropColumn: View {
+    let title: String
+    let table: Bool
+    @State private var items = ["a", "b", "c", "d"]
+
+    private func take(_ values: [String], at index: Int) {
+        guard title != "idle" else { return }
+        items.insert(contentsOf: values, at: index)
+    }
+
+    var body: some View {
+        if table {
+            Table(items.map(Named.init(id:))) {
+                TableColumn("Name") { (item: Named) in "\(title) \(item.id)" }
+            }
+            .dropDestination(for: String.self) { take($1, at: $0) }
+            .frame(width: 20, height: 9)
+        } else {
+            List {
+                ForEach(items, id: \.self) { Text(verbatim: "\(title) \($0)") }
+                    .dropDestination(for: String.self) { take($1, at: $0) }
+            }
+            .frame(width: 20, height: 8)
+        }
+    }
+}
+
 /// A column of rows, each with a menu and a context menu.
 private struct MenusApp: App {
     var body: some Scene {
@@ -272,6 +327,56 @@ struct SessionReadsUnderMemoTests {
         twin.send(MouseEvent(button: .none, phase: .moved, x: row.x + 1, y: row.y + 6))
         twin.frames(10)
         #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
+    }
+
+    /// A drag from elsewhere hovering a list opens a gap where it would land.
+    /// The slot is the list's handler's, moved by the drop target's hover:
+    /// neither a `@State` write nor anything a memo keys on. A list that does
+    /// not hold the focus makes only replayable registrations, so the column
+    /// around it is stored, and was served as it was stored — the rows closed
+    /// up under the pointer while the drop still landed between them.
+    ///
+    /// Every way the slot moves: the pointer arriving over a row, leaving the
+    /// list, and a drop the app takes nothing from, whose gap closes with no
+    /// `@State` write to redraw the list. The table variant is the same code
+    /// in `Table`.
+    @Test("A drag from elsewhere opens and closes its gap in a list inside a memoized row", arguments: [false, true])
+    func externalDropGap(table: Bool) throws {
+        let twin = Twin({ BoardApp(table: table) }, width: 72, height: 14)
+        twin.frames(3)
+        let card = try #require(twin.position(of: "card X"))
+        let right = try #require(twin.position(of: "right b"))
+        let idle = try #require(twin.position(of: "idle b"))
+        let home = (x: card.x + 2, y: card.y)
+        twin.send(MouseEvent(button: .left, phase: .pressed, x: home.x, y: home.y))
+        twin.frame()
+        drag(twin, from: home, to: (right.x + 2, right.y))
+        #expect(
+            twin.position(of: "right b")?.y == right.y + 1,
+            "precondition: the cold app opened the gap above the row, or this proves nothing")
+        drag(twin, from: (right.x + 2, right.y), to: home)
+        #expect(
+            twin.position(of: "right b")?.y == right.y,
+            "precondition: the cold app closed the gap when the pointer left, or this proves nothing")
+        drag(twin, from: home, to: (idle.x + 2, idle.y))
+        twin.send(MouseEvent(button: .left, phase: .released, x: idle.x + 2, y: idle.y))
+        twin.frames(3)
+        #expect(
+            twin.position(of: "idle b")?.y == idle.y && twin.position(of: "card X")?.y == card.y,
+            "precondition: the idle column took nothing and closed its gap, or this proves nothing")
+        #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
+    }
+
+    /// Carries the held button from `start` to `end` in four steps, a frame
+    /// after each, and two more once it is there.
+    private func drag<A: App>(_ twin: Twin<A>, from start: (x: Int, y: Int), to end: (x: Int, y: Int)) {
+        for step in 1...4 {
+            let x = start.x + (end.x - start.x) * step / 4
+            let y = start.y + (end.y - start.y) * step / 4
+            twin.send(MouseEvent(button: .left, phase: .dragged, x: x, y: y))
+            twin.frame()
+        }
+        twin.frames(2)
     }
 
     /// A button's hover face is the button's own state, written as the pointer
