@@ -166,7 +166,13 @@ func renderValueMemoized<Key: Equatable, Row>(
     // the key next changes. NOT a `@State` write: since `44660d87` those are
     // queued (`pendingInvalidations`) and drained at the next `beginRenderPass`,
     // so this counter does not move for them and the store goes ahead — which is
-    // right, because the drain clears the entry before it can be served.
+    // right, because the drain clears the entry before it can be served. That
+    // rests on the drain dropping the entries at, above AND below each queued
+    // identity: a write this render makes to state the buffer read is to state
+    // held at this memo, inside it or above it, and each of those drops this
+    // entry. A drain that keeps what is below a writer (Option C's soft drain)
+    // keeps this entry after a write above it, and the store is then right
+    // only if what that drain keeps is re-checked before it is served.
     let clearsBefore = cache.stats.subtreeClears
     let journal = cache.effectJournal
     let journalStart = journal.beginRecording()
