@@ -96,6 +96,24 @@ extension String {
     /// - Parameter resetRestoresAField: Whether a reset in this row will have a
     ///   field put back after it before the row reaches the terminal.
     public func collapsingAdjacentSGR(resetRestoresAField: Bool = false) -> String {
+        var absolutesSpelled = 0
+        return collapsingAdjacentSGR(resetRestoresAField: resetRestoresAField, absolutesSpelled: &absolutesSpelled)
+    }
+
+    /// ``collapsingAdjacentSGR(resetRestoresAField:)``, counting the
+    /// reset-prefixed absolutes it spells itself — not the one
+    /// ``SGRState/rendered(changingFrom:)`` spells to compare a delta against.
+    ///
+    /// The count is the price of a state change in a row: a state spelled
+    /// absolutely is its whole ``SGRState/parameters`` built again, a string per
+    /// colour. It is paid for the first state after the line's first reset,
+    /// where nothing emitted is known, and where a row with
+    /// `resetRestoresAField` puts the field around it back — and nowhere else.
+    ///
+    /// - Parameters:
+    ///   - resetRestoresAField: As ``collapsingAdjacentSGR(resetRestoresAField:)``.
+    ///   - absolutesSpelled: Incremented once per absolute spelled.
+    package func collapsingAdjacentSGR(resetRestoresAField: Bool, absolutesSpelled: inout Int) -> String {
         guard containsAnySGR else { return self }
 
         var result = ""
@@ -137,12 +155,24 @@ extension String {
             // Without, it is unknown (nothing has been netted yet, only the
             // line's inherited baseline), and only a reset-prefixed absolute is
             // safe. See ``SGRState/rendered(changingFrom:)``.
-            let absolute = desired.isDefault ? "\u{1B}[0m" : "\u{1B}[0;" + desired.parameters + "m"
-            var change = emitted.map { desired.rendered(changingFrom: $0) } ?? absolute
+            //
+            // The absolute is spelled only where it is the answer. Spelled up
+            // front for every change, it built the state's parameters a second
+            // time on each of them — the delta spells its own absolute to
+            // compare against — and the writer, whose rows never pass
+            // `resetRestoresAField`, threw it away every time: 868 allocations a
+            // frame on the `processes` session (2026-09-27).
+            var change: String
+            if let emitted {
+                change = desired.rendered(changingFrom: emitted)
+            } else {
+                change = Self.absolute(desired, counting: &absolutesSpelled)
+            }
             if resetRestoresAField, desired.backgroundColour == nil {
                 change = Self.spellingWhichNoField(
-                    change, statesDefault: desiredStates49, absolute: absolute,
-                    after: emitted.map { ($0.backgroundColour != nil, emittedStates49) })
+                    change, of: desired, statesDefault: desiredStates49,
+                    after: emitted.map { ($0.backgroundColour != nil, emittedStates49) },
+                    absolutesSpelled: &absolutesSpelled)
             }
             result += change
             emitted = desired
@@ -256,14 +286,16 @@ extension String {
     ///
     /// - Parameters:
     ///   - change: The escape as the netting spells it.
+    ///   - desired: The state `change` takes the row to.
     ///   - statesDefault: Whether the row wants a stated 49.
-    ///   - absolute: The same state as a reset-prefixed absolute.
     ///   - emitted: What was emitted before, if anything: whether it had a
     ///     background colour, and whether its lack of one was a stated 49.
-    /// - Returns: `change`, with a 49 added, or replaced by `absolute`.
+    ///   - absolutesSpelled: Incremented when `desired` is spelled from a reset.
+    /// - Returns: `change`, with a 49 added, or replaced by `desired` spelled
+    ///   from a reset.
     private static func spellingWhichNoField(
-        _ change: String, statesDefault: Bool, absolute: String,
-        after emitted: (hadColour: Bool, states49: Bool)?
+        _ change: String, of desired: SGRState, statesDefault: Bool,
+        after emitted: (hadColour: Bool, states49: Bool)?, absolutesSpelled: inout Int
     ) -> String {
         let resets = change.hasPrefix("\u{1B}[0m") || change.hasPrefix("\u{1B}[0;")
         let shows49: Bool
@@ -274,10 +306,23 @@ extension String {
         }
         if statesDefault == shows49 { return change }
         // A return to the field around the row is a reset, whatever it costs.
-        guard statesDefault else { return absolute }
+        guard statesDefault else { return absolute(desired, counting: &absolutesSpelled) }
         // And a stated 49 is 49, said after whatever else changes.
         guard change.hasSuffix("m"), change.count > 3 else { return change + "\u{1B}[49m" }
         return String(change.dropLast()) + ";49m"
+    }
+
+    /// `state` spelled from a reset: `ESC[0;` and the whole of its parameters,
+    /// or a bare `ESC[0m` for the default.
+    ///
+    /// - Parameters:
+    ///   - state: The state to spell.
+    ///   - spelled: Incremented, for
+    ///     ``collapsingAdjacentSGR(resetRestoresAField:absolutesSpelled:)``'s count.
+    /// - Returns: The escape.
+    private static func absolute(_ state: SGRState, counting spelled: inout Int) -> String {
+        spelled += 1
+        return state.isDefault ? "\u{1B}[0m" : "\u{1B}[0;" + state.parameters + "m"
     }
 
     /// Whether the string carries any SGR at all — a plain line has nothing to
