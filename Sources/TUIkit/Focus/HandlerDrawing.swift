@@ -20,12 +20,12 @@ import TUIkitView
 /// focus, because a focused control's registration cannot be replayed and
 /// nothing containing it is stored. It is not fine for the inputs that reach a
 /// control WITHOUT focusing it — a drag from elsewhere hovering a `List`, the
-/// wheel over a `ScrollView`, the pointer passing over its scrollbar, a drag
-/// held at its edge — because a control that does not hold the focus makes
-/// only replayable registrations, and the `ForEach` row or `.equatable()` view
-/// around it is stored like any other. It was then served as it was stored:
-/// the gap under the pointer never opened, and the content never moved under
-/// the wheel.
+/// wheel over a `ScrollView`, the pointer passing over its scrollbar or over a
+/// resizable view's edge, a drag held at its edge — because a control that
+/// does not hold the focus makes only replayable registrations, and the
+/// `ForEach` row or `.equatable()` view around it is stored like any other.
+/// It was then served as it was stored: the gap under the pointer never
+/// opened, and the content never moved under the wheel.
 ///
 /// So such an input reports the control through this. Only the control's own
 /// buffers and those containing it are dropped, and its sizes are kept: what

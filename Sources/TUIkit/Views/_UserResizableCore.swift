@@ -338,11 +338,20 @@ struct _UserResizableCore<Content: View>: View, Renderable {
         // One handler per edge, each knowing which dimensions ITS edge changes:
         // the bottom edge is height, the right edge is width, and the corner —
         // registered last, so it wins the overlap — is both.
+        //
+        // The hover that lights the grip is the handler's, which is no `@State`
+        // write, and an unfocused resizable view makes only replayable
+        // registrations: the row around it is stored, and was served with the
+        // grip at rest under the pointer. So a hover that moved is reported
+        // (`HandlerDrawing`), as a scrollbar's lift is. A press focuses the
+        // view, and a focus move clears, so a drag needs no report.
         func register(_ dragAxes: ResizableAxes) -> HitTestRegion.HandlerID {
-            dispatcher.register(in: context) { event in
-                self.handleResizeEvent(
-                    event, axes: dragAxes, handler: handler, focusID: focusID, context: context)
-            }
+            dispatcher.register(
+                in: context, reportingChangesTo: { handler.isHovered },
+                { event in
+                    self.handleResizeEvent(
+                        event, axes: dragAxes, handler: handler, focusID: focusID, context: context)
+                })
         }
 
         // Regions rather than one L-shape, because a hit region is a rectangle.

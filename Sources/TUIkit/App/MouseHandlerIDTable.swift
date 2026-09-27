@@ -211,7 +211,8 @@ extension MouseEventDispatcher {
     /// write. The `ForEach` row around such a scrollable is stored, and without
     /// the report it was served at the offset and in the colours it was stored
     /// with. One registration path, so the next handler a scrollable grows gets
-    /// the report by asking for it.
+    /// the report by asking for it — as a resizable view's edges did, for the
+    /// grip the pointer lights.
     ///
     /// Only while a value memo records, because only then can anything
     /// containing this registration be stored: a memo stores only what it

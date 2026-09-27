@@ -6,8 +6,9 @@
 //  write reports. So is what a control draws from its own HANDLER object when
 //  an input moves it without focusing the control: the gap a drag from
 //  elsewhere opens in a list, the offset the wheel scrolls, the scrollbar
-//  arrow the pointer lifts. A row memoized above such a read was served as it
-//  was stored when the state moved. Each test here plays one gesture against
+//  arrow the pointer lifts, the grip it lights on a resizable view's edge. A
+//  row memoized above such a read was served as it was stored when the state
+//  moved. Each test here plays one gesture against
 //  two apps, one keeping its render cache and one emptying it before every
 //  frame, and holds them to drawing the same thing, styling included, on every
 //  frame: the oracle the Stress sessions use, for gestures no session plays.
@@ -336,6 +337,23 @@ private struct ScrollerColumn: View {
     }
 }
 
+/// A column of cards, each a `ForEach` row memoized by its card, that the
+/// pointer can resize by an edge or the corner.
+private struct ResizableApp: App {
+    var body: some Scene {
+        WindowGroup {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(cards) { card in
+                    Text(verbatim: card.title).frame(width: 12, height: 2).userResizable()
+                }
+                Spacer()
+            }
+        }
+        // Motion reporting, for the grip's lift.
+        .mouseSupport(.full)
+    }
+}
+
 /// A column of rows, each with a menu and a context menu.
 private struct MenusApp: App {
     var body: some Scene {
@@ -635,6 +653,27 @@ struct SessionReadsUnderMemoTests {
         #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
         twin.send(MouseEvent(button: .left, phase: .released, x: edge.x, y: edge.y))
         twin.frames(3)
+        #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
+    }
+
+    /// The pointer on a resizable view's edge or corner lights its grip — the
+    /// resize handler's hover, set by the edge's own handler as the pointer
+    /// arrives, which is no `@State` write. An unfocused resizable view makes
+    /// only replayable registrations, so the card's row was stored and served
+    /// with the grip at rest.
+    @Test("A resizable view's grip lights under the pointer inside a memoized row")
+    func resizeGripLightsUnderThePointer() throws {
+        let twin = Twin(ResizableApp.init)
+        twin.frames(3)
+        let card = try #require(twin.position(of: "card 2"))
+        let resting = twin.cold.screen
+        // The corner: eleven cells along the twelve-wide frame, on its second line.
+        twin.send(MouseEvent(button: .none, phase: .moved, x: card.x + 11, y: card.y + 1))
+        twin.frames(3)
+        #expect(twin.cold.screen != resting, "precondition: the cold app lit the grip, or this proves nothing")
+        twin.send(MouseEvent(button: .none, phase: .moved, x: card.x + 20, y: card.y + 1))
+        twin.frames(3)
+        #expect(twin.cold.screen == resting, "precondition: the cold app put the grip back to rest")
         #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
     }
 
