@@ -4391,6 +4391,56 @@ anywhere. It now takes the geometry arm, and its regions are cut to the content 
 kept, by the derivation the line is drawn through, so none of them reaches the fill or the
 badge.
 
+Revised 2026-09-26: the list's two geometry drops CUT a run now, as a clipping container
+does, rather than dropping it whole. A run is carried as far as the row keeps the cells it
+was drawn over — short of the row's edge, and on a badged first line short of what the badge
+keeps of the content — and only what is cut off is dropped, leaving its alpha behind as above.
+Those columns mean what the child said they meant. Dropped whole, a run froze: a producer that
+leaves a run stops asking to be rendered, and nothing asked on its behalf. `Spinner()` in a
+badged row held the glyph it was drawn with while a render moved it, at every tick of a walk
+(`ReplayOracle`). The code's own note said a dropped run here "is not a frozen animation", on
+the premise that everything animating inside a row still asks for renders; a spinner does not.
+A badged row's several-alpha top rule is carried with its alpha now, and leaves nothing behind
+for itself.
+
+The ellipsis a truncated badged line ends in is the child's too, in the one sense that
+matters: the child never drew it, but the truncation draws it in the state its cut leaves open
+(`truncatedToWidth`: the kept body, the ellipsis, a reset), after the trailing blanks the cut
+drops. Where a run's cells are at the cut, each frame decides that state, and can decide the
+ellipsis's column. So a run that reaches the cut is asked what each of its frames makes of it,
+the line cut as the row cuts it with that frame in it (`BadgedLineFit.ellipsis(following:)`,
+asked only of a run at the cut, and the line fitted only for a row with a run on it). Where
+the cut falls inside the run, the run is carried over the ellipsis too, each frame ending in its
+own: cut short of it, a breathing border's top rule turned while its ellipsis held the colour
+it was drawn in (23 ticks of a 24-tick walk). Where a frame ends on a
+blank, the cut drops it and the ellipsis moves a column left in that frame, which no run can
+draw; the run is cut short of it and the row asks for a render at each of its steps, which draws
+the ellipsis where that frame puts it (a probe whose frames are `ab` and `a ` at the cut: before,
+every tick showing the second frame disagreed, 24 on two rows). How far a dropped blank moves
+the ellipsis depends on the bytes after the
+frame, which a splice of it restates, so every run that ends inside what the cut keeps on such a
+frame is taken to move it. A frame that ends in an escape after its blank — every styled one,
+closed by its reset — does not: the cut keeps every escape before the cell it stops at, and the
+escape shields the blank from the trailing blanks it drops. So a `.shade` spinner at the cut,
+whose first frame is a blank, is carried as it is, and replays as it renders.
+
+A run that STARTS in the ellipsis's column keeps no cell, but the cut keeps its frame's opening
+escape, and the ellipsis is drawn in the state it leaves. It is asked as a run the cut falls
+inside is, and carried over the ellipsis: taken for one the cut leaves alone, it was dropped,
+and the ellipsis held the drawn frame's colour where a render gave it each frame's (a probe of
+two frames alike but for their colour, starting there: 24 mismatches on two rows). And each
+row asks for its renders under a token of its own: the list's context is every row's, and a
+wake is kept per token, so under one token for the list only the last row's steps were asked
+for, and a row stepping apart from it held its ellipsis between them (two rows stepping every
+3 and every 7 ticks: 10 mismatches).
+
+What it costs: nothing for a row with no run on its badged line, which never fits the line a
+second time. Counted with a temporary counter on `badgePlacement`, one render of a 50-row
+`List` whose rows carry a `.badge(_:)` and no run placed the badge 49 times (the rows drawn),
+where it placed it 98 times when every badged row fitted its line for its runs up front; 28
+times where it placed it 56 at a width that truncates every row. A run at the cut costs one
+splice and one truncation per frame per render.
+
 A fifth builds the held slot of a reorder: `dimmed(_:)` and `stacked(_:)` rebuild the rows in
 hand from their lines and claims (§52), so their runs were gone before `renderRow` ever saw
 the slot. Both now append the runs' drawn-frame regions after each buffer's claims, in the

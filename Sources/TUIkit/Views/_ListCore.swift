@@ -1652,6 +1652,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             let isSelected = handler.isSelected(at: rowIndex)
             let rendered = renderRow(
                 row: row,
+                at: rowIndex,
                 state: RowDrawState(
                     isFocused: isFocused, isSelected: isSelected,
                     isReturningHome: handler.returningRows.contains(rowIndex)),
@@ -1941,6 +1942,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             let isSelected = handler.isSelected(at: rowIndex)
             let rendered = renderRow(
                 row: row,
+                at: rowIndex,
                 state: RowDrawState(
                     isFocused: isFocused, isSelected: isSelected,
                     isReturningHome: handler.returningRows.contains(rowIndex)),
@@ -3501,6 +3503,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
 
     private func renderRow(
         row: SelectableListRow<SelectionValue>,
+        at rowIndex: Int,
         state: RowDrawState,
         rowWidth: Int,
         sectionContentIndex: Int,
@@ -3586,20 +3589,36 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
 
         /// The row content's own runs, moved past the leading pad this renderer
-        /// adds. Dropped where they cannot be trusted:
+        /// adds, as far as the row keeps the cells they were drawn over:
         ///
-        /// - **Past the row's width.** A run that would extend beyond the cells
+        /// - **Short of the row's width.** A run that would extend beyond the cells
         ///   the row occupies paints over the scrollbar or the border.
-        /// - **On a badged line**, whose content is truncated to make room —
-        ///   after which a column no longer means what the child said it meant.
+        /// - **Short of the badge, on a badged line**, whose content is truncated to
+        ///   make room — after which a column no longer means what the child said
+        ///   it meant.
         ///
-        /// A dropped run is not a frozen animation: nothing yet relies on this
-        /// path to move, and everything that animates inside a row still asks
-        /// the run loop to re-render it. It is a missed saving, not a bug. What a
-        /// dropped run said about ALPHA is not a saving, and is left behind (§69.4).
+        /// What is cut off is dropped, and a dropped run is a FROZEN animation: a
+        /// producer that leaves a run behind stops asking to be re-rendered. What it
+        /// said about ALPHA is left behind (§69.4).
+        ///
+        /// The badged line is fitted only for a row with a run on it: the fit is a
+        /// second derivation beside the one the line is drawn through, and nearly no
+        /// badged row carries a run.
         let carried = Self.carriedChildRuns(
-            of: row.buffer, rowWidth: rowWidth, skippingBadgeLine: shouldRenderBadge)
+            of: row.buffer, rowWidth: rowWidth,
+            badgedLine: shouldRenderBadge
+                ? { badgedLineFit(row.buffer.lines.first ?? "", badge: badge!, rowWidth: rowWidth) } : nil)
         let childRuns = carried.runs
+        // A run cut short of an ellipsis its frames move asks for a render at each of
+        // its steps, which draws the ellipsis where that frame puts it. Under a token of
+        // the row's own: the context is the list's, and a wake is kept per token, so one
+        // token for the list kept only the last row's steps, and a row stepping apart
+        // from it held its ellipsis between them.
+        if !carried.stepping.isEmpty {
+            context.requestWake(
+                token: "list-truncated-run-\(context.identity.path)-\(rowIndex)",
+                forNextStepOf: carried.stepping.map { ($0.clock, $0.frameTicks) })
+        }
         let droppedRunClaims = cutToBadgedContent(
             carried.droppedClaims, of: row, badged: shouldRenderBadge, rowWidth: rowWidth)
         /// What the content owes with `dropped` left behind: `nil` — its buffer's own
@@ -3718,44 +3737,168 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// the row's width) and a row's own narrow run — because every clip, the
     /// reorder overrun and the overscroll slide all key on `y` alone. One
     /// pipeline rather than two that have to be kept in step.
-    /// A child buffer's runs as this row can carry them, and what the ones it cannot
+    /// A child buffer's runs as this row can carry them, and what the parts it cannot
     /// leave behind.
     ///
     /// A run is dropped for two different reasons and they want different answers. Not
     /// ANIMATING is the same filter `RenderLoop` applies before keeping a frame's runs:
     /// a still run holds the animation clock open forever to repaint a picture that
     /// cannot change, and it has nothing to leave. Not FITTING is geometry — past the
-    /// row's width, or on a badged row's first line, whose columns the badge re-lays —
-    /// and the row's lines are carried through where its runs are not, so a run stating
-    /// its alpha per frame would take the only statement about those cells with it, and
-    /// they would render at full strength. That one degrades to what a static claim would
-    /// have said: right at the frame the render drew, frozen after (§69.4). A badged
-    /// line's regions leave here whole, and `renderRow` cuts them to the content the
-    /// badge kept, being the only one that knows where that ends.
+    /// row's width, or past what a badged row's first line keeps of the content — and
+    /// there the run is CUT to the cells that fit, as a clipping container cuts one: the
+    /// columns it keeps mean what the child said they meant. Dropped whole, as it was
+    /// until 2026-09-26, a spinner on a badged row froze at the glyph it was drawn with,
+    /// since a producer that leaves a run stops asking to be rendered.
+    ///
+    /// The row's lines are carried through where the cut-off cells' runs are not, so a
+    /// run stating its alpha per frame would take the only statement about those cells
+    /// with it, and they would render at full strength. That part degrades to what a
+    /// static claim would have said: right at the frame the render drew, frozen after
+    /// (§69.4). A badged line's regions leave here whole, and `renderRow` cuts them to the
+    /// content the badge kept, being the only one that knows where that ends.
+    ///
+    /// A truncated badged line ends in an ellipsis the child never drew, in the state
+    /// its cut leaves open, after the trailing blanks the cut drops. A run whose cells
+    /// are at the cut can move it from frame to frame: its ink, where the cut falls
+    /// inside the run, and its column, where a frame leaves a blank there. So each run
+    /// that reaches the cut is asked what each of its frames makes of the ellipsis, the
+    /// line cut as the row cuts it with that frame in it
+    /// (``BadgedLineFit/ellipsis(following:)``). Where the ellipsis only changes its
+    /// state, the run is carried over it too, each frame ending in its own; cut short
+    /// of it, the run moved and the ellipsis kept the drawn frame's ink. Where it
+    /// changes its column, no run can draw it, and the run is cut short of the
+    /// leftmost and asks for a render at each of its steps (`stepping`), which draws
+    /// the ellipsis where that frame puts it.
+    ///
+    /// - Parameter badgedLine: How a badged first line is fitted, asked for the first
+    ///   time a run sits on it; `nil` for a row with no badge.
     private static func carriedChildRuns(
-        of buffer: FrameBuffer, rowWidth: Int, skippingBadgeLine: Bool
-    ) -> (runs: [RowRun], droppedClaims: [OpacityRegion]) {
+        of buffer: FrameBuffer, rowWidth: Int, badgedLine: (() -> BadgedLineFit)?
+    ) -> (runs: [RowRun], droppedClaims: [OpacityRegion], stepping: [AnimatedCellRun]) {
         var runs: [RowRun] = []
         var droppedClaims: [OpacityRegion] = []
+        var stepping: [AnimatedCellRun] = []
+        // Fitted the first time a run sits on the badged line, and only then.
+        var fitted: BadgedLineFit?
         for run in buffer.animatedCells where run.offsetY < buffer.lines.count {
             guard run.isAnimating else { continue }
-            // The badged line joins the geometry arm rather than being skipped ahead of
-            // it: the line is kept either way, so a run dropped from it must leave what
-            // it said. Skipped first, a several-alpha border under a badge drew an opaque
-            // top rule above its faded walls.
-            guard run.width > 0, 1 + run.offsetX + run.width <= rowWidth,
-                !(skippingBadgeLine && run.offsetY == 0)
-            else {
-                droppedClaims += run.alphaLeftBehind
+            // Short of the row's edge past its one-cell gutter, and on a badged line
+            // short of what the badge keeps.
+            var fits = max(0, rowWidth - 1)
+            var carried = run
+            if run.offsetY == 0, let badgedLine {
+                let line = fitted ?? badgedLine()
+                fitted = line
+                fits = min(fits, line.kept)
+                switch line.ellipsis(following: run) {
+                case .still:
+                    break
+                case .restyled(let frames, let ellipsis):
+                    // Over the ellipsis too, each frame ending in its own.
+                    if let upTo = run.clipped(toColumns: 0..<(ellipsis + 1)) {
+                        fits = ellipsis + 1
+                        carried = upTo.replacingFrames(frames, alpha: upTo.alpha)
+                    }
+                case .moved(let leftmost):
+                    fits = min(fits, leftmost)
+                    stepping.append(run)
+                }
+            }
+            let end = run.offsetX + run.width
+            guard run.width > 0, end > fits else {
+                if run.width > 0 { runs.append(.placed(carried, pastTheGutter: 1)) }
                 continue
             }
-            runs.append(
-                RowRun(
-                    y: run.offsetY, x: 1 + run.offsetX, width: run.width, frames: run.frames,
-                    frameTicks: run.frameTicks, clock: run.clock, alpha: run.alpha,
-                    ground: run.ground, groundUnderStatedDefault: run.groundUnderStatedDefault))
+            // The part that fits, where it still animates; what is cut off leaves what
+            // it said about its cells' alpha. A run with no part that fits leaves it all.
+            let kept = carried.clipped(toColumns: 0..<fits).flatMap { $0.isAnimating ? $0 : nil }
+            if let kept { runs.append(.placed(kept, pastTheGutter: 1)) }
+            if let cutOff = kept == nil ? run : run.clipped(toColumns: fits..<end), let alpha = cutOff.alpha {
+                droppedClaims += alpha.drawnRegions(forRunAt: cutOff.offsetX, offsetY: cutOff.offsetY)
+            }
         }
-        return (runs, droppedClaims)
+        return (runs, droppedClaims, stepping)
+    }
+
+    /// A badged first line as the row fits it beside the badge (`badgePlacement`), for
+    /// the runs on it.
+    private struct BadgedLineFit {
+        /// The content's line, as the row draws it.
+        let line: String
+        /// The line fitted beside the badge: truncated to `budget`, or as it is.
+        let fitted: String
+        /// The width a line too wide for the row is truncated to: the columns it keeps
+        /// before the ellipsis, and the ellipsis.
+        let budget: Int
+
+        /// What a run's frames make of the ellipsis a truncated line ends in.
+        enum Ellipsis {
+            /// Nothing: every frame leaves it where and as the line draws it.
+            case still
+            /// Its state, in the column `ellipsis`: each frame of the run, from its first
+            /// cell up to and including the ellipsis, as the line is cut with it in.
+            case restyled(frames: [String], ellipsis: Int)
+            /// Its column: a frame ends on a blank the cut drops, and the ellipsis moves
+            /// left over it, as far as `leftmost`.
+            case moved(leftmost: Int)
+        }
+
+        /// The column of the ellipsis a truncated line ends in, or `nil` where the line
+        /// fits whole.
+        var ellipsis: Int? { fitted == line ? nil : max(0, fitted.strippedLength - 1) }
+
+        /// How many of the line's columns keep the cells the child drew there: the
+        /// content fitted, short of the ellipsis, which the child never drew.
+        var kept: Int { ellipsis ?? fitted.strippedLength }
+
+        /// What `run`'s frames make of the ellipsis. Asked only of a run at the cut: one
+        /// that ends before the ellipsis the line draws has a cell of the line's own
+        /// after it, which no frame moves, and one that starts past the ellipsis's
+        /// column has nothing of its own kept. One that starts IN that column has none
+        /// of its cells kept, but the cut keeps every escape before the cell it stops
+        /// at, the frame's opening one among them, and the ellipsis is drawn in the
+        /// state they leave: taken for a run the cut leaves alone, it was dropped, and
+        /// the ellipsis held the drawn frame's colour while a render gave it each
+        /// frame's.
+        ///
+        /// A run the cut falls inside is cut as the line is, with each frame in it —
+        /// verbatim, since the cut is inside the frame's own bytes — and its frames say
+        /// the ellipsis's state, or its column where one leaves a blank at the cut. A
+        /// run that ENDS inside what the cut keeps moves the ellipsis only where a frame
+        /// ends on a blank with nothing after it, which the cut drops with whatever
+        /// blanks the line has before it; how far depends on bytes past the frame that
+        /// a splice of it restates, so every such run is taken to move it. A frame that
+        /// ends in an escape after its blank — every styled one, closed by its reset —
+        /// keeps the blank: the cut keeps the escape, and the escape shields it.
+        func ellipsis(following run: AnimatedCellRun) -> Ellipsis {
+            let end = run.offsetX + run.width
+            guard let ellipsis, run.offsetX < budget, end >= ellipsis else { return .still }
+            guard end > budget - 1 else {
+                return run.frames.contains { $0.last == " " } ? .moved(leftmost: run.offsetX) : .still
+            }
+            var cuts: [String] = []
+            cuts.reserveCapacity(run.frames.count)
+            var leftmost = ellipsis
+            for frame in run.frames {
+                let cut = FrameBuffer.splicing(frame, into: line, atColumn: run.offsetX).truncatedToWidth(max(1, budget))
+                leftmost = min(leftmost, max(0, cut.strippedLength - 1))
+                cuts.append(cut)
+            }
+            guard leftmost == ellipsis, cuts.allSatisfy({ $0.strippedLength == ellipsis + 1 }) else {
+                return .moved(leftmost: leftmost)
+            }
+            let cells = ellipsis + 1 - run.offsetX
+            return .restyled(
+                frames: cuts.map { $0.ansiAwareSlice(visibleStart: run.offsetX, visibleCount: cells) },
+                ellipsis: ellipsis)
+        }
+    }
+
+    /// How a badged first line, `line`, is fitted beside `badge`, for its runs: by the
+    /// derivation the line is drawn through (`badgePlacement`).
+    private func badgedLineFit(_ line: String, badge: BadgeValue, rowWidth: Int) -> BadgedLineFit {
+        let placement = badgePlacement(line: line, badge: badge, rowWidth: rowWidth, gutterCells: 1)
+        return BadgedLineFit(line: line, fitted: placement.fitted, budget: placement.budget)
     }
 
     /// `rendered` — a still row, drawn — with its content's fades spent against the
@@ -3867,10 +4010,11 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         /// (``AnimatedCellRun/groundUnderStatedDefault``).
         var groundUnderStatedDefault: String?
 
-        /// `run`, placed as the row's lines have it.
-        static func placed(_ run: AnimatedCellRun) -> Self {
+        /// `run`, placed as the row's lines have it — `pastTheGutter` columns right of
+        /// where its own buffer has it.
+        static func placed(_ run: AnimatedCellRun, pastTheGutter gutter: Int = 0) -> Self {
             Self(
-                y: run.offsetY, x: run.offsetX, width: run.width, frames: run.frames,
+                y: run.offsetY, x: gutter + run.offsetX, width: run.width, frames: run.frames,
                 frameTicks: run.frameTicks, clock: run.clock, alpha: run.alpha, ground: run.ground,
                 groundUnderStatedDefault: run.groundUnderStatedDefault)
         }
@@ -4002,7 +4146,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
     /// the badge where `rowWidth − badgeWidth − 1` says it is.
     private func badgePlacement(
         line: String, badge: BadgeValue, rowWidth: Int, gutterCells: Int
-    ) -> (fitted: String, fillPadding: Int, columns: Range<Int>) {
+    ) -> (fitted: String, fillPadding: Int, columns: Range<Int>, budget: Int) {
         let badgeWidth = badge.displayText.strippedLength
         // When the row is too narrow for both, the CONTENT truncates and the
         // badge survives (as in SwiftUI, where the label truncates first) —
@@ -4015,7 +4159,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         let usedWidth = gutterCells + fitted.strippedLength + badgeWidth + 1
         let fillPadding = max(1, rowWidth - usedWidth)
         let start = gutterCells + fitted.strippedLength + fillPadding
-        return (fitted, fillPadding, start..<(start + badgeWidth))
+        return (fitted, fillPadding, start..<(start + badgeWidth), contentBudget)
     }
 
     /// `claims` — what a row's dropped child runs left behind, in the row buffer's
