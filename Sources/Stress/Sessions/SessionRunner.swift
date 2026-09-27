@@ -94,9 +94,11 @@ enum SessionRunner {
         var scriptMismatch: String?
         /// What the warm instance's render cache did over the steps, the page's
         /// opening frame left out: the value memos' hits, misses and stores, and
-        /// the memoized rows composed against those served. Deterministic — the
-        /// same script at the same instants does the same work — so, unlike the
-        /// timings, two builds' counts can be compared on any machine.
+        /// the memoized rows composed against those served. The same script at
+        /// the same instants does the same work, so, unlike the timings, two
+        /// builds' counts can be compared on any machine. All but the
+        /// value-memo hits: they vary by a few in a thousand between two runs
+        /// of one build (see the README), so a difference that small is noise.
         var cacheStats = RenderCache.Stats()
         var rowWork = RenderCache.RowWork()
 
