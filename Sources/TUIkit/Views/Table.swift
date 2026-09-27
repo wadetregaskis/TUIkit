@@ -1308,6 +1308,7 @@ where Value.ID: Hashable {
                 selectionMode: selectionMode, canBeFocused: !isDisabled(in: context)))
         let handler = handlerBox.value
         handler.itemCount = data.count
+        handler.drawing = HandlerDrawing(context)
         // As on the single-line path: a hovering drag's landing slot is a line
         // nothing left to make room for, so the rows are budgeted the content
         // area minus it and ``ItemListHandler/extent`` gains the row that lets
@@ -2009,6 +2010,7 @@ where Value.ID: Hashable {
         )
         let handler = handlerBox.value
         handler.itemCount = data.count
+        handler.drawing = HandlerDrawing(context)
         // A drag from elsewhere draws its landing slot as an extra line —
         // nothing left this table to make room for it. `Table` has no
         // same-table case to exclude: its rows are built from `data`, so they
@@ -2980,8 +2982,10 @@ where Value.ID: Hashable {
         // the floating row a cell off the pointer. `_ListCore` passes the
         // equivalent `rowContentLeft`.
         let rowContentLeft = contentColumns.lowerBound + Self.containerPadding.leading
+        // The wheel scrolls a table that does not hold the focus: reported, as
+        // in `_ListCore`, or the row around it is served unscrolled.
         let mouseHandlerID = mouseDispatcher.register(
-            in: context,
+            in: context, reportingChangesTo: { [handler = state.handler] in handler.drawnPosition },
             containerMouseHandler(
                 state: state,
                 context: context,

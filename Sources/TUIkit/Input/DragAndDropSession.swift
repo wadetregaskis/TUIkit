@@ -148,6 +148,15 @@ final class DragAndDropSession: @unchecked Sendable {
         /// environment at registration (`.shiftStepMultiplier`) — the keys are
         /// answered at the root, where that environment is out of reach.
         var shiftStep: Int = 5
+
+        /// Where a tick that moved the viewport is reported: the scrollable's
+        /// own pictures, stamped by ``registerAutoScrollZone(_:in:)``.
+        ///
+        /// A drag held at the edge of a scrollable that does not hold the
+        /// focus — a drag from elsewhere, aimed at a list's rows — scrolls it
+        /// with no `@State` write, and the row around it is stored: it was
+        /// served unscrolled. See ``HandlerDrawing``.
+        var drawing: HandlerDrawing?
     }
 
     /// The drag in flight, or `nil`.
@@ -928,8 +937,10 @@ final class DragAndDropSession: @unchecked Sendable {
             autoScrollEngagedSinceNanos = nowNanos
             autoScrollNextFireNanos = nowNanos &+ step.zone.delayNanos
         } else if nowNanos >= autoScrollNextFireNanos {
-            if step.dy != 0 { step.zone.vertical.scrollFine(by: step.dy) }
-            if step.dx != 0 { step.zone.horizontal?.scrollFine(by: step.dx) }
+            var moved = false
+            if step.dy != 0 { moved = step.zone.vertical.scrollFine(by: step.dy) }
+            if step.dx != 0, step.zone.horizontal?.scrollFine(by: step.dx) == true { moved = true }
+            if moved { step.zone.drawing?.changed() }
             autoScrollNextFireNanos = UInt64(
                 bitPattern: AnimationClock.nanoseconds(
                     ofRepeatTicks: AutoScroll.intervalTicks, afterStepAt: Int64(bitPattern: nowNanos)))

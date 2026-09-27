@@ -199,7 +199,7 @@ extension _ScrollViewCore {
             proportional: context.environment.scrollbarProportionalThumb,
             behavior: context.environment.scrollbarClickBehavior)
         let barHandlerID = mouseDispatcher.register(
-            in: context,
+            in: context, reportingChangesTo: { handler.drawnPositions },
             ScrollbarRenderer.focusing(
                 barHandler, focusID: persistedFocusID,
                 focusManager: context.environment.focusManager))
@@ -235,7 +235,7 @@ extension _ScrollViewCore {
         else { return }
         let scroller = handler
         func shield(paging delta: Int, atY y: Int) {
-            let handlerID = mouseDispatcher.register(in: context) { event in
+            let pager: (MouseEvent) -> Bool = { event in
                 guard event.button == .left else { return false }
                 switch event.phase {
                 case .pressed:
@@ -247,6 +247,9 @@ extension _ScrollViewCore {
                     return false
                 }
             }
+            // A page is a scroll that focuses nothing: reported, as the wheel's.
+            let handlerID = mouseDispatcher.register(
+                in: context, reportingChangesTo: { scroller.drawnPositions }, pager)
             buffer.hitTestRegions.append(
                 HitTestRegion(
                     offsetX: 0, offsetY: y, width: contentWidth, height: 1,
@@ -278,7 +281,7 @@ extension _ScrollViewCore {
             proportional: context.environment.scrollbarProportionalThumb,
             behavior: context.environment.scrollbarClickBehavior)
         let barHandlerID = mouseDispatcher.register(
-            in: context,
+            in: context, reportingChangesTo: { handler.drawnPositions },
             ScrollbarRenderer.focusing(
                 barHandler, focusID: persistedFocusID,
                 focusManager: context.environment.focusManager))

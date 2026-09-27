@@ -202,6 +202,36 @@ extension MouseEventDispatcher {
         }
     }
 
+    /// Registers `handler` for a control that draws part of ITSELF from state
+    /// the event can move, and reports each event that moves what `drawn`
+    /// reads to the render cache (``HandlerDrawing``).
+    ///
+    /// For the scrollables: the wheel scrolls one that does not hold the focus,
+    /// and the pointer lifts its scrollbar's cells, and neither is a `@State`
+    /// write. The `ForEach` row around such a scrollable is stored, and without
+    /// the report it was served at the offset and in the colours it was stored
+    /// with. One registration path, so the next handler a scrollable grows gets
+    /// the report by asking for it.
+    ///
+    /// Only while a value memo records, because only then can anything
+    /// containing this registration be stored: a memo stores only what it
+    /// records as it renders, and one that is served makes again the
+    /// registration it recorded — the reporting one — rather than this. A
+    /// scrollable no memo holds, which is where one usually is, registers its
+    /// handler bare: each wheel tick that moved it walked the whole cache for
+    /// buffers that could not exist.
+    @MainActor
+    func register<Drawn: Equatable>(
+        in context: RenderContext, reportingChangesTo drawn: @escaping () -> Drawn,
+        _ handler: @escaping (MouseEvent) -> Bool
+    ) -> HitTestRegion.HandlerID {
+        guard context.recordingEffectJournal != nil else { return register(in: context, handler) }
+        let drawing = HandlerDrawing(context)
+        return register(in: context) { event in
+            drawing.reportingChanges(to: drawn) { handler(event) }
+        }
+    }
+
     /// Registers a hover OBSERVER: a handler that hears the pointer enter and
     /// leave its region without taking the hover from the control inside it.
     ///

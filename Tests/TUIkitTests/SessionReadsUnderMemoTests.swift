@@ -5,13 +5,14 @@
 //  flight, the tooltip being hovered — is state no memo keys on and no `@State`
 //  write reports. So is what a control draws from its own HANDLER object when
 //  an input moves it without focusing the control: the gap a drag from
-//  elsewhere opens in a list. A row memoized above such a read was served as
-//  it was stored when the state moved. Each test here plays one gesture
-//  against two apps, one keeping its render cache and one emptying it before
-//  every frame, and holds them to drawing the same thing on every frame: the
-//  oracle the Stress sessions use, for gestures no session plays. The
-//  gestures whose state IS written where the cache sees it — a hover face, a
-//  list reorder, a menu — are pinned beside them as controls.
+//  elsewhere opens in a list, the offset the wheel scrolls, the scrollbar
+//  arrow the pointer lifts. A row memoized above such a read was served as it
+//  was stored when the state moved. Each test here plays one gesture against
+//  two apps, one keeping its render cache and one emptying it before every
+//  frame, and holds them to drawing the same thing, styling included, on every
+//  frame: the oracle the Stress sessions use, for gestures no session plays.
+//  The gestures whose state IS written where the cache sees it — a hover face,
+//  a list reorder, a menu — are pinned beside them as controls.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -49,9 +50,13 @@ private final class Twin<A: App> {
         let date = Date(timeIntervalSinceReferenceDate: 800_000_000 + Double(frames) / 60)
         warm.frame(atNanos: now, date: date)
         cold.frame(atNanos: now, date: date)
-        let (w, c) = (warm.screen.map(\.stripped), cold.screen.map(\.stripped))
+        // Styled, not stripped: a scrollbar lit under the pointer is the same
+        // text in other colours.
+        let (w, c) = (warm.screen, cold.screen)
         guard w != c, let row = w.indices.first(where: { $0 >= c.count || w[$0] != c[$0] }) else { return }
-        divergences.append("frame \(frames), row \(row): kept \"\(w[row])\", cold \"\(c[row])\"")
+        let (kept, wanted) = (w[row].stripped, row < c.count ? c[row].stripped : "")
+        let styled = kept == wanted ? " (the same text, styled differently)" : ""
+        divergences.append("frame \(frames), row \(row)\(styled): kept \"\(kept)\", cold \"\(wanted)\"")
     }
 
     func frames(_ count: Int) {
@@ -181,17 +186,22 @@ private struct ReorderColumn: View {
 /// column's drop takes nothing, so only the gap tells a drop happened there.
 private struct BoardApp: App {
     let table: Bool
+    /// Rows per column: four fit, twelve scroll.
+    let rows: Int
 
     init() { self.init(table: false) }
 
-    init(table: Bool) { self.table = table }
+    init(table: Bool, rows: Int = 4) {
+        self.table = table
+        self.rows = rows
+    }
 
     var body: some Scene {
         WindowGroup {
             HStack(alignment: .top, spacing: 1) {
                 Text("card X").draggable("card X")
                 ForEach(["left", "right", "idle"], id: \.self) { title in
-                    DropColumn(title: title, table: table)
+                    DropColumn(title: title, table: table, rows: rows)
                 }
             }
         }
@@ -205,7 +215,13 @@ private struct Named: Identifiable, Hashable {
 private struct DropColumn: View {
     let title: String
     let table: Bool
-    @State private var items = ["a", "b", "c", "d"]
+    @State private var items: [String]
+
+    init(title: String, table: Bool, rows: Int) {
+        self.title = title
+        self.table = table
+        _items = State(initialValue: (0..<rows).map { String(UnicodeScalar(UInt8(97 + $0))) })
+    }
 
     private func take(_ values: [String], at index: Int) {
         guard title != "idle" else { return }
@@ -225,6 +241,97 @@ private struct DropColumn: View {
                     .dropDestination(for: String.self) { take($1, at: $0) }
             }
             .frame(width: 20, height: 8)
+        }
+    }
+}
+
+/// Which scrollable ``ScrollersApp`` puts in each column.
+enum ScrollerKind: CaseIterable, Sendable {
+    case list, table, scrollView
+    /// A scroll view that pages from its "N more" lines.
+    case textIndicators
+    /// A scroll view that scrolls sideways, with a bar along its bottom.
+    case sideways
+}
+
+/// Two columns, each a `ForEach` row memoized by its title, holding a
+/// scrollable taller than its frame. The left one takes the focus, so the
+/// right one's column is stored.
+private struct ScrollersApp: App {
+    let kind: ScrollerKind
+
+    init() { self.init(kind: .list) }
+
+    init(kind: ScrollerKind) { self.kind = kind }
+
+    var body: some Scene {
+        WindowGroup {
+            HStack(alignment: .top, spacing: 1) {
+                ForEach(["left", "right"], id: \.self) { title in
+                    ScrollerColumn(title: title, kind: kind)
+                }
+            }
+        }
+        // Motion reporting, for the scrollbar's lift.
+        .mouseSupport(.full)
+    }
+}
+
+/// One scrollable, alone on the page: no `ForEach` row or other memo around
+/// it.
+private struct BareScrollerApp: App {
+    let kind: ScrollerKind
+
+    init() { self.init(kind: .list) }
+
+    init(kind: ScrollerKind) { self.kind = kind }
+
+    var body: some Scene {
+        WindowGroup {
+            ScrollerColumn(title: "bare", kind: kind)
+        }
+        .mouseSupport(.full)
+    }
+}
+
+private struct ScrollerColumn: View {
+    let title: String
+    let kind: ScrollerKind
+
+    private var rows: [Named] { (0..<20).map { Named(id: "\(title) \($0)") } }
+
+    var body: some View {
+        switch kind {
+        case .list:
+            List {
+                ForEach(rows) { Text(verbatim: $0.id) }
+            }
+            .frame(width: 20, height: 8)
+        case .table:
+            Table(rows) {
+                TableColumn("Name") { (row: Named) in row.id }
+            }
+            .frame(width: 20, height: 9)
+        case .scrollView:
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(rows) { Text(verbatim: $0.id) }
+                }
+            }
+            .frame(width: 20, height: 8)
+        case .textIndicators:
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(rows) { Text(verbatim: $0.id) }
+                }
+            }
+            .scrollIndicatorStyle(.text)
+            .frame(width: 20, height: 8)
+        case .sideways:
+            ScrollView(.horizontal) {
+                Text(verbatim: "\(title) " + String(repeating: "-", count: 60))
+            }
+            .frame(width: 20, height: 3)
         }
     }
 }
@@ -377,6 +484,158 @@ struct SessionReadsUnderMemoTests {
             twin.frame()
         }
         twin.frames(2)
+    }
+
+    /// The wheel scrolls whatever it is over, focused or not. The offset it
+    /// moves is the scrollable's handler's, which is no `@State` write, and a
+    /// scrollable that does not hold the focus makes only replayable
+    /// registrations: the column around it was stored, and served unscrolled
+    /// for as long as the wheel turned.
+    @Test(
+        "The wheel scrolls a scrollable that does not hold the focus inside a memoized row",
+        arguments: [ScrollerKind.list, .table, .scrollView, .textIndicators])
+    func wheelOverUnfocusedScroller(kind: ScrollerKind) throws {
+        let twin = Twin({ ScrollersApp(kind: kind) }, width: 50, height: 14)
+        twin.frames(3)
+        let row = try #require(twin.position(of: "right 2"))
+        for _ in 0..<3 {
+            twin.send(MouseEvent(button: .scrollDown, phase: .pressed, x: row.x + 2, y: row.y))
+            twin.frame()
+        }
+        twin.send(MouseEvent(button: .scrollUp, phase: .pressed, x: row.x + 2, y: row.y))
+        twin.frames(2)
+        #expect(
+            twin.position(of: "right 2")?.y != row.y,
+            "precondition: the cold app scrolled, or this proves nothing")
+        #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
+    }
+
+    /// The report the wheel makes is for a memo that might have stored the
+    /// scrollable, and each one walks the whole cache. With no memo around the
+    /// scrollable — held focused or not — there is nothing to drop, and the
+    /// wheel reports nothing; inside a memoized row it reports each tick that
+    /// moved it (the control, so that the count is the report's).
+    @Test(
+        "The wheel reports only a scrollable a memo could have stored",
+        arguments: [ScrollerKind.list, .table, .scrollView], [false, true])
+    func wheelReportsOnlyUnderAMemo(kind: ScrollerKind, underMemo: Bool) throws {
+        func reported<A: App>(_ twin: Twin<A>, at title: String) throws -> Int {
+            twin.frames(3)
+            let row = try #require(twin.position(of: "\(title) 2"))
+            var reports = 0
+            for _ in 0..<3 {
+                let before = twin.warm.renderCache.stats.subtreeClears
+                twin.send(MouseEvent(button: .scrollDown, phase: .pressed, x: row.x + 2, y: row.y))
+                reports += twin.warm.renderCache.stats.subtreeClears - before
+                twin.frame()
+            }
+            #expect(
+                twin.position(of: "\(title) 2")?.y != row.y,
+                "precondition: the cold app scrolled, or this proves nothing")
+            #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
+            return reports
+        }
+        if underMemo {
+            let reports = try reported(Twin({ ScrollersApp(kind: kind) }, width: 50, height: 14), at: "right")
+            #expect(reports == 3, "the wheel under a memo reported \(reports) of its 3 ticks")
+        } else {
+            let reports = try reported(Twin({ BareScrollerApp(kind: kind) }, width: 50, height: 14), at: "bare")
+            #expect(reports == 0, "the wheel over a scrollable no memo holds walked the cache \(reports) times")
+        }
+    }
+
+    /// The pointer over a scroll view's scrollbar lifts the arrow under it —    /// The pointer over a scroll view's scrollbar lifts the arrow under it —
+    /// the handler's hovered cell, set by the bar's own handler as the pointer
+    /// passes, and another write the render cache never heard. Both bars: the
+    /// vertical one's up arrow, and the sideways one's left arrow.
+    @Test(
+        "A scroll view's scrollbar arrow lifts under the pointer inside a memoized row",
+        arguments: [false, true])
+    func scrollbarLiftsUnderThePointer(sideways: Bool) throws {
+        let twin = Twin({ ScrollersApp(kind: sideways ? .sideways : .scrollView) }, width: 50, height: 14)
+        twin.frames(3)
+        let (arrow, x, y) = try arrowOfTheRightScrollView(in: twin, sideways: sideways)
+        let resting = twin.cold.screen
+        twin.send(MouseEvent(button: .none, phase: .moved, x: x + (sideways ? 1 : -1), y: y + (sideways ? -1 : 1)))
+        twin.frame()
+        twin.send(MouseEvent(button: .none, phase: .moved, x: x, y: y))
+        twin.frames(2)
+        #expect(
+            twin.cold.screen != resting,
+            "precondition: the cold app lifted the \(arrow) arrow, or this proves nothing")
+        twin.send(MouseEvent(button: .none, phase: .moved, x: x + (sideways ? 1 : -1), y: y + (sideways ? -1 : 1)))
+        twin.frames(2)
+        #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
+    }
+
+    /// Where the right-hand scroll view draws its up arrow — or, `sideways`,
+    /// its left arrow — on the cold screen.
+    private func arrowOfTheRightScrollView(
+        in twin: Twin<ScrollersApp>, sideways: Bool
+    ) throws -> (arrow: Character, x: Int, y: Int) {
+        let arrow: Character = sideways ? "◀" : "▲"
+        let top = try #require(twin.position(of: "right"))
+        let lines = twin.cold.screen.map(\.stripped)
+        for y in top.y..<lines.count {
+            let line = lines[y]
+            guard let index = line.lastIndex(of: arrow) else { continue }
+            let x = line.distance(from: line.startIndex, to: index)
+            if x >= top.x - 1 { return (arrow, x, y) }
+        }
+        Issue.record("precondition: the right scroll view draws its \(arrow) arrow")
+        throw CancellationError()
+    }
+
+    /// A click on a scroll view's "N lines below" line pages it — without
+    /// focusing it, so the page it lands on was never drawn inside a memoized
+    /// row.
+    @Test("A click on a scroll view's \"lines below\" line pages it inside a memoized row")
+    func textIndicatorPages() throws {
+        let twin = Twin({ ScrollersApp(kind: .textIndicators) }, width: 50, height: 14)
+        twin.frames(3)
+        let top = try #require(twin.position(of: "right 0"))
+        let lines = twin.cold.screen.map(\.stripped)
+        let belowY = try #require(
+            lines.indices.dropFirst(top.y).first { lines[$0].contains("below") },
+            "precondition: the right scroll view draws a \"lines below\" line")
+        let below = (x: top.x + 2, y: belowY)
+        twin.send(MouseEvent(button: .left, phase: .pressed, x: below.x, y: below.y))
+        twin.frame()
+        twin.send(MouseEvent(button: .left, phase: .released, x: below.x, y: below.y))
+        twin.frames(2)
+        #expect(
+            twin.position(of: "right 0") == nil,
+            "precondition: the cold app paged the scroll view, or this proves nothing")
+        #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
+    }
+
+    /// A drag held at the edge of a list scrolls it, to bring the rows past the
+    /// edge within reach. A drag from elsewhere does not focus the list, and
+    /// the tick that scrolls it is no `@State` write, so the column around it
+    /// was served unscrolled while the cold app's rows streamed past.
+    @Test(
+        "A drag held at the edge of a list inside a memoized row scrolls it",
+        arguments: [false, true])
+    func dragAutoScroll(table: Bool) throws {
+        let twin = Twin({ BoardApp(table: table, rows: 12) }, width: 72, height: 14)
+        twin.frames(3)
+        let card = try #require(twin.position(of: "card X"))
+        let right = try #require(twin.position(of: "right b"))
+        let home = (x: card.x + 2, y: card.y)
+        twin.send(MouseEvent(button: .left, phase: .pressed, x: home.x, y: home.y))
+        twin.frame()
+        // Onto the rows, then down to the last line of them, and held there.
+        drag(twin, from: home, to: (right.x + 2, right.y))
+        let edge = (x: right.x + 2, y: right.y + (table ? 5 : 5))
+        drag(twin, from: (right.x + 2, right.y), to: edge)
+        twin.frames(60)
+        #expect(
+            twin.position(of: "right a") == nil,
+            "precondition: the cold app scrolled the list under the held drag, or this proves nothing")
+        #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
+        twin.send(MouseEvent(button: .left, phase: .released, x: edge.x, y: edge.y))
+        twin.frames(3)
+        #expect(twin.divergences.isEmpty, "\(twin.divergences.prefix(4))")
     }
 
     /// A button's hover face is the button's own state, written as the pointer

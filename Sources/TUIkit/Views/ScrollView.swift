@@ -833,7 +833,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         let focusManager = context.environment.focusManager
         let captureFocusID = persistedFocusID
         let captureHorizontal = wantsHorizontal
-        let mouseHandlerID = mouseDispatcher.register(in: context) { event in
+        let viewportHandler: (MouseEvent) -> Bool = { event in
             // Shift + vertical wheel IS the horizontal gesture, decided before
             // the vertical capture gets a look: the vertical handler consumes
             // .scrollUp/.scrollDown without ever reading the shift bit, so
@@ -869,6 +869,11 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             }
             return false
         }
+        // The wheel scrolls a scroll view that does not hold the focus, and
+        // nothing about that is a `@State` write: reported, or the row around
+        // it is served where it was stored.
+        let mouseHandlerID = mouseDispatcher.register(
+            in: context, reportingChangesTo: { captureHandler.drawnPositions }, viewportHandler)
         // The ScrollView's focusID rides on this region: it is how an
         // ENCLOSING ScrollView locates a focused embedded ScrollView to
         // scroll it into view (`snapViewportToFocusedControl` scans regions

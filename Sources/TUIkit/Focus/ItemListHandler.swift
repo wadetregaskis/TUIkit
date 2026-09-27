@@ -851,6 +851,16 @@ final class ItemListHandler<SelectionValue: Hashable>: PersistedFocusable, Scrol
     /// retarget is for.
     var externalDropResolvedOffset: Int?
 
+    /// This list's own pictures, stamped by each render of it, for the one
+    /// write of the drop gap a render makes AFTER drawing: the auto-scroll
+    /// retarget, which runs as the rows are published (see ``HandlerDrawing``).
+    ///
+    /// What the retarget moves is drawn on the next frame. A list that does not
+    /// hold the focus — the one a drag from elsewhere is aimed at — is stored
+    /// by the row around it, as it was drawn before the move, and was then
+    /// served with the gap where the retarget had just moved it from.
+    var drawing: HandlerDrawing?
+
     /// Rows whose picture is still flying home, drawn BLANK where they belong.
     ///
     /// A cancelled reorder puts its rows back the instant the button comes up,

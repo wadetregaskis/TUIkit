@@ -1256,6 +1256,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         )
         let handler = handlerBox.value
         handler.itemCount = source.count
+        handler.drawing = HandlerDrawing(context)
         // A drag from elsewhere draws its landing slot as an extra line —
         // nothing left this list to make room for it — so while one is hovering
         // the list has a row's worth of content more than it has rows.
@@ -2273,8 +2274,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // (sub-2-column) list still yields a valid, empty range.
         let borderInset = showsBorder ? 1 : 0
         let contentColumns = borderInset..<max(borderInset, buffer.width - borderInset)
+        // The wheel scrolls a list that does not hold the focus, and nothing
+        // about that is a `@State` write: reported, or the row around it is
+        // served unscrolled. (The bar needs no report: it focuses the list on
+        // the press that moves it, and draws no lift under the pointer.)
         let mouseHandlerID = mouseDispatcher.register(
-            in: context,
+            in: context, reportingChangesTo: { [handler = state.handler] in handler.drawnPosition },
             containerMouseHandler(
                 state: state,
                 focusManager: focusManager,

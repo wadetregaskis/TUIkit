@@ -84,8 +84,13 @@ extension DragAndDropSession {
     /// A served scrollable that stopped registering its zone is a drag that
     /// will not scroll to reach what is off screen — silently, since the
     /// viewport looks exactly as it did.
+    ///
+    /// The zone is stamped with the scrollable's pictures here, so every zone a
+    /// render walk registers reports the ticks that move it.
     @MainActor
     func registerAutoScrollZone(_ zone: AutoScrollZone, in context: RenderContext) {
+        var zone = zone
+        zone.drawing = HandlerDrawing(context)
         registerAutoScrollZone(zone)
         guard let journal = DragAndDropRegistrar.declareReplayable(in: context) else { return }
         journal.append(

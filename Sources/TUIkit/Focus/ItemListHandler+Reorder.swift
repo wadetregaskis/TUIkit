@@ -616,7 +616,13 @@ extension ItemListHandler {
             // droppable band whose `dropIndex` IS `externalDropSlot`. Clamping
             // onto that would resolve the slot to the value it already has and
             // the gap would sit still while the rows streamed past it — the bug.
+            //
+            // After the rows are drawn, so a move of the gap is reported: see
+            // `drawing`. Mid-render, which is what keeps the row around this
+            // list from storing the picture the move has just made stale.
+            let before = externalDropSlot
             retargetExternalDrop(atContentY: y)
+            if externalDropSlot != before { drawing?.changed() }
             return
         }
         guard reorder != nil, let y = lastReorderContentY else { return }
