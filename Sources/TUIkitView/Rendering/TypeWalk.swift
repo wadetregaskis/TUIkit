@@ -94,13 +94,15 @@ private struct KindProbe<T> {
 /// - **Structs and tuples**: their fields.
 /// - **Classes**: their fields, looking only for a source reader. A class is
 ///   shared state held by identity, so what it holds otherwise — existentials,
-///   closures, storage the runtime cannot see — is its own business. An
-///   Objective-C class the runtime cannot describe is a leaf.
+///   closures, storage the runtime cannot see — is its own business. A class
+///   that lists no fields (its field metadata stripped) is a leaf.
 /// - **Functions**: allowed and noted. A closure is covered by the app's
 ///   `==`, as an action is.
 /// - **Existentials**: refused.
 /// - **Enums** other than `Optional`: leaves. The runtime reports no
 ///   payloads, so what a case carries is not seen — a documented blind spot.
+/// - **Objective-C and foreign classes, and builtins** (the opaque kind, a
+///   buffer's reference): leaves.
 /// - **A source reader** (``_ReadsItsSource``): refused.
 /// - **A field reported as `()`**: refused. That is how the runtime describes
 ///   a noncopyable field — `Mutex`, `Atomic` — whose contents it cannot see;
@@ -108,7 +110,18 @@ private struct KindProbe<T> {
 ///   leaf before its fields are asked. Only a class can hold a noncopyable
 ///   field and still be copied, and inside a class only a source reader
 ///   counts.
-/// - **No field metadata** (reflection metadata stripped): refused.
+/// - **No field metadata** — a struct or tuple that is not POD and lists no
+///   fields: refused. A value with no stored fields is POD, so one that is
+///   not and lists none is one whose module was built without reflection
+///   metadata, which `_forEachField` does not report as a failure: it
+///   answers `true` having listed nothing.
+/// - **Any other kind** that is not POD — the kind the SPI calls `unknown`,
+///   or one it names that the walk does not list above: refused. The SPI
+///   reports a constrained existential (`any Collection<Int>`) as unknown,
+///   and on macOS 15 cannot even name its type; every type reads as unknown
+///   when TUIkitView itself is built without reflection metadata (the kind
+///   is read off a wrapper's field); and a kind added to the runtime after
+///   this was written reads as one the walk does not list.
 ///
 /// Recursion stops at a type already being walked, which is answered by the
 /// walk that is under way.
@@ -116,8 +129,9 @@ private struct KindProbe<T> {
 /// Blind spots, beyond an enum's payloads: a `Binding` captured in a closure;
 /// the elements of a container that keeps them in a buffer without
 /// conforming to ``_ElementTypesProviding`` (`Deque`, the persistent
-/// collections); and fields a subclass adds, which the declared type's
-/// metadata does not list. Each is documented rather than refused, because
+/// collections); fields a subclass adds, which the declared type's
+/// metadata does not list; and a source reader inside a class whose field
+/// metadata was stripped. Each is documented rather than refused, because
 /// refusing every closure, buffer or class would refuse almost every row.
 package struct TypeWalk {
     /// Why a type cannot be re-checked by its value.
@@ -126,8 +140,14 @@ package struct TypeWalk {
         case readsItsSource(path: String)
         /// It holds an existential, at `path`.
         case existential(path: String)
-        /// The runtime has no field metadata for the type at `path`.
+        /// The runtime has no field metadata for the type at `path`: it lists
+        /// no fields for a struct or tuple that is not POD, or does not
+        /// describe it at all.
         case noFieldMetadata(path: String)
+        /// The runtime reports a kind for the type at `path` that the walk
+        /// does not know — a constrained existential such as
+        /// `any Collection<Int>` is one — so what it holds cannot be seen.
+        case unknownKind(path: String)
         /// A field at `path` is described as `()`: noncopyable storage the
         /// runtime cannot see into.
         case opaqueStorage(path: String)
@@ -207,9 +227,17 @@ package struct TypeWalk {
             found = Verdict(refusal: nil, holdsFunctions: true)
         case .existential:
             found = Verdict(refusal: .existential(path: path), holdsFunctions: false)
-        default:
-            // An enum, an Objective-C class, a metatype, a foreign type: a leaf.
+        case .enum, .objcClassWrapper, .foreignClass, .opaque:
+            // An enum (its payloads unseen), an Objective-C or foreign class, a
+            // builtin: a leaf.
             found = Verdict(refusal: nil, holdsFunctions: false)
+        default:
+            // Not POD (a POD type is a leaf above), and of a kind the walk does
+            // not know: `.unknown`, which is how the SPI reports a constrained
+            // existential and every type of a module built without reflection
+            // metadata, or a kind it did not name when this was written.
+            // Refused, since what it holds cannot be seen.
+            found = Verdict(refusal: .unknownKind(path: path), holdsFunctions: false)
         }
         return inClass ? Self.withinClass(found) : found
     }
@@ -240,7 +268,15 @@ package struct TypeWalk {
             }
             return true
         }
-        guard described else { return Verdict(refusal: .noFieldMetadata(path: path), holdsFunctions: false) }
+        // Only a type that is not POD is asked for its fields, and a struct or
+        // tuple with no stored fields is POD — so one that lists none had its
+        // field metadata stripped, which `_forEachField` answers `true` to. (A
+        // class that lists none is refused here too, and `withinClass` makes
+        // that a leaf, as it does every refusal in a class but a source
+        // reader's.)
+        guard described, !found.isEmpty else {
+            return Verdict(refusal: .noFieldMetadata(path: path), holdsFunctions: false)
+        }
         return fold(found)
     }
 
@@ -264,7 +300,9 @@ package struct TypeWalk {
 
     /// The runtime's kind for `type`: the kind `_forEachField` reports for a
     /// stored field of that type, read off a one-field wrapper, which is the
-    /// only way the SPI says what kind a type is without an instance.
+    /// only way the SPI says what kind a type is without an instance. `.unknown`
+    /// when the wrapper lists no field: this module built without reflection
+    /// metadata.
     private static func kind(of type: Any.Type) -> _MetadataKind {
         func probe<T>(_: T.Type) -> _MetadataKind {
             var found = _MetadataKind.unknown

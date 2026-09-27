@@ -52,6 +52,7 @@ struct TypeWalkTests {
     private struct NestsBinding { var inner: HoldsBinding }
     private struct TupleOfBinding { var pair: (Int, Binding<Int>) }
     private struct HoldsExistential { var payload: any Payload }
+    private struct HoldsConstrainedExistential { var items: any Collection<Int> }
     private struct HoldsClosure { var title: String; var action: () -> Void }
     private struct HoldsVoid { var title: String; var nothing: () }
     private struct PODVoid { var count: Int; var nothing: () }
@@ -137,10 +138,37 @@ struct TypeWalkTests {
         #expect(verdict(PODVoid.self) == .init(refusal: nil, holdsFunctions: false))
     }
 
-    @Test("A type the runtime cannot describe is refused")
+    @Test("A struct or tuple that is not POD and lists no fields is refused: its field metadata was stripped")
+    func strippedMetadataRefused() {
+        // What the runtime does for a type from a module built without
+        // reflection metadata: `_forEachField` says it described the type,
+        // and lists no fields.
+        var walk = TypeWalk(listFields: { _, _, _ in true })
+        #expect(walk.verdict(for: HoldsExistential.self).refusal == .noFieldMetadata(path: "HoldsExistential"))
+        let tuple = (String, any Payload).self
+        #expect(walk.verdict(for: tuple).refusal == .noFieldMetadata(path: "\(tuple)"))
+        #expect(
+            walk.verdict(for: Plain.self) == .init(refusal: nil, holdsFunctions: false),
+            "POD is a leaf before its fields are asked")
+        #expect(
+            walk.verdict(for: Shared.self) == .init(refusal: nil, holdsFunctions: false),
+            "a class that lists none is a leaf, as a class the runtime cannot describe is")
+    }
+
+    @Test("A type the lister does not describe is refused")
     func undescribedRefused() {
+        // `_forEachField` answers `false` only for a class asked without the
+        // class option, or when its body stops it; the walk does neither, so
+        // this refusal is a guard the runtime never reaches.
         var walk = TypeWalk(listFields: { _, _, _ in false })
         #expect(walk.verdict(for: HoldsClosure.self).refusal == .noFieldMetadata(path: "HoldsClosure"))
+    }
+
+    @Test("A constrained existential, whose kind the runtime does not name, is refused")
+    func unknownKindRefused() {
+        #expect(
+            verdict(HoldsConstrainedExistential.self).refusal
+                == .unknownKind(path: "HoldsConstrainedExistential.items"))
     }
 
     @Test("Recursion through a class or an array terminates")
