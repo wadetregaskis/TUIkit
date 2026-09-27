@@ -236,8 +236,9 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         var measureContext = context
         measureContext.isMeasuring = true
         // Children of a windowed stack are not at the scroll origin; the
-        // window must not leak into their own measures.
-        measureContext.environment.scrollContentWindow = nil
+        // window must not leak into their own measures, and a lazy stack
+        // among them must measure what it will draw.
+        measureContext.leaveScrollOrigin()
 
         // The seek ladder (mirroring the render): uniform arithmetic when
         // the hypothesis is live, else — for any LARGE keyed collection —
@@ -565,17 +566,6 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         guard !children.isEmpty else { return FrameBuffer() }
         let availableHeight = context.availableHeight
 
-        // A ramp spanning this stack needs each row's place in it before the
-        // row renders, and this path renders as it walks — so the placement is
-        // measured up front, stopping at the same fold the walk will. Costs
-        // nothing without a `.gradientExtent(.subtree)` above.
-        let (gradientFrame, gradientOffsets) = windowGradientPlacement(children, context: context)
-        func rowContext(_ index: Int) -> RenderContext {
-            guard index < gradientOffsets.count else { return context }
-            return context.placingGradientChild(
-                gradientFrame, x: gradientOffsets[index].x, y: gradientOffsets[index].y)
-        }
-
         // True viewport windowing: when an enclosing vertical `ScrollView`
         // published the visible slice (and this isn't a measure pass, and there's
         // no Spacer forcing a full render), render ONLY the rows intersecting the
@@ -587,6 +577,24 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             children.allSatisfy({ !$0.isSpacer })
         {
             return renderViewportWindow(children: children, window: window, context: context)
+        }
+
+        // Below here this stack draws every row it reaches, whole, so none of
+        // them is at the scroll content's origin: a lazy stack among them must
+        // measure what it will draw (`RenderContext.leaveScrollOrigin()`), as
+        // this stack's own measure asked it to.
+        var rowsContext = context
+        rowsContext.leaveScrollOrigin()
+
+        // A ramp spanning this stack needs each row's place in it before the
+        // row renders, and this path renders as it walks — so the placement is
+        // measured up front, stopping at the same fold the walk will. Costs
+        // nothing without a `.gradientExtent(.subtree)` above.
+        let (gradientFrame, gradientOffsets) = windowGradientPlacement(children, context: rowsContext)
+        func rowContext(_ index: Int) -> RenderContext {
+            guard index < gradientOffsets.count else { return rowsContext }
+            return rowsContext.placingGradientChild(
+                gradientFrame, x: gradientOffsets[index].x, y: gradientOffsets[index].y)
         }
 
         // Spacer distribution (same as VStack) needs every non-spacer child's
@@ -648,7 +656,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 // rendering-to-check would run the first overflowing child's
                 // render every frame without ever displaying it — firing its
                 // onAppear and keeping its .task alive for an invisible row.
-                let measured = child.measure(proposal: .unspecified, context: context)
+                let measured = child.measure(proposal: .unspecified, context: rowsContext)
                 let spacingToApply = linearSpacing(before: measured.height, placedExtent: currentHeight, spacing: spacing)
                 if currentHeight + spacingToApply + measured.height > availableHeight {
                     appendSaturatedTail(
@@ -821,7 +829,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
 
         // Descendants aren't at the scroll origin, so they must not re-window.
         var childContext = context
-        childContext.environment.scrollContentWindow = nil
+        childContext.leaveScrollOrigin()
 
         let width = context.availableWidth
 

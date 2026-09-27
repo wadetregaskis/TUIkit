@@ -390,7 +390,7 @@ extension _VStackCore {
         context.stateStorage?.retainSubtree(context.identity)
 
         var childContext = context
-        childContext.environment.scrollContentWindow = nil
+        childContext.leaveScrollOrigin()
         let width = context.availableWidth
 
         // Seed the hypothesis from row 0 (render path: mutation is legal).
@@ -887,7 +887,7 @@ extension _VStackCore {
 
         var measureContext = context
         measureContext.isMeasuring = true
-        measureContext.environment.scrollContentWindow = nil
+        measureContext.leaveScrollOrigin()
         let sampleProposal = ProposedSize(width: widthLimit, height: nil)
         var maxWidth = 0
         var widthFlexible = false

@@ -746,7 +746,12 @@ estimate: above 256 rows it is taken over the rows its budget reaches
 on every context it asks its content in, `RenderContext.scrollContentOriginDepth`),
 where the sixteen-row sample
 had ended the scroll view wherever the estimate did and left every row past it
-unreachable (`NestedLazyStackReachTests`).
+unreachable (`NestedLazyStackReachTests`). "Direct" is not the same as "reached
+by single-child steps": a stack alone in an outer lazy stack, or the body of a
+view that is, sits below the outer stack, which takes the window for itself.
+So a windowed stack marks the origin passed for its rows
+(`RenderContext.leaveScrollOrigin()`), and a stack under the mark is drawn
+whole like any other nested one (`NestedLazyStackOriginTests`).
 
 That walk is Ω(rows) per measure, and it is priced by who reads it:
 

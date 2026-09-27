@@ -76,7 +76,7 @@ extension _VStackCore {
 
         var measureContext = context
         measureContext.isMeasuring = true
-        measureContext.environment.scrollContentWindow = nil
+        measureContext.leaveScrollOrigin()
         let rowProposal = ProposedSize(width: asksIdealWidth ? nil : widthLimit, height: nil)
         func measured(_ ordinal: Int) -> ViewSize {
             let child = children[ordinal]

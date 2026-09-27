@@ -1144,6 +1144,30 @@ extension RenderContext {
         environment.leaveScrollCanvas()
         scrollContentOriginDepth = 0
     }
+
+    /// For a subtree drawn BELOW the scroll content's origin, inside the same
+    /// canvas: the rows of a windowed stack, which consumes the window itself
+    /// or draws them whole. The window is withheld, so nothing below bands
+    /// itself against it, and the origin is marked passed
+    /// (`RenderContext.belowScrollContentOrigin`), so a lazy stack below knows
+    /// at measure time that it will be drawn whole
+    /// (`_VStackCore.isNestedInScrollContent`).
+    ///
+    /// Both halves, because the window only reaches a render and the mark is
+    /// what a measure reads: withholding the window alone left a lone lazy
+    /// stack in an outer one — or a custom view whose body is that stack —
+    /// drawn whole by the render into the height its measure had ESTIMATED,
+    /// since single-child steps lead to it from the content and the depth
+    /// alone read it as the stack the window bands. Outside scroll content
+    /// there is no origin to pass, and none is marked.
+    ///
+    /// Writes only what is set: a measure carries no window.
+    mutating func leaveScrollOrigin() {
+        if environment.scrollContentWindow != nil { environment.scrollContentWindow = nil }
+        if scrollContentOriginDepth != 0 {
+            scrollContentOriginDepth = RenderContext.belowScrollContentOrigin
+        }
+    }
 }
 
 // MARK: - Disabled state

@@ -26,10 +26,11 @@
 ///   1000-row list costs a viewport's worth of rendering, not all 1000 — and
 ///   `onAppear` fires on visibility, matching SwiftUI. (A `LazyVStack` nested
 ///   *below* other scroll content isn't at the content origin, so it is left
-///   un-windowed: every row is measured and drawn, as in a `VStack`, so its
-///   cost per frame tracks its row count — and in a row of an outer lazy stack
-///   it is measured whenever the outer stack places that row, on screen or
-///   not. `pinnedViews:` is still absent — §2.8 of
+///   un-windowed — and so is one alone inside an outer lazy stack, which takes
+///   the window itself. Every row of such a stack is measured and drawn, as
+///   in a `VStack`, so its cost per frame tracks its row count — and in a row
+///   of an outer lazy stack it is measured whenever the outer stack places
+///   that row, on screen or not. `pinnedViews:` is still absent — §2.8 of
 ///   `Documentation/SwiftUI-compatibility.md` records what it costs, which is
 ///   not an init parameter: the stack cannot see inside a `Section`, and the
 ///   scroll offset it would pin against lives in the `ScrollView`.)

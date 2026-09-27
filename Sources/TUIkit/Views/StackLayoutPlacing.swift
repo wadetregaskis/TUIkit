@@ -135,10 +135,18 @@ extension _VStackCore {
     }
 
     /// A placement-query context: the stack's own context with any scroll
-    /// window cleared, so geometry answers are window-independent.
+    /// window cleared, so geometry answers are window-independent — and, for a
+    /// windowed stack, the scroll content's origin passed, as its layout
+    /// passes it to the rows it measures (`RenderContext.leaveScrollOrigin()`),
+    /// so a row is asked here the question the layout asks it. An eager
+    /// column hands its rows its own context, and a lone row of one is at the
+    /// origin still.
     private func placementContext(_ context: RenderContext) -> RenderContext {
         var placementContext = context
-        placementContext.environment.scrollContentWindow = nil
+        switch overflow {
+        case .clip: placementContext.environment.scrollContentWindow = nil
+        case .window: placementContext.leaveScrollOrigin()
+        }
         return placementContext
     }
 
@@ -167,11 +175,14 @@ extension _VStackCore {
     /// the origin the scroll view marks for its measures and its render alike
     /// (`RenderContext.scrollContentOriginDepth`), since a measure has no window
     /// to ask. No origin means no scroll view above — or a window injected
-    /// directly, which the render trusts — and is not this.
+    /// directly, which the render trusts — and is not this. An origin already
+    /// passed (`RenderContext.leaveScrollOrigin()`) is this, whatever steps
+    /// lead here.
     func isNestedInScrollContent(context: RenderContext) -> Bool {
-        let origin = Int(context.scrollContentOriginDepth)
+        let origin = context.scrollContentOriginDepth
         guard origin > 0 else { return false }
-        return !context.identity.isDirectDescent(fromDepth: origin - 1)
+        guard origin != RenderContext.belowScrollContentOrigin else { return true }
+        return !context.identity.isDirectDescent(fromDepth: Int(origin) - 1)
     }
 }
 

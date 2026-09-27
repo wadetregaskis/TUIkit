@@ -478,7 +478,8 @@ window**, not a deferred-creation machine:
   full-height buffer, off-window rows blank), so `onAppear`/`task` fire on
   visibility — matching SwiftUI's model rather than materialising everything.
   A `LazyVStack` nested *below* other scroll content (not at the content
-  origin) is left un-windowed — measured and drawn over every row, as a
+  origin) is left un-windowed — as is one alone inside an outer lazy stack,
+  which takes the window itself — measured and drawn over every row, as a
   `VStack` is, so its cost per frame tracks its row count, including in a row
   of an outer lazy stack that is out of sight — and `pinnedViews:` is still
   absent.

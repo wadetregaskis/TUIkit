@@ -368,7 +368,7 @@ extension _VStackCore {
         measureContext.availableWidth = width
         // Children of a windowed stack are not at the scroll origin; the window
         // must not leak into their own measures (`windowSizeThatFits`).
-        measureContext.environment.scrollContentWindow = nil
+        measureContext.leaveScrollOrigin()
         if let tracker = context.environment.volatileReadTracker {
             return (measureContext, tracker)
         }

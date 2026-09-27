@@ -263,7 +263,19 @@ public struct RenderContext {
     /// implied: every identity a context carries descends from the one it was
     /// given, and the canvas is cleared where a context is lent to a subtree
     /// drawn elsewhere.
+    ///
+    /// `belowScrollContentOrigin` below a view that sits at the origin and
+    /// keeps it for itself: the rows of a windowed stack
+    /// (`leaveScrollOrigin()`). Single-child steps lead there all the same — a
+    /// lone lazy stack in an outer one, a custom view whose body is the stack
+    /// — and the depth alone read that stack as the one the window bands, so
+    /// it estimated itself and was drawn whole into the estimate.
     package var scrollContentOriginDepth: UInt16 = 0
+
+    /// `scrollContentOriginDepth` for a subtree inside scroll content but
+    /// below its origin, where nothing is the stack the window is consumed by.
+    /// No real depth: the scroll view marks none this deep.
+    package static let belowScrollContentOrigin = UInt16.max
 
     /// Whether this measure is a horizontal natural-extent probe's IDEAL-WIDTH
     /// ask — see ``measureGeneration``'s bit 7. Under it, a width proposal of

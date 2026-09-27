@@ -421,7 +421,7 @@ extension _VStackCore {
         context.stateStorage?.retainSubtree(context.identity)
 
         var childContext = context
-        childContext.environment.scrollContentWindow = nil
+        childContext.leaveScrollOrigin()
         let width = context.availableWidth
         let frame = AnchoredWindowFrame(
             children: children, spacing: spacing, state: state,
@@ -766,7 +766,7 @@ extension _VStackCore {
 
         var measureContext = context
         measureContext.isMeasuring = true
-        measureContext.environment.scrollContentWindow = nil
+        measureContext.leaveScrollOrigin()
         let widthLimit = proposal.width ?? context.availableWidth
         let heightLimit = proposal.height ?? context.availableHeight
         let sampleProposal = ProposedSize(width: widthLimit, height: nil)
