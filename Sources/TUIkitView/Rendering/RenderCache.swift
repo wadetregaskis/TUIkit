@@ -501,6 +501,10 @@ public final class RenderCache: @unchecked Sendable {
     /// hit can make them again — see `EffectJournal`.
     package let effectJournal = EffectJournal()
 
+    /// What the cache keeps to re-check a row after a parent's write rather
+    /// than drop it — see ``RevalidationState``.
+    package let revalidation = RevalidationState()
+
     /// Ids interned per view identity that have to live exactly as long as the
     /// entries here do — in practice the mouse dispatcher's handler ids, which
     /// a stored buffer carries baked into its hit-test regions. Pruned in

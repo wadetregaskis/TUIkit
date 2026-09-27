@@ -445,6 +445,10 @@ extension _DefaultFocusModifier: Layoutable {
 
 // MARK: - Environment Resolution
 
+// A focus binding reads a `FocusState` it does not hold: a row holding one
+// compares equal to a row bound to another field. See `TypeWalk`.
+extension FocusState.Binding: _ReadsItsSource {}
+
 extension FocusState: EnvironmentResolvable {
     /// Hands this `@FocusState` the focus manager of the environment its view
     /// renders in — the same reflection pass that fills the `@Environment`
