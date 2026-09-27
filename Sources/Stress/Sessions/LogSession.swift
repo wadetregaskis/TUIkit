@@ -34,6 +34,10 @@ final class LogModel {
 /// there while lines arrive, and reports which line is at its top.
 struct LogPage: View {
     let log: LogModel
+    /// Whether the top line is bound through `@Bindable`, as an app binds an
+    /// `@Observable`'s property (`log-observable`), rather than through a
+    /// closure pair.
+    var bindsThroughBindable = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -44,15 +48,22 @@ struct LogPage: View {
                 }
             }
             .defaultScrollAnchor(.bottom)
-            .scrollPosition(id: Binding(get: { log.topLine }, set: { log.topLine = $0 }))
+            .scrollPosition(id: topLine)
         }
+    }
+}
+
+extension LogPage {
+    /// The scroll view's top-line binding.
+    private var topLine: Binding<Int?> {
+        bindsThroughBindable ? Bindable(log).topLine : Binding(get: { log.topLine }, set: { log.topLine = $0 })
     }
 }
 
 /// One line: its number, its level coloured by severity, then the message,
 /// which wraps. The number is how the session tells which lines are on the
 /// screen.
-private struct LogRow: View {
+struct LogRow: View {
     let line: LogModel.Line
 
     var body: some View {
@@ -76,7 +87,7 @@ extension LogRow: @MainActor Equatable {}
 /// wraps, a reader who scrolls back to look at something and returns to the end.
 @MainActor
 final class LogSession: StressSession {
-    private let log: LogModel
+    let log: LogModel
     private var random: SessionRandom
     /// Whether the reader is following the log: `true` at its end, where the
     /// anchor keeps it as lines arrive, `false` once they page back, and `nil`

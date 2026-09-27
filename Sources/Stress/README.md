@@ -131,6 +131,19 @@ windowed loop pays it: the values are asked for, not resolved up front, and
 the split view's hug measure asks for none (`ListRowSelectionValueCostTests`
 counts both).
 
+Three variants are there to price what TUIkit OBSERVES. `outline` is forty
+sections of rows in one lazy stack, each row reading an `@Observable` counter
+of its own in its body, and `scrollfollow-observable` is `scrollfollow` with
+every row reading one of 64 notes. Both are DRIVEN (`DrivenScenario`): a model
+the view reads is written between frames — one counter, one note a frame — as
+an app's model is, because what a write invalidates is part of what a frame
+costs and a tick the view derives its content from invalidates nothing.
+`--bench` and `--selfcheck` make the write before each frame (outside the
+timed region; its invalidations are paid in the frame); the interactive shell
+shows the view at rest. `timeline-rows` is a two-axis lazy stack of 400 rows
+each holding a `TimelineView(.animation)`, the shape a live timeline beside a
+kept width is priced on.
+
 `table-api` is the first: 43 variants over seven axes — how a column gets its
 value (key path, closure, sort-by-one-display-another, non-`Equatable` rows,
 class rows), the four width modes, what a cell holds (interpolated integers,
@@ -234,8 +247,16 @@ memos at the end of every frame.
 | `playlist` | a playlist rearranged with the keys and the mouse, tracks deleted, added and renamed: `onMove` by the Control/Option chords, by move mode (pick up with Ctrl-R, carry, place or cancel) and by a mouse drag with live feedback, `onDelete`; its check reads the order off the screen and requires a run of the model's |
 | `jobs` | a queue of jobs whose spinners turn while their rows stay unchanged: memoized `List` rows holding spinners at six speeds, their frames moving under an unchanged value for many frames — the shape in which a cache serving a row as stored would draw an old frame, which the cache-cleared twin sees at once; progress writes, jobs finishing, failing, retried and arriving; walking and paging |
 | `processes` | a sortable, filterable process `Table` whose numbers move on every step: `.fit` columns and the row memo under continuous churn, re-sorting, a filter narrowing the rows, rows appended and removed, selection moved with the keys |
-| `residual` | rows that draw what is not their element, three ways on one page: index-keyed lines read from `document.lines[i]`, retyped in place, inserted above and removed; a row computing `selection == item.id` in the `ForEach` closure; a parent `@State` driving `.disabled` and `.bold` into rows. Each is right today only because the write that changes it clears everything below the page, so this is the oracle for any change to what survives an ancestor's write (Option C). The rows say they are `Equatable`, which is what C asks of a row before it re-checks it rather than drawing it again. Checked against a throwaway C-shaped memo on 400 steps per shape: re-checking the rebuilt value and the environment, it matches the twin while serving 45.1 rows a step against today's 10.0; with the environment fingerprint switched off, the busy page fails the twin on 306 frames (styling, so only the twin sees it); comparing the element instead of the rebuilt value, the lines fail on 400 frames and the selection on 383, the page's own check catching both |
-| `residual-opaque` | the same page with rows that are not `Equatable`: what C must refuse and draw again as today. Under the same three memos it matches the twin and serves what today serves, 10.0 rows a step |
+| `residual` | rows that draw what is not their element, three ways on one page: index-keyed lines read from `document.lines[i]`, retyped in place, inserted above and removed; a row computing `selection == item.id` in the `ForEach` closure; a parent `@State` driving `.disabled`, `.bold` and `.help` into rows. Above them a band of the shapes the reviews of Option C named: rows holding a `Binding` (with a hand-written `==` that leaves it out), an existential, a token memo inside an `HStack`; rows reading an object the page injects and swaps; `Button`s that are whole rows; a `List` whose selection is bound through `@Bindable` and whose rows carry the page's badge; a two-axis stack whose widest row, far off the window, reads a counter of its own; rows whose `ViewThatFits` measures, without drawing, a candidate that reads a counter; and tasks under a custom `Equatable` `ButtonStyle` whose `makeBody` reads a model. Each is right today only because the write that changes it clears everything below the page, so this is the oracle for any change to what survives an ancestor's write (Option C). The rows say they are `Equatable`, which is what C asks of a row before it re-checks it rather than drawing it again. Checked against a throwaway C-shaped memo, 400 steps a shape (see the commit that added the band): re-checking the rebuilt value and the environment, refusing rows that hold a `Binding` or an existential and token memos, and observing measured and style bodies, it matches the twin on every shape while serving 56.8 rows a step against today's 10.0; each part of that switched off fails the shape it guards |
+| `residual-opaque` | the same page with rows that are not `Equatable`: what C must refuse and draw again as today. Under every C-shaped memo it matches the twin and serves what today serves |
+| `inbox-tinted` | `inbox`'s script and data under a `.tint` that flips every 23 steps: an environment write above every row, which C compares and draws the rows again for |
+| `inbox-pushed` | the inbox pushed onto a `NavigationStack`: every row drawn under the pushed screen's dismiss action |
+| `inbox-sheet` | the inbox presented in a sheet: every row drawn under the sheet's dismiss action |
+| `inbox-observable` | the inbox with its selection bound through `@Bindable`, as an app binds an `@Observable`'s property |
+| `log-observable` | `log` with `.scrollPosition(id:)` bound through `@Bindable` |
+| `log-captures` | `log` whose rows carry a tap handler capturing the parent's growing list through `self`: today one copy of the list is alive at a time; a memo that serves rows keeps each drawn row's handler, and the list it captured when drawn |
+| `image-rows` | a `List` of rows each holding a decoded 64×32 picture (8 KB of pixels) that arrive, leave and are replaced: the resident size of what a memo keeps of a row's VALUE |
+| `accumulate` | a clock moving every step over four readers of an `@Observable` property nothing writes until the end — a drawn body, a body only measured (`ViewThatFits`' unchosen candidate), a custom `ButtonStyle`'s `makeBody` and a `@Bindable`-bound `Toggle`. Every body evaluated under observation arms a registration on what it read, freed only when that is written, so a reader drawn every frame of a property nobody writes adds one a frame, for good. Reports resident size every 9,000 steps (a quarter of an hour at 10 Hz) and, at the end, how long the first write took: every registration armed since the page opened runs inside it. Play it without `--verify` for its numbers — the twin's registrations are in the same process |
 
 Adding one: a `StressSession` — a page built once over a model the session
 owns, a `step(_:)` that makes that step's data changes on the model and
@@ -255,6 +276,13 @@ before each step (`look(at:)`), so both instances of a verified run aim at the
 same cell.
 Choices come from a `SessionRandom` seeded from the config, so the twin makes
 the same ones.
+
+A session whose cost is what builds up over a long run says
+`checkpointEvery`, and the runner prints the process's resident size and
+footprint at every multiple of it. `finish()` is what the session does once its
+last step is played — `accumulate` writes its property for the first time and
+times the write — and the runner then draws one more frame on both instances
+and compares it like any other.
 
 ## Profiling
 

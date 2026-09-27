@@ -31,6 +31,9 @@ struct ScenarioVariant: Sendable {
     /// Which axis of the API this point is varying, so the listing groups.
     let axis: String
     let make: @MainActor (StressConfig) -> AnyView
+    /// A driven variant's view and the write it wants made before each frame
+    /// (see ``DrivenScenario``); `nil` for a variant that is only a view.
+    var drive: (@MainActor (StressConfig) -> DrivenScenario)?
 }
 
 /// The matrix scenarios, by scenario id.

@@ -147,6 +147,16 @@ enum Headless {
         let id: String
         let title: String
         let make: @MainActor () -> AnyView
+        /// A driven case's view and its write (see ``DrivenScenario``).
+        var drive: (@MainActor () -> DrivenScenario?)?
+    }
+
+    /// `scenario`'s driven form under `config`, deferred, when it has one.
+    private static func driving(
+        _ scenario: Scenario, _ config: StressConfig
+    ) -> (@MainActor () -> DrivenScenario?)? {
+        guard let drive = scenario.drive else { return nil }
+        return { drive(config) }
     }
 
     /// Every scenario, with matrix scenarios expanded into their variants.
@@ -155,16 +165,16 @@ enum Headless {
         Scenarios.all.flatMap { scenario -> [SelfcheckCase] in
             let variants = ScenarioVariants.variants(of: scenario.id)
             guard !variants.isEmpty else {
-                return [SelfcheckCase(id: scenario.id, title: scenario.title,
-                    make: { scenario.make(config) })]
+                return [SelfcheckCase(
+                    id: scenario.id, title: scenario.title, make: { scenario.make(config) },
+                    drive: driving(scenario, config))]
             }
             return variants.map { variant in
                 var scoped = config
                 scoped.variant = variant.id
                 return SelfcheckCase(
-                    id: "\(scenario.id)/\(variant.id)",
-                    title: variant.summary,
-                    make: { scenario.make(scoped) })
+                    id: "\(scenario.id)/\(variant.id)", title: variant.summary, make: { scenario.make(scoped) },
+                    drive: driving(scenario, scoped))
             }
         }
     }
@@ -180,7 +190,10 @@ enum Headless {
         for scenario in cases {
             let channels = HeadlessInputChannels()
             let context = makeContext(cols: 120, rows: 40, channels: channels)
-            let view = AnyView(scenario.make().environment(clock))
+            // A driven case's model moves between the two renders, so the
+            // second — the one the verifier reads — follows a write.
+            let driven = scenario.drive?()
+            let view = AnyView((driven?.view ?? scenario.make()).environment(clock))
             let trimmedBefore = StackGuard.truncationCount
             // TWICE, with the pass lifecycle between, because a memo only
             // SERVES on a second render — so a one-render check never exercised
@@ -193,6 +206,7 @@ enum Headless {
             _ = renderToBuffer(view, context: context)
             context.environment.stateStorage?.endRenderPass()
             context.environment.renderCache?.removeInactive()
+            driven?.advance(1)
             channels.beginWalk()
             context.environment.stateStorage?.beginRenderPass()
             context.environment.renderCache?.beginRenderPass()
@@ -311,7 +325,8 @@ enum Headless {
             return 1
         }
         let clock = StressClock()
-        let view = AnyView(scenario.make(config).environment(clock))
+        let driven = scenario.drive?(config)
+        let view = AnyView((driven?.view ?? scenario.make(config)).environment(clock))
 
         // Warm up (build lazy state, prime caches) outside the timed region.
         let channels = HeadlessInputChannels()
@@ -346,6 +361,9 @@ enum Headless {
             if iteration.isMultiple(of: 64) { memory.sample() }
             if cold { warm = makeContext(cols: cols, rows: rows, channels: channels) }
             clock.tick &+= 1
+            // A driven scenario's write, outside the timed region; what it
+            // invalidates is paid in the frame, where an app pays it.
+            driven?.advance(clock.tick)
             let cpuStart = threadCPUNanoseconds()
             let frameStart = DispatchTime.now()
             // The live loop's per-pass lifecycle, timed as part of the frame

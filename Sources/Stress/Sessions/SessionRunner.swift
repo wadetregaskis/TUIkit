@@ -104,6 +104,12 @@ enum SessionRunner {
         }
         /// The last frame, when asked for (``Options/show``).
         var lastScreen: [String] = []
+        /// What the run looked like at each of the session's checkpoints
+        /// (``StressSession/checkpointEvery``), one line each.
+        var checkpoints: [String] = []
+        /// What the session did once its steps were played
+        /// (``StressSession/finish()``).
+        var finish: String?
     }
 
     /// The sizes a resizing run cycles through.
@@ -176,6 +182,9 @@ enum SessionRunner {
                 report.staleSizeSteps.append(index)
                 staleSizesSoFar = warm.staleSizes().count
             }
+            if let every = warm.checkpointEvery, (index + 1).isMultiple(of: every) {
+                report.checkpoints.append(checkpoint(after: index + 1))
+            }
 
             guard let cold else { continue }
             var twin = cold.step(index)
@@ -196,6 +205,7 @@ enum SessionRunner {
                 }
             }
         }
+        finish(warm, cold, at: options.steps, checks: options.checks, into: &report)
         if options.show { report.lastScreen = warm.screen().map(\.stripped) }
         let counts = warm.cacheCounts()
         report.cacheStats = counts.stats.delta(since: countsAtOpen.stats)
@@ -205,6 +215,33 @@ enum SessionRunner {
         report.sizesVerified = RenderCache.verifiesMeasureMemo
         report.staleSizes = warm.staleSizes()
         return report
+    }
+
+    /// One checkpoint's line: the steps played and the process's resident size
+    /// and footprint now.
+    private static func checkpoint(after steps: Int) -> String {
+        let mb = { (bytes: UInt64?) in bytes.map { String(format: "%.1fMB", Double($0) / 1_048_576) } ?? "-" }
+        return "checkpoint after \(steps) steps: rss=\(mb(ProcessMemory.currentResidentBytes())) "
+            + "footprint=\(mb(ProcessMemory.currentFootprintBytes()))"
+    }
+
+    /// Lets both instances do what their sessions do once the steps are played,
+    /// then draws one more frame on each and compares and checks it as a step's.
+    @MainActor
+    private static func finish(
+        _ warm: DrivenSession, _ cold: DrivenSession?, at index: Int, checks: Bool, into report: inout Report
+    ) {
+        guard let note = warm.finish() else { return }
+        _ = cold?.finish()
+        report.finish = note
+        warm.frame(instant(index))
+        cold?.frame(instant(index))
+        if checks { checkFrame(of: warm, after: index, action: "finish", into: &report) }
+        guard let cold, warm.screen() != cold.screen() else { return }
+        report.divergentSteps.append(index)
+        if report.divergences.count < 5 {
+            report.divergences.append(describe(index, "finish", seen: warm.screen(), expected: cold.screen()))
+        }
     }
 
     /// Asks `session` whether the frame drawn after step `index` shows what it
@@ -299,6 +336,8 @@ enum SessionRunner {
                     + "value memos: %d hits, %d misses, %d stores",
                 rows.rendered, rows.served, Double(rows.rendered) / steps, Double(rows.served) / steps,
                 stats.hits, stats.misses, stats.stores))
+        for line in report.checkpoints { Swift.print("  " + line) }
+        if let finish = report.finish { Swift.print("  finish: " + finish) }
         if !report.lastScreen.isEmpty {
             Swift.print("  last frame:")
             for line in report.lastScreen { Swift.print("  | " + line) }

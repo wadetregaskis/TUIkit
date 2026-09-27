@@ -71,12 +71,16 @@ final class Inbox {
 /// while a search narrows the collection and widens it again.
 struct InboxPage: View {
     let inbox: Inbox
+    /// Whether the selection is bound through `@Bindable`, as an app binds an
+    /// `@Observable`'s property (`inbox-observable`), rather than through a
+    /// closure pair.
+    var bindsThroughBindable = false
 
     var body: some View {
         let shown = inbox.shown
         VStack(alignment: .leading, spacing: 0) {
             Text(verbatim: "\(shown.count) of \(inbox.items.count) · \(inbox.items.count { $0.done }) done")
-            List(selection: Binding(get: { inbox.selection }, set: { inbox.selection = $0 })) {
+            List(selection: selection) {
                 ForEach(shown) { item in InboxRow(item: item) }
             }
             .searchable(text: Binding(get: { inbox.query }, set: { inbox.query = $0 }))
@@ -90,6 +94,14 @@ struct InboxPage: View {
             inbox.items[index].done.toggle()
             return true
         }
+    }
+}
+
+extension InboxPage {
+    /// The list's selection binding.
+    private var selection: Binding<Int?> {
+        bindsThroughBindable
+            ? Bindable(inbox).selection : Binding(get: { inbox.selection }, set: { inbox.selection = $0 })
     }
 }
 
@@ -118,7 +130,15 @@ extension InboxRow: @MainActor Equatable {}
 /// searching, while items arrive, leave, move and change underneath.
 @MainActor
 final class InboxSession: StressSession {
-    private let inbox: Inbox
+    let inbox: Inbox
+    /// Whether the counts may be drawn anywhere on a line rather than at its
+    /// start: inside a pushed screen or a sheet, which the variants put the
+    /// page in.
+    var countsAnywhere = false
+    /// Whether the script types into the search field. A variant whose focus
+    /// cycle is not the page's own (a pushed screen adds its crumb bar) leaves
+    /// it out, and those steps are quiet.
+    var searches = true
     private var random: SessionRandom
     /// The keys still to come of a search being typed and then cleared.
     private var pending: [KeyEvent] = []
@@ -181,14 +201,7 @@ final class InboxSession: StressSession {
             inbox.items[random.below(inbox.items.count)].title = Synth.sentence(h, words: 1 + Int(h % 9))
             return SessionStep(action: "rename")
         case "search":
-            // Into the search field, a few letters that narrow the list, then
-            // cleared and back to the list: one key a step, as typed.
-            let letters = (0..<random.within(1...3)).map { _ in
-                KeyEvent(key: .character(Character(UnicodeScalar(UInt8(97 + random.below(26))))))
-            }
-            pending = letters + Array(repeating: KeyEvent(key: .backspace), count: letters.count)
-                + [KeyEvent(key: .tab)]
-            return SessionStep(action: "search", keys: [KeyEvent(key: .tab)])
+            return search()
         case "sort":
             inbox.items.sort { $0.title < $1.title }
             return SessionStep(action: "sort")
@@ -198,11 +211,27 @@ final class InboxSession: StressSession {
         }
     }
 
+    /// Into the search field, a few letters that narrow the list, then
+    /// cleared and back to the list: one key a step, as typed. A quiet step
+    /// when the session does not search: typing depends on where the Tab
+    /// cycle lands, which a pushed screen's crumb bar changes, and
+    /// `inbox-pushed` leaves it out.
+    private func search() -> SessionStep {
+        guard searches else { return SessionStep(action: "quiet") }
+        let letters = (0..<random.within(1...3)).map { _ in
+            KeyEvent(key: .character(Character(UnicodeScalar(UInt8(97 + random.below(26))))))
+        }
+        pending = letters + Array(repeating: KeyEvent(key: .backspace), count: letters.count)
+            + [KeyEvent(key: .tab)]
+        return SessionStep(action: "search", keys: [KeyEvent(key: .tab)])
+    }
+
     /// The counts over the list are the model's: what the search leaves, what
     /// there is, and what is done.
     func check(_ screen: [String], after index: Int) -> String? {
         let counts = "\(inbox.shown.count) of \(inbox.items.count) · \(inbox.items.count { $0.done }) done"
-        return screen.contains { $0.hasPrefix(counts) } ? nil : "the counts do not say \(counts)"
+        return screen.contains { countsAnywhere ? $0.contains(counts) : $0.hasPrefix(counts) }
+            ? nil : "the counts do not say \(counts)"
     }
 
     static let descriptor = SessionDescriptor(

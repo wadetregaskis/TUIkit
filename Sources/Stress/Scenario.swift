@@ -31,6 +31,10 @@ struct Scenario {
     let stresses: String
     /// Builds the scenario's view for the given configuration.
     let make: @MainActor (StressConfig) -> AnyView
+    /// Builds a DRIVEN scenario — a view over a model the harness writes
+    /// between frames — or `nil` for a scenario that is only a view. See
+    /// ``DrivenScenario``.
+    var drive: (@MainActor (StressConfig) -> DrivenScenario?)?
 
     /// The menu title for the current language.
     ///
@@ -43,6 +47,22 @@ struct Scenario {
     var localizedBlurb: String { L("stress.scenario.\(id).blurb") }
     /// The "stresses" summary for the current language; see ``localizedTitle``.
     var localizedStresses: String { L("stress.scenario.\(id).stresses") }
+}
+
+// MARK: - Driven scenarios
+
+/// A scenario's view and what moves its model between frames.
+///
+/// A scenario at rest reads the shared `StressClock` and derives what it
+/// shows from the tick, which is a pure function of the frame. A model an app
+/// reads is not: it is WRITTEN, outside any render, and what a write
+/// invalidates is part of what a frame costs. So a driven scenario hands the
+/// harness the write to make before each frame, with the frame's tick.
+/// `--bench` and `--selfcheck` make it; the interactive shell shows the view
+/// at rest.
+struct DrivenScenario {
+    let view: AnyView
+    let advance: @MainActor (_ tick: Int) -> Void
 }
 
 // MARK: - Registry

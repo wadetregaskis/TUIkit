@@ -197,13 +197,22 @@ enum AppShapeMatrix {
         make: { config in
             ScenarioVariants.resolve(config, in: scenarioID)?.make(config)
                 ?? AnyView(Text(Lf("stress.scenario.app-shapes.heading", "?", 0)))
-        }
+        },
+        drive: { config in ScenarioVariants.resolve(config, in: scenarioID)?.drive?(config) }
     )
 
     private static func variant(
         _ id: String, _ summary: String, _ make: @escaping @MainActor (StressConfig) -> AnyView
     ) -> ScenarioVariant {
         ScenarioVariant(id: id, summary: summary, axis: "app", make: make)
+    }
+
+    /// A driven variant: the view over a model the bench writes between
+    /// frames. `make` builds the same view with nothing moving it.
+    private static func driven(
+        _ id: String, _ summary: String, _ drive: @escaping @MainActor (StressConfig) -> DrivenScenario
+    ) -> ScenarioVariant {
+        ScenarioVariant(id: id, summary: summary, axis: "app", make: { drive($0).view }, drive: drive)
     }
 
     static let variants: [ScenarioVariant] = [
@@ -248,6 +257,15 @@ enum AppShapeMatrix {
         },
         variant("headed-log", "a header over a lazy stack of 2,000 one- and two-line entries in one scroll view; the page moves every tick") {
             AnyView(HeadedLogApp(entries: $0.sized(2_000), seed: $0.seed))
+        },
+        driven("outline", "40 sections of 25 rows in one lazy stack, each row reading a counter of its own; one counter moves a frame") {
+            OutlineApp.driven(sections: $0.sized(40), rows: 25, seed: $0.seed)
+        },
+        driven("scrollfollow-observable", "scrollfollow with every row reading one of 64 notes; a row appends and a note moves every frame") {
+            ObservedFollowApp.driven(base: $0.sized(1_000_000), seed: $0.seed)
+        },
+        variant("timeline-rows", "a two-axis lazy stack of 400 rows, each with a TimelineView on the animation schedule") {
+            AnyView(TimelineRowsApp(rows: $0.sized(400), seed: $0.seed))
         },
     ]
 }

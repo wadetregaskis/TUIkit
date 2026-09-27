@@ -24,6 +24,15 @@
 //  cache-cleared twin of `--verify`, and the page's own check of what the
 //  model says it must show.
 //
+//  Above them sits a band of the shapes the reviews of Option C named since
+//  (see `ResidualRows.swift`): rows holding a `Binding`, an existential, a
+//  token memo; rows reading an injected object that the page swaps; buttons
+//  that are whole rows; a list whose selection is bound to a model and whose
+//  rows carry the page's badge; a stack whose rows off the window each read a
+//  counter of their own; and, on the tasks, the page's help text and a custom
+//  button style that reads a model. Every write that moves one of them is one
+//  the page's body reads too, so each is right today by the same clear.
+//
 //  The rows say they are `Equatable`, because that is what Option C asks of a
 //  row before it re-checks one: it serves an `Equatable` row whose rebuilt
 //  value equals the one it drew, under an environment that has not moved, and
@@ -40,8 +49,8 @@ import TUIkit
 
 // MARK: - The model
 
-/// What the page shows: lines keyed by index, items to pick from, and tasks
-/// that the page can make busy.
+/// What the page shows: lines keyed by index, items to pick from, tasks that
+/// the page can make busy, and what the band of extra rows reads.
 @Observable
 @MainActor
 final class ResidualModel {
@@ -54,11 +63,35 @@ final class ResidualModel {
     var lines: [String]
     var items: [Item]
     var tasks: [Item]
+    /// What the existential rows hold.
+    var payloads: [any ResidualPayload]
+    /// What the token-memoized rows draw, keyed by index.
+    var tokens: [String]
+    /// Buttons drawn as the whole of a row.
+    var actions: [Item]
+    /// What the pick list offers, and which of them is picked.
+    var picks: [Item]
+    var pick: Int?
+    /// One per row of the off-window stack, each read by its row alone.
+    /// ``ResidualColumns/widestCounter``'s is always the longest.
+    let counters: [ResidualCounter]
+    /// One per fitting row, each read only by the wide candidate its row's
+    /// `ViewThatFits` measures.
+    let fits: [ResidualCounter]
 
-    init(lines: [String], items: [Item], tasks: [Item]) {
+    init(
+        lines: [String], items: [Item], tasks: [Item], payloads: [any ResidualPayload], tokens: [String],
+        actions: [Item], picks: [Item], counters: [ResidualCounter], fits: [ResidualCounter]
+    ) {
         self.lines = lines
         self.items = items
         self.tasks = tasks
+        self.payloads = payloads
+        self.tokens = tokens
+        self.actions = actions
+        self.picks = picks
+        self.counters = counters
+        self.fits = fits
     }
 }
 
@@ -90,62 +123,177 @@ enum OpaqueRows: ResidualRowKind {
 
 // MARK: - The page
 
-/// Where the columns sit.
+/// Where the columns sit, and how tall the band of extra rows is.
 enum ResidualColumns {
     /// How wide the lines column is; the items column starts one cell after it.
     static let linesWidth = 36
     /// How wide the items column is.
     static let itemsWidth = 24
+    /// How wide the band's third column is: the pick list over the stack.
+    static let listsWidth = 30
+    /// How many flags, payloads, tokens, swatches and action buttons there are.
+    static let flags = 4
+    static let payloads = 3
+    static let tokens = 3
+    static let swatches = 2
+    static let actions = 3
+    /// The band's height: its first column, the tallest.
+    static let bandHeight = flags + payloads + tokens
+    /// How many counters the stack holds, and which one's row is the widest,
+    /// well below the window: a counter elsewhere stays below
+    /// ``narrowCounters``' bound, and this one above it.
+    static let counters = 40
+    static let widestCounter = 30
+    static let narrowCounters = 0...20
+    static let wideCounter = 25...60
+    /// How many fitting rows there are, and the range their counters move in:
+    /// the wide candidate fits the items column up to ``fitsUpTo``.
+    static let fitRows = 2
+    static let fitCounter = 10...30
+    static let fitsUpTo = itemsWidth - 3
+    /// The help texts the page cycles the tasks through.
+    static let hints = ["start it", "stop it", "skip it"]
 }
 
-/// A status line over three columns: numbered lines keyed by index, items with
-/// the selection marked, and tasks the page disables and bolds while it is
-/// busy. `selection` and `busy` are the page's own `@State`, moved by `j`/`k`
-/// and flipped by `b`.
+/// The status lines the page draws and its check looks for.
+enum ResidualStatus {
+    static func main(selection: Int, busy: Bool, lines: Int) -> String {
+        "#\(selection) selected · \(busy ? "busy" : "idle") · \(lines) lines"
+    }
+
+    static func extras(
+        theme: String, hint: Int, badge: Int, flagsOn: Int, pick: Int?, sum: Int, angled: Bool
+    ) -> String {
+        "\(theme) · hint \(hint) · badge \(badge) · \(flagsOn) on · pick \(pick.map(String.init) ?? "-") · "
+            + "Σ\(sum) · \(angled ? "<>" : "[]")"
+    }
+}
+
+/// Two status lines over a band of extra rows and three columns: numbered
+/// lines keyed by index, items with the selection marked, and tasks the page
+/// disables and bolds while it is busy. `selection`, `busy`, the help text,
+/// the badge, the flags and which theme is injected are the page's own
+/// `@State`, moved by `j`/`k`, `b`, `h`, `g`, `f` and `t`.
 struct ResidualPage<Kind: ResidualRowKind>: View {
     let model: ResidualModel
+    let palette: ResidualPalette
+    let themes: [ResidualTheme]
     @State private var selection = 0
     @State private var busy = false
+    @State private var hint = 0
+    @State private var badge = 1
+    @State private var flags = [false, true, false, true]
+    @State private var flagCursor = 0
+    @State private var theme = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(verbatim: "#\(selection) selected · \(busy ? "busy" : "idle") · \(model.lines.count) lines")
-            HStack(alignment: .top, spacing: 1) {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(0..<model.lines.count, id: \.self) { index in
-                        LineRow<Kind>(number: index + 1, text: model.lines[index])
-                    }
-                }
-                .frame(width: ResidualColumns.linesWidth, alignment: .leading)
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(model.items) { item in
-                        PickRow<Kind>(title: item.title, isSelected: item.id == selection)
-                    }
-                }
-                .frame(width: ResidualColumns.itemsWidth, alignment: .leading)
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(model.tasks) { task in TaskRow<Kind>(task: task) }
-                }
-                .disabled(busy)
-                .bold(busy)
-            }
+            Text(verbatim: ResidualStatus.main(selection: selection, busy: busy, lines: model.lines.count))
+            Text(
+                verbatim: ResidualStatus.extras(
+                    theme: themes[theme].name, hint: hint, badge: badge, flagsOn: flags.count { $0 },
+                    pick: model.pick, sum: (model.counters + model.fits).reduce(0) { $0 + $1.value },
+                    angled: palette.angled))
+            band.frame(height: ResidualColumns.bandHeight, alignment: .top)
+            columns
         }
-        .onKeyPress(keys: [.character("j"), .character("k"), .character("b")]) { event in
+        .onKeyPress(keys: Set(["j", "k", "b", "h", "g", "f", "t"].map { Key.character($0) })) { event in
             let count = max(1, model.items.count)
             switch event.key {
             case .character("j"): selection = (selection + 1) % count
             case .character("k"): selection = (selection + count - 1) % count
+            case .character("h"): hint = (hint + 1) % ResidualColumns.hints.count
+            case .character("g"): badge = (badge + 1) % 4
+            case .character("f"):
+                flags[flagCursor].toggle()
+                flagCursor = (flagCursor + 1) % flags.count
+            case .character("t"): theme = (theme + 1) % themes.count
             default: busy.toggle()
             }
             return true
         }
     }
+
+    /// The band of extra rows: what holds a `Binding`, an existential or a
+    /// token memo; what reads the injected object; buttons that are rows; and
+    /// the bound pick list over the stack whose rows read counters.
+    private var band: some View {
+        HStack(alignment: .top, spacing: 1) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<flags.count, id: \.self) { index in
+                    ResidualFlagRow<Kind>(number: index, isOn: $flags[index])
+                }
+                ForEach(0..<model.payloads.count, id: \.self) { index in
+                    ResidualPayloadRow<Kind>(payload: model.payloads[index])
+                }
+                ForEach(0..<model.tokens.count, id: \.self) { index in
+                    HStack(spacing: 0) {
+                        Text(verbatim: ResidualText.token(index, model.tokens[index])).memoized(id: index)
+                    }
+                }
+            }
+            .frame(width: ResidualColumns.linesWidth, alignment: .leading)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<ResidualColumns.swatches, id: \.self) { index in ResidualSwatchRow<Kind>(number: index) }
+                    .environment(themes[theme])
+                ForEach(model.actions) { action in Button(action.title) {} }
+                ForEach(0..<model.fits.count, id: \.self) { index in
+                    ResidualFitRow<Kind>(number: index, counter: model.fits[index])
+                }
+            }
+            .frame(width: ResidualColumns.itemsWidth, alignment: .leading)
+            VStack(alignment: .leading, spacing: 0) {
+                List(selection: Bindable(model).pick) {
+                    ForEach(model.picks) { pick in ResidualPickRow<Kind>(title: pick.title).badge(badge) }
+                }
+                .frame(height: 5)
+                ScrollView([.horizontal, .vertical]) {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(0..<model.counters.count, id: \.self) { index in
+                            ResidualCounterRow<Kind>(number: index, counter: model.counters[index])
+                        }
+                    }
+                }
+                .frame(height: ResidualColumns.bandHeight - 5)
+            }
+            .frame(width: ResidualColumns.listsWidth, alignment: .leading)
+        }
+    }
+
+    /// The first three shapes: lines by index, the selection mark, and tasks
+    /// under the page's busy, help text and custom button style.
+    private var columns: some View {
+        HStack(alignment: .top, spacing: 1) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<model.lines.count, id: \.self) { index in
+                    LineRow<Kind>(number: index + 1, text: model.lines[index])
+                }
+            }
+            .frame(width: ResidualColumns.linesWidth, alignment: .leading)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(model.items) { item in
+                    PickRow<Kind>(title: item.title, isSelected: item.id == selection)
+                }
+            }
+            .frame(width: ResidualColumns.itemsWidth, alignment: .leading)
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(model.tasks) { task in TaskRow<Kind>(task: task) }
+            }
+            .disabled(busy)
+            .bold(busy)
+            .help(ResidualColumns.hints[hint])
+            .buttonStyle(ResidualButtonStyle(palette: palette))
+        }
+    }
 }
 
-/// The label a line is drawn with: its number, right-aligned in three cells.
-private func lineLabel(_ number: Int) -> String {
-    let digits = String(number)
-    return String(repeating: " ", count: max(0, 3 - digits.count)) + digits + " "
+/// Labels the page and its check both spell.
+enum ResidualLabels {
+    /// The label a line is drawn with: its number, right-aligned in three cells.
+    static func line(_ number: Int) -> String {
+        let digits = String(number)
+        return String(repeating: " ", count: max(0, 3 - digits.count)) + digits + " "
+    }
 }
 
 /// A numbered line: whatever text is at its index now.
@@ -154,7 +302,7 @@ private struct LineRow<Kind: ResidualRowKind>: View {
     let text: String
 
     var body: some View {
-        Text(verbatim: lineLabel(number) + text)
+        Text(verbatim: ResidualLabels.line(number) + text)
     }
 }
 
@@ -185,139 +333,3 @@ private struct TaskRow<Kind: ResidualRowKind>: View {
 extension LineRow: @MainActor Equatable where Kind == EquatableRows {}
 extension PickRow: @MainActor Equatable where Kind == EquatableRows {}
 extension TaskRow: @MainActor Equatable where Kind == EquatableRows {}
-
-// MARK: - The script
-
-/// Someone working a page of three panes: retyping lines, inserting and
-/// deleting them, walking the selection, making the page busy and idle,
-/// renaming items and tasks, and moving the focus among the tasks.
-@MainActor
-final class ResidualSession<Kind: ResidualRowKind>: StressSession {
-    private let model: ResidualModel
-    private var random: SessionRandom
-    /// The page's `selection` and `busy`, as the keys sent so far set them:
-    /// what the check expects to see.
-    private var selection = 0
-    private var busy = false
-    /// How few and how many lines there may be.
-    private let lineRange: ClosedRange<Int>
-
-    init(config: StressConfig) {
-        let seed = config.seed
-        let lineCount = config.sized(24)
-        lineRange = max(4, lineCount / 3)...lineCount
-        model = ResidualModel(
-            lines: (0..<lineCount).map { Self.line(mix(seed, $0)) },
-            items: (0..<config.sized(16)).map { ResidualModel.Item(id: $0, title: Self.title($0, mix(seed ^ 0x17E, $0))) },
-            tasks: (0..<config.sized(10)).map { ResidualModel.Item(id: $0, title: Synth.slug(mix(seed ^ 0x7A5, $0))) })
-        random = SessionRandom(seed: seed ^ 0x2E51)
-    }
-
-    /// A line short enough never to be cut by its column.
-    private static func line(_ h: UInt64) -> String {
-        String(Synth.sentence(h, words: 2 + Int(h % 3)).prefix(ResidualColumns.linesWidth - 6))
-    }
-
-    /// An item's title: its number, and a slug cut to fit its column.
-    private static func title(_ id: Int, _ h: UInt64) -> String {
-        String("\(id) \(Synth.slug(h))".prefix(ResidualColumns.itemsWidth - 2))
-    }
-
-    var page: ResidualPage<Kind> { ResidualPage(model: model) }
-
-    func step(_ index: Int) -> SessionStep {
-        switch random.pick([
-            ("select", 22), ("busy", 12), ("edit", 20), ("insert", 8), ("remove", 6), ("rename", 8),
-            ("retask", 6), ("focus", 6), ("quiet", 12),
-        ]) {
-        case "select":
-            let forward = random.below(3) != 0
-            let presses = random.within(1...3)
-            let count = model.items.count
-            selection = (selection + (forward ? presses : count * presses - presses)) % count
-            return SessionStep(
-                action: "select",
-                keys: Array(repeating: KeyEvent(key: .character(forward ? "j" : "k")), count: presses))
-        case "busy":
-            busy.toggle()
-            return SessionStep(action: "busy", keys: [KeyEvent(key: .character("b"))])
-        case "edit":
-            // Retyped in place: the row keeps its index, and so its key.
-            model.lines[random.below(model.lines.count)] = Self.line(random.next())
-            return SessionStep(action: "edit")
-        case "insert":
-            // Every line below the insertion now reads the line above it.
-            guard model.lines.count < lineRange.upperBound else { return SessionStep(action: "quiet") }
-            model.lines.insert(Self.line(random.next()), at: random.below(model.lines.count + 1))
-            return SessionStep(action: "insert")
-        case "remove":
-            guard model.lines.count > lineRange.lowerBound else { return SessionStep(action: "quiet") }
-            model.lines.remove(at: random.below(model.lines.count))
-            return SessionStep(action: "remove")
-        case "rename":
-            let at = random.below(model.items.count)
-            model.items[at].title = Self.title(model.items[at].id, random.next())
-            return SessionStep(action: "rename")
-        case "retask":
-            model.tasks[random.below(model.tasks.count)].title = Synth.slug(random.next())
-            return SessionStep(action: "retask")
-        case "focus":
-            return SessionStep(action: "focus", keys: [KeyEvent(key: .tab)])
-        default:
-            return SessionStep(action: "quiet")
-        }
-    }
-
-    /// The status line says what the keys set and how many lines there are;
-    /// every line on the screen is the model's line at that index, numbered;
-    /// and every item on the screen is marked exactly when it is the
-    /// selection. What `busy` does to the tasks is styling, which a stripped
-    /// screen cannot show: the twin compares it.
-    ///
-    /// Read relative to the status line, wherever the window centres the page,
-    /// and only as far down as the page is drawn and above the app's status
-    /// bar, whose top border ends what a larger scale may have clipped.
-    func check(_ screen: [String], after index: Int) -> String? {
-        let status = "#\(selection) selected · \(busy ? "busy" : "idle") · \(model.lines.count) lines"
-        guard let top = screen.firstIndex(where: { $0.contains(status) }),
-            let found = screen[top].range(of: status)
-        else { return "the status line does not say \(status)" }
-        let left = screen[top].distance(from: screen[top].startIndex, to: found.lowerBound)
-        let tall = max(model.lines.count, model.items.count, model.tasks.count)
-        let below = screen[(top + 1)...]
-        let bar = below.firstIndex { $0.drop { $0 == " " }.hasPrefix("╭") } ?? screen.count
-        for (offset, line) in below.prefix(min(tall, bar - top - 1)).enumerated() {
-            let row = Array(line.dropFirst(left))
-            if offset < model.lines.count {
-                let expected = lineLabel(offset + 1) + model.lines[offset]
-                guard String(row.prefix(expected.count)) == expected else {
-                    return "line \(offset + 1) does not read \"\(expected)\": \(String(row))"
-                }
-            }
-            if offset < model.items.count {
-                let item = model.items[offset]
-                let expected = (item.id == selection ? "> " : "  ") + item.title
-                let start = ResidualColumns.linesWidth + 1
-                let drawn = row.count > start ? String(row[start...].prefix(expected.count)) : ""
-                guard drawn == expected else {
-                    return "item \(item.id) is drawn \"\(drawn)\" where \"\(expected)\" belongs"
-                }
-            }
-        }
-        return nil
-    }
-
-    static var descriptor: SessionDescriptor {
-        SessionDescriptor(
-            id: Kind.sessionID,
-            summary: "rows that draw what is not their element: lines by index, a selection mark, a parent's "
-                + "busy — \(Kind.rowsSummary)",
-            exercises:
-                "index-keyed rows reading document.lines[i] retyped, inserted above and removed; a row "
-                + "computing selection == item.id; a parent @State driving .disabled and .bold into rows; "
-                + "each right today only because the write clears everything below the page",
-            make: { config, width, height, cold in
-                DrivenSession(ResidualSession(config: config), width: width, height: height, cold: cold)
-            })
-    }
-}

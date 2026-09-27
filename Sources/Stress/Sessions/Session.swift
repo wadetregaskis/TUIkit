@@ -76,12 +76,25 @@ protocol StressSession: AnyObject {
     /// that matches the data. Written from the person's side: what would they
     /// see that is wrong?
     func check(_ screen: [String], after index: Int) -> String?
+
+    /// Every how many steps the runner reports the run so far — its resident
+    /// size — for a session whose cost is what builds up over a long run, or
+    /// `nil` for the usual end-of-run report alone.
+    var checkpointEvery: Int? { get }
+
+    /// What the session does once its last step is played, before one more
+    /// frame is drawn, described for the report; `nil` when it does nothing.
+    /// Called on the warm instance and on the twin, so both draw the same
+    /// last frame.
+    func finish() -> String?
 }
 
 extension StressSession {
     func check(_ screen: [String], after index: Int) -> String? { nil }
     var looksBeforeEachStep: Bool { false }
     func look(at screen: [String]) {}
+    var checkpointEvery: Int? { nil }
+    func finish() -> String? { nil }
 }
 
 /// The app a session's page is the whole of.
@@ -115,6 +128,10 @@ final class DrivenSession {
     let screen: () -> [String]
     let bytesWritten: () -> Int
     let check: (_ screen: [String], _ index: Int) -> String?
+    /// The session's ``StressSession/checkpointEvery``.
+    let checkpointEvery: Int?
+    /// The session's ``StressSession/finish()``.
+    let finish: () -> String?
     /// What `TUIKIT_VERIFY_RENDER_MEMO` found: each served buffer that a fresh
     /// render of the same subtree disagreed with. Empty unless it is set.
     let staleServes: () -> [String]
@@ -155,6 +172,8 @@ final class DrivenSession {
         screen = { app.screen }
         bytesWritten = { app.bytesWritten }
         check = { session.check($0, after: $1) }
+        checkpointEvery = session.checkpointEvery
+        finish = { session.finish() }
         staleServes = { app.renderCache.renderMemoMismatches }
         staleSizes = { app.renderCache.measureMemoMismatches }
         cacheCounts = { (app.renderCache.stats, app.renderCache.rowWork) }
@@ -190,7 +209,12 @@ enum Sessions {
         JobsSession.descriptor,
         ResidualSession<EquatableRows>.descriptor,
         ResidualSession<OpaqueRows>.descriptor,
-    ]
+    ] + InboxVariant.allCases.map { InboxVariantSession.descriptor($0) }
+        + LogVariant.allCases.map { LogVariantSession.descriptor($0) }
+        + [
+            AccumulateSession.descriptor,
+            ImageRowsSession.descriptor,
+        ]
 
     @MainActor
     static func byID(_ id: String) -> SessionDescriptor? {
