@@ -363,8 +363,20 @@ extension _VStackCore {
     /// than the rows above it can fill. If enough of them were removed, it rides
     /// up so the topmost row meets the viewport top rather than leaving a blank
     /// strip above it. Bounded by the held line (≤ one viewport).
-    private func clampDesignatedHold(frame: AnchoredWindowFrame, state: StackWindowState) {
-        guard state.anchorOffsetWithin < 0 else { return }
+    ///
+    /// The rows above it have then run out, so every one of them has been
+    /// measured: the row's place in the stack is exact, and the first row is
+    /// on the viewport's top line, so the offset is 0 — returned for the scroll
+    /// view to adopt, as the other two paths report the offset that holds a
+    /// row and clamp one forced up to the top (`offsetHoldingDesignatedRow`).
+    /// Riding up at the offset it had, the row kept the rows above it on screen
+    /// but not the offset: scrolled down when rows above it were deleted, the
+    /// first row was drawn where the offset was — under "N more lines above",
+    /// with nothing above it.
+    private func clampDesignatedHold(
+        frame: AnchoredWindowFrame, state: StackWindowState, window: inout ScrollContentWindow
+    ) -> Int? {
+        guard state.anchorOffsetWithin < 0 else { return nil }
         let heldLine = -state.anchorOffsetWithin
         var available = 0
         var ordinal = state.anchorOrdinal - 1
@@ -372,7 +384,11 @@ extension _VStackCore {
             available += frame.pitch(of: ordinal)
             ordinal -= 1
         }
-        if available < heldLine { state.anchorOffsetWithin = -available }
+        guard available < heldLine else { return nil }
+        state.anchorOffsetWithin = -available
+        guard window.offset != 0 else { return nil }
+        window.offset = 0
+        return 0
     }
 
     /// Resolves a pending `scrollTo` against the anchored geometry: pins the
@@ -463,6 +479,7 @@ extension _VStackCore {
         let resolvedSeek = resolveAnchoredSeek(
             frame: frame, state: state, window: &window, children: children)
 
+        var heldOffset: Int?
         if designatedKey == nil {
             frame.advanceAnchor(to: window.offset, viewportHeight: window.viewportHeight)
             state.anchorKey = children.key(at: state.anchorOrdinal)
@@ -474,9 +491,10 @@ extension _VStackCore {
             // drag the anchor off the designated row every frame, which is
             // exactly what made `.row` behave as "hold the top visible row".
             // A below-top hold rides up when the content above it shrinks past
-            // its held line; `lastDerivedOffset` is still synced so no phantom
-            // delta accumulates if the designation is later cleared.
-            clampDesignatedHold(frame: frame, state: state)
+            // its held line, the view scrolling to the top with it;
+            // `lastDerivedOffset` is still synced so no phantom delta
+            // accumulates if the designation is later cleared.
+            heldOffset = clampDesignatedHold(frame: frame, state: state, window: &window)
             state.lastDerivedOffset = window.offset
         }
         var (placed, lastPlaced, bottomY) = frame.fill(window: window)
@@ -547,9 +565,10 @@ extension _VStackCore {
             placed: placed, grafts: grafts, lastPlaced: lastPlaced, bottomY: bottomY,
             frame: frame, window: window, width: width, context: childContext)
         // Answer the seek only on success: a nil (spacer bail) falls to the
-        // exact path, which re-resolves against its own geometry.
-        if buffer != nil, let resolvedSeek {
-            window.reply?.seekResolvedOffset = resolvedSeek
+        // exact path, which re-resolves against its own geometry. A hold that
+        // moved the offset after the seek has the last word.
+        if buffer != nil, let offset = heldOffset ?? resolvedSeek {
+            window.reply?.seekResolvedOffset = offset
         }
         if buffer != nil { state.drawnOrdinals = drawn }
         return buffer

@@ -409,7 +409,10 @@ rows away; farther is off-screen and revealed at the top edge), and `fill` walks
 upward from the anchor to draw the now-visible rows above it (collapsing to the
 old single-margin-row behaviour when the anchor is at/above the top). A
 sticky-top clamp (`clampDesignatedHold`) rides the row up if the rows above it
-are deleted past its held line, so it never leaves a blank strip.
+are deleted past its held line, so it never leaves a blank strip — and, every
+row above it measured then, scrolls the view to the top with it, as the other
+two paths clamp such a row: riding up at the offset it had, the first row was
+drawn at that offset, under "N more lines above" with nothing above it.
 
 A designation naming a row the data does not hold — a position restored before
 its data loads — holds nothing until the row arrives, on every path, as a

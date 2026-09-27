@@ -46,7 +46,14 @@ struct DesignatedRowAnchorTests {
             }
         }
         .frame(height: Self.viewport)
+        return renderVisible(list, anchored: anchored, tuiContext: tuiContext, focusManager: focusManager)
+    }
 
+    /// One rendered frame of `list`, with `anchored` designated, as the
+    /// VISIBLE lines.
+    private func renderVisible<V: View>(
+        _ list: V, anchored: Int?, tuiContext: TUIContext, focusManager: FocusManager
+    ) -> [String] {
         var environment = EnvironmentValues()
         environment.focusManager = focusManager
         environment.applyRuntimeServices(from: tuiContext)
@@ -210,6 +217,53 @@ struct DesignatedRowAnchorTests {
         #expect(
             screenLine(of: 5, in: restored) == forcedLine,
             "row 5 sprang back toward \(startLine) instead of holding \(forcedLine): \(restored)")
+    }
+
+    /// Rows above a held row deleted until too few are left to fill its line:
+    /// it rides up to where the first row meets the viewport's top, as on the
+    /// other two paths — and, as they do, the view scrolls to the top with it.
+    /// Every row above it is measured then, so its place is exact. Riding up
+    /// at the offset it had, the first row was drawn at that offset — under
+    /// "N more lines above", with nothing above it.
+    @Test("Anchored walk: a held row whose rows above are deleted rides up to the top, and the view scrolls there")
+    func anchoredWalkRideUpScrollsToTheTop() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        var position = ScrollPosition()
+        var items = Array(0..<400)
+        func frame(_ row: Int?) -> [String] {
+            let list = ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(items, id: \.self) { i in
+                        Text("row \(i)").frame(height: i % 3 + 1)
+                    }
+                }
+            }
+            .scrollPosition(Binding(get: { position }, set: { position = $0 }))
+            .scrollIndicatorStyle(.text)
+            .frame(height: Self.viewport)
+            return renderVisible(list, anchored: row, tuiContext: tuiContext, focusManager: focusManager)
+        }
+
+        _ = frame(nil)
+        position.scrollTo(y: 30)
+        let scrolled = frame(nil)
+        // The row that starts lowest on screen, held where it sits.
+        guard
+            let heldLine = scrolled.indices.dropFirst(2).last(where: { scrolled[$0].hasPrefix("row ") }),
+            let held = Int(scrolled[heldLine].dropFirst(4))
+        else {
+            Issue.record("no row starts below line 1: \(scrolled)")
+            return
+        }
+        for _ in 0..<3 { _ = frame(held) }
+        // One row of one line is left above it.
+        let kept = stride(from: held - 1, through: 0, by: -1).first { $0.isMultiple(of: 3) } ?? 0
+        items.removeAll { $0 < held && $0 != kept }
+        let after = frame(held)
+        #expect(scrolled.first?.contains("more") == true, "precondition: \(scrolled)")
+        #expect(after.first == "row \(kept)", "the first row on the top line, nothing above it: \(after)")
+        #expect(screenLine(of: held, in: after) == 1, "\(after)")
     }
 
     // MARK: - The contrast: no designation means no holding
