@@ -6,7 +6,9 @@
 //  screen, in a sheet, and with its selection bound through `@Bindable`. The
 //  same script plays against the same data as `inbox`, so each variant's
 //  counts and costs read against `inbox`'s: what C keeps of inbox's saving
-//  in each place is the difference.
+//  in each place is the difference. The pushed screen does not type into the
+//  search field: its search steps are quiet, as many as `inbox`'s and making
+//  the same draws, so its other steps are `inbox`'s step for step.
 //
 //  Created by Wade Tregaskis
 //  License: MIT

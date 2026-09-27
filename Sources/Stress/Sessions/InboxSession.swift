@@ -137,7 +137,8 @@ final class InboxSession: StressSession {
     var countsAnywhere = false
     /// Whether the script types into the search field. A variant whose focus
     /// cycle is not the page's own (a pushed screen adds its crumb bar) leaves
-    /// it out, and those steps are quiet.
+    /// it out: its search steps are quiet, but as many and making the same
+    /// draws, so every other step is the one `inbox` plays at that index.
     var searches = true
     private var random: SessionRandom
     /// The keys still to come of a search being typed and then cleared.
@@ -163,7 +164,8 @@ final class InboxSession: StressSession {
             return SessionStep(action: "focus", keys: [KeyEvent(key: .tab)])
         }
         if !pending.isEmpty {
-            return SessionStep(action: "search", keys: [pending.removeFirst()])
+            let key = pending.removeFirst()
+            return searches ? SessionStep(action: "search", keys: [key]) : SessionStep(action: "quiet")
         }
         switch random.pick([
             ("down", 22), ("up", 8), ("page", 5), ("toggle", 10), ("arrive", 12), ("leave", 6),
@@ -212,18 +214,18 @@ final class InboxSession: StressSession {
     }
 
     /// Into the search field, a few letters that narrow the list, then
-    /// cleared and back to the list: one key a step, as typed. A quiet step
-    /// when the session does not search: typing depends on where the Tab
-    /// cycle lands, which a pushed screen's crumb bar changes, and
-    /// `inbox-pushed` leaves it out.
+    /// cleared and back to the list: one key a step, as typed. When the
+    /// session does not search, the same letters are drawn and as many steps
+    /// are quiet, so the script goes on as `inbox`'s does: typing depends on
+    /// where the Tab cycle lands, which a pushed screen's crumb bar changes,
+    /// and `inbox-pushed` leaves it out.
     private func search() -> SessionStep {
-        guard searches else { return SessionStep(action: "quiet") }
         let letters = (0..<random.within(1...3)).map { _ in
             KeyEvent(key: .character(Character(UnicodeScalar(UInt8(97 + random.below(26))))))
         }
         pending = letters + Array(repeating: KeyEvent(key: .backspace), count: letters.count)
             + [KeyEvent(key: .tab)]
-        return SessionStep(action: "search", keys: [KeyEvent(key: .tab)])
+        return searches ? SessionStep(action: "search", keys: [KeyEvent(key: .tab)]) : SessionStep(action: "quiet")
     }
 
     /// The counts over the list are the model's: what the search leaves, what
