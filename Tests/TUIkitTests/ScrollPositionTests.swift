@@ -274,6 +274,43 @@ struct ScrollPositionTests {
         #expect(position.viewID(type: Int.self) == 15)
     }
 
+    @Test(
+        "A line between two rows is read back as the row below it, on every path",
+        arguments: ["uniform", "exact walk", "anchored"])
+    func gapLineReportsTheRowBelow(path: String) {
+        // Spaced rows leave a line between each two. Scrolled one line, the
+        // top line is the gap below row 0: the exact walk named row 1, the
+        // uniform window row 0 — the row it had already reported, so nothing
+        // was written and the binding, moved to a line, named none — and the
+        // anchored window no row at all.
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        var position = ScrollPosition()
+        let binding = Binding(get: { position }, set: { position = $0 })
+        let count = path == "exact walk" ? 30 : 300
+        let view = ScrollView {
+            LazyVStack(spacing: 1) {
+                ForEach(0..<count, id: \.self) { index in
+                    Text(
+                        Array(repeating: "row \(index)", count: path == "uniform" ? 1 : 1 + index % 3)
+                            .joined(separator: "\n"))
+                }
+            }
+        }
+        .scrollPosition(binding)
+
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        position.scrollTo(y: 1)
+        renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        let landed = renderFrame(view, tuiContext: tuiContext, focusManager: focusManager)
+        #expect(landed.first?.hasPrefix("row") == false, "precondition: the top line is the gap: \(landed)")
+        #expect(
+            landed.dropFirst().first?.split(separator: " ").prefix(2) == ["row", "1"],
+            "precondition: row 1 below it: \(landed)")
+        #expect(position.viewID(type: Int.self) == 1, "\(landed)")
+    }
+
     // MARK: - The id: binding
 
     @Test("scrollPosition(id:) writes the id back")

@@ -695,6 +695,12 @@ extension _VStackCore {
     ///
     /// Constant pitch makes this a division rather than a walk: no row is
     /// built, and no key is compared.
+    ///
+    /// The row is the first whose bottom lies past the line, as on the other
+    /// two paths: a line in the gap between two rows belongs to the row below
+    /// it. The pitch carries the gap below each row, so the line is moved down
+    /// one gap before dividing; divided as it was, a gap line was the row
+    /// above it, where the exact walk names the row below.
     private func sampledID(
         _ children: ChildViewCollection, window: ScrollContentWindow, pitch: Int,
         totalHeight: Int
@@ -702,7 +708,7 @@ extension _VStackCore {
         guard let unit = window.reportsIDAt, pitch > 0, !children.isEmpty else { return nil }
         let sampled = window.sampleY(
             at: unit, contentBelow: window.offset + window.viewportHeight < totalHeight)
-        let ordinal = min(max(0, sampled / pitch), children.count - 1)
+        let ordinal = min(max(0, (sampled + spacing) / pitch), children.count - 1)
         return children.anyID(at: ordinal)
     }
 

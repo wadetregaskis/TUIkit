@@ -73,6 +73,10 @@ struct ScrollContentWindow: Sendable, Hashable {
     /// Where in the viewport to sample the row whose id is reported back
     /// through ``ScrollContentReply/anchorID``, or `nil` to sample nothing.
     ///
+    /// The row reported is the first whose bottom lies past the sampled line
+    /// (``sampleY(at:contentBelow:)``), on every path a stack takes: a line in
+    /// the gap between two rows belongs to the row below it.
+    ///
     /// Set only when something is actually listening (a `.scrollPosition(id:)`
     /// binding): the sample costs an `anyID(at:)` per frame, and a scroll view
     /// nobody is asking should not pay it.

@@ -567,7 +567,8 @@ extension _VStackCore {
         var cursor = sliceOrigin
         var memo: [String: Int] = [:]
         // Content-space y of the line whose row is reported back, and the row
-        // found there (see ``ScrollContentWindow/reportsIDAt``).
+        // found there (see ``ScrollContentWindow/reportsIDAt``): the first
+        // whose bottom lies past the line, as on the other two paths.
         let sampleY = window.sampleY(
             at: window.reportsIDAt ?? .top,
             contentBelow: lastPlaced < frame.children.count - 1
@@ -604,10 +605,11 @@ extension _VStackCore {
                 slot = slot.clamped(toWidth: max(width, slot.width), height: rowHeight)
             }
             result.appendVertically(slot, spacing: 0)
-            // The sample line falls in exactly one row's span. Rows are
-            // variable-height here, so unlike the uniform path this cannot be
-            // a division — but the spans are being walked anyway.
-            if window.reportsIDAt != nil, sampleY >= slotY, sampleY < slotY + rowHeight {
+            // Rows are variable-height here, so unlike the uniform path this
+            // cannot be a division — but the spans are being walked anyway. A
+            // line in the gap between two rows belongs to the row below it;
+            // taken only inside a row, that line named no row at all.
+            if window.reportsIDAt != nil, sampledOrdinal == nil, sampleY < slotY + rowHeight {
                 sampledOrdinal = ordinal
             }
             cursor = slotY + rowHeight
