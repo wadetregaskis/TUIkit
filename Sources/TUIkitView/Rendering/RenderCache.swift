@@ -817,7 +817,7 @@ extension RenderCache {
     /// Three callers: `measureValueMemoized`, which both ``EquatableView`` and
     /// `_MemoizedRow` reach — they were the same code written twice — and two
     /// containers that keep a width of their own here, a hugging `List`'s widest
-    /// row (through ``lookupHeldSize(key:view:)``, for its lapse) and a
+    /// row (through `lookupHeldSize(key:view:)`, for its lapse) and a
     /// `Table`'s `.fit` column. Each checks what it is served under
     /// ``verifiesMeasureMemo`` (`verifyServedSize`), since nothing here can.
     ///
