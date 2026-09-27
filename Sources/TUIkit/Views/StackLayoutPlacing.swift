@@ -157,9 +157,10 @@ extension _VStackCore {
     /// several (a lazy stack below a header, say) is NOT at the scroll
     /// origin — consuming the window there blanked the wrong rows.
     func consumableScrollWindow(context: RenderContext) -> ScrollContentWindow? {
-        guard let window = context.environment.scrollContentWindow else { return nil }
-        guard let owner = window.contentIdentity else { return window }
-        return context.identity.isDirectDescent(from: owner) ? window : nil
+        guard let window = context.environment.scrollContentWindow,
+            window.isAtOrigin(context.identity)
+        else { return nil }
+        return window
     }
 
     /// Whether this stack is inside a scroll view's content WITHOUT being the

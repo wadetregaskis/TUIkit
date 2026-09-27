@@ -48,6 +48,14 @@ struct ScrollContentWindow: Sendable, Hashable {
     /// injection) means "trust the publisher" and consume unconditionally.
     var contentIdentity: ViewIdentity?
 
+    /// Whether a view at `identity` is reached from the scroll view's content
+    /// by single-child steps (``contentIdentity``), and so is at the content's
+    /// origin: a stack there consumes this window.
+    func isAtOrigin(_ identity: ViewIdentity) -> Bool {
+        guard let contentIdentity else { return true }
+        return identity.isDirectDescent(from: contentIdentity)
+    }
+
     /// The render-pass reply slot (Stage 6): the stack reports the compact
     /// slice it actually rendered, so the ScrollView can clip a band
     /// instead of a full-height canvas. `nil` (tests, measure passes) keeps
