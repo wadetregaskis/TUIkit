@@ -1,13 +1,17 @@
 //  🖥️ TUIkit — Terminal UI Kit for Swift
 //  NestedLazyStackOriginTests.swift
 //
-//  A lazy stack reached from a scroll view's content by SINGLE-CHILD steps —
-//  alone in an outer lazy stack, or the body of a custom view there — can
-//  still be below the content's origin: the outer stack consumed the scroll
-//  window itself. Reading the steps alone, such a stack took itself for the
-//  one the window bands: it estimated its height and was drawn whole into the
-//  estimate. These drive the whole app and hold each shape to the same rows in
-//  an eager `VStack`, which has no window to misread.
+//  A lazy stack reached from a scroll view's content by SINGLE-CHILD steps can
+//  still be below the content's origin — alone in an outer lazy stack, or the
+//  body of a custom view there, where the outer stack consumed the scroll
+//  window itself — or at it with lines drawn around it: the content of a
+//  section with a header or a footer. Reading the steps alone, the first took
+//  itself for the stack the window bands, estimated its height and was drawn
+//  whole into the estimate; the second banded itself as if it were all the
+//  content. These drive the whole app and hold each shape to the same rows in
+//  an eager `VStack`, which has no window to misread. What rides the window in
+//  a section — seeks, read-back, a held row, the band — is
+//  `SectionScrollWindowTests`.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -24,6 +28,10 @@ enum LazyStackOriginShape: CaseIterable, CustomTestStringConvertible {
     case aloneInAnOuterLazyStack
     /// `LazyVStack { Rows() }`, `Rows` a view whose body is the lazy stack.
     case customBodyInAnOuterLazyStack
+    /// `Section("header") { LazyVStack { rows } }`.
+    case sectionWithAHeader
+    /// `Section { LazyVStack { rows } } footer: { … }`.
+    case sectionWithAFooter
 
     var testDescription: String { "\(self)" }
 }
@@ -95,6 +103,14 @@ private struct OriginPage: View {
                 } else {
                     VStack(alignment: .leading, spacing: 0) { OriginRowStack(lazy: false) }
                 }
+            case .sectionWithAHeader:
+                Section("header") { OriginRowStack(lazy: lazy) }
+            case .sectionWithAFooter:
+                Section {
+                    OriginRowStack(lazy: lazy)
+                } footer: {
+                    Text("footer")
+                }
             }
         }
     }
@@ -146,7 +162,9 @@ struct NestedLazyStackOriginTests {
         // measures by walking where it estimated.
         //
         // Before: alone in an outer lazy stack, or a view's body there, End
-        // stopped at row 157.
+        // stopped at row 157; under a section's header every row sat a line
+        // below where the window put it and the last line was never shown;
+        // above a section's footer the footer was never shown.
         let wasVerifyingMeasures = RenderCache.verifiesMeasureMemo
         let wasVerifyingRenders = RenderCache.verifiesRenderMemo
         RenderCache.verifiesMeasureMemo = true

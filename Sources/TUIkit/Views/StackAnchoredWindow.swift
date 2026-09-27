@@ -152,7 +152,11 @@ private final class AnchoredWindowFrame {
     /// Applies a scroll offset to the persisted anchor. A big jump seeks by
     /// estimate (O(1), approximate — what a scrollbar drag means); a small
     /// delta walks rows until it is consumed (one line up looks at one row).
-    func advanceAnchor(to offset: Int, viewportHeight: Int) {
+    ///
+    /// `linesBelow` is what the scroll content draws below this stack — a
+    /// section's footer (``ScrollContentWindow/linesBelow``) — which ends the
+    /// content where this stack does not.
+    func advanceAnchor(to offset: Int, viewportHeight: Int, linesBelow: Int) {
         let count = children.count
         var anchor = min(state.anchorOrdinal, count - 1)
         var within = state.anchorOffsetWithin
@@ -169,7 +173,15 @@ private final class AnchoredWindowFrame {
             // far above it, and End showed the last row for a frame and then
             // settled mid-list. So the bottom is placed exactly, from the last
             // row up — the estimate is exact at the endpoints.
-            (anchor, within) = tailAnchor(viewportHeight: viewportHeight)
+            //
+            // At this stack's end, which is the viewport's bottom only when
+            // nothing is drawn below the stack. A footer fills the viewport's
+            // lines past the end: placed at the viewport's bottom, the last row
+            // pushed the footer below it, and a jump to the content's end that
+            // is not glued (`scrollTo(y:)` past it) stayed there, the footer
+            // never shown.
+            let pastEnd = min(offset + viewportHeight - reported, linesBelow)
+            (anchor, within) = tailAnchor(endingAt: viewportHeight - pastEnd)
         } else if abs(delta) > viewportHeight * 4 {
             let estimate = state.estimatedPitch(spacing: spacing)
             anchor = min(count - 1, max(0, offset / estimate))
@@ -192,24 +204,43 @@ private final class AnchoredWindowFrame {
         // continuation line no longer exists), and without this the anchor
         // row silently drifts above the viewport on a resize frame whose
         // offset didn't move (§5e: the anchor row is pinned by construction).
-        within = min(within, max(0, pitch(of: anchor) - 1))
+        //
+        // The last row alone may sit wholly above the viewport, when what is
+        // drawn below this stack is taller than the viewport: at the content's
+        // end the viewport's top is `linesBelow - viewportHeight` lines past
+        // the stack's end. Held to the viewport, the last row's last line rode
+        // down with every line scrolled, the footer under it, whose end was
+        // never reached.
+        let pastEnd = anchor == count - 1 ? max(0, linesBelow - viewportHeight + 1) : 0
+        within = min(within, max(0, pitch(of: anchor) - 1 + pastEnd))
+        // A negative offset is a viewport whose top shows what the scroll
+        // content draws above this stack — a section's header
+        // (`ScrollContentWindow/linesAbove`) — so the first row sits that many
+        // lines down it. Every branch above floors `within` at 0, which would
+        // have drawn row 0 at the viewport's top, over the header's lines.
+        if offset < 0 {
+            anchor = 0
+            within = offset
+        }
         state.anchorOrdinal = anchor
         state.anchorOffsetWithin = within
         state.lastDerivedOffset = offset
     }
 
-    /// The anchor that puts the last row's bottom at the viewport's: walking up
-    /// from the last row by exact pitches until the viewport is covered, the
-    /// row reached and how many of its lines sit above the viewport's top.
-    /// O(the rows one viewport shows).
-    func tailAnchor(viewportHeight: Int) -> (ordinal: Int, within: Int) {
+    /// The anchor that puts the last row's bottom `line` lines below the
+    /// viewport's top — at its bottom, or above a footer — walking up from the
+    /// last row by exact pitches until those lines are covered: the row
+    /// reached and how many of its lines sit above the viewport's top. At or
+    /// above the top (`line <= 0`, a footer taller than the viewport) that is
+    /// the last row, wholly above it. O(the rows one viewport shows).
+    func tailAnchor(endingAt line: Int) -> (ordinal: Int, within: Int) {
         var ordinal = children.count - 1
         var covered = pitch(of: ordinal)
-        while covered < viewportHeight, ordinal > 0 {
+        while covered < line, ordinal > 0 {
             ordinal -= 1
             covered += pitch(of: ordinal)
         }
-        return (ordinal, max(0, covered - viewportHeight))
+        return (ordinal, max(0, covered - line))
     }
 
     /// Fills outward from the anchor: the anchor row sits exactly at
@@ -360,23 +391,39 @@ extension _VStackCore {
     }
 
     /// Sticky top for a below-top hold: a held row cannot sit lower on screen
-    /// than the rows above it can fill. If enough of them were removed, it rides
-    /// up so the topmost row meets the viewport top rather than leaving a blank
-    /// strip above it. Bounded by the held line (≤ one viewport).
+    /// than the content above it can fill. Bounded by the held line (≤ one
+    /// viewport).
     ///
-    /// The rows above it have then run out, so every one of them has been
-    /// measured: the row's place in the stack is exact, and the first row is
-    /// on the viewport's top line, so the offset is 0 — returned for the scroll
-    /// view to adopt, as the other two paths report the offset that holds a
-    /// row and clamp one forced up to the top (`offsetHoldingDesignatedRow`).
-    /// Riding up at the offset it had, the row kept the rows above it on screen
-    /// but not the offset: scrolled down when rows above it were deleted, the
-    /// first row was drawn where the offset was — under "N more lines above",
-    /// with nothing above it.
+    /// When the rows above it run out before its line, every one of them has
+    /// been measured, so the row's place in the stack is exact — `available`
+    /// lines down — and so is the offset that holds it on its line: that place
+    /// less the line, as the other two paths hold a row
+    /// (`offsetHoldingDesignatedRow`), but no higher than the content's top,
+    /// the first line of what the scroll content draws above this stack — a
+    /// section's header (`ScrollContentWindow/scrollableOffsets(stackHeight:)`).
+    /// There the row rides up until the content's first line meets the
+    /// viewport's, and is re-anchored where it lands. The offset is returned
+    /// for the scroll view to adopt. Riding up at the offset it had, the row
+    /// kept the rows above it on screen but not the offset: scrolled down when
+    /// rows above it were deleted, the first row was drawn where the offset
+    /// was — under "N more lines above", with nothing above it. And ridden up
+    /// by the header's lines on screen at the offset it was handed, a row held
+    /// under a header of two lines or more is drawn off its line — rows placed
+    /// above the stack's top, which the fill drops — when a row is inserted
+    /// above it or the header grows, and a scroll that takes a header line off
+    /// screen rides the row up rather than leaving it on its line.
+    ///
+    /// When the rows above the held row fill its line, none of the header can
+    /// be on screen, so a negative offset is raised — to where the topmost of
+    /// those rows starts at the stack's top, the highest the fill places a
+    /// row — and returned likewise. Left negative, the row sat the header's
+    /// lines above its line, where that floor stopped the rows above it: a row
+    /// designated off screen under a header showed on line 0, not under the
+    /// "more above" line on line 1, and moved down to it on the first line
+    /// scrolled.
     private func clampDesignatedHold(
         frame: AnchoredWindowFrame, state: StackWindowState, window: inout ScrollContentWindow
     ) -> Int? {
-        guard state.anchorOffsetWithin < 0 else { return nil }
         let heldLine = -state.anchorOffsetWithin
         var available = 0
         var ordinal = state.anchorOrdinal - 1
@@ -384,11 +431,16 @@ extension _VStackCore {
             available += frame.pitch(of: ordinal)
             ordinal -= 1
         }
-        guard available < heldLine else { return nil }
-        state.anchorOffsetWithin = -available
-        guard window.offset != 0 else { return nil }
-        window.offset = 0
-        return 0
+        if available < heldLine {
+            let offset = max(available - heldLine, -window.linesAbove)
+            state.anchorOffsetWithin = offset - available
+            guard offset != window.offset else { return nil }
+            window.offset = offset
+            return offset
+        }
+        guard window.offset < 0 else { return nil }
+        window.offset = available - heldLine
+        return window.offset
     }
 
     /// Resolves a pending `scrollTo` against the anchored geometry: pins the
@@ -421,9 +473,9 @@ extension _VStackCore {
         let estimate = state.estimatedPitch(spacing: spacing)
         let estimatedY = ordinal * estimate
         let rowHeight = frame.pitch(of: ordinal) - (ordinal < children.count - 1 ? spacing : 0)
-        let newOffset = seek.windowOffset(
-            targetY: estimatedY, rowHeight: rowHeight, currentOffset: window.offset,
-            viewportHeight: window.viewportHeight, totalHeight: children.count * estimate - spacing)
+        let newOffset = window.offset(
+            realising: seek, targetY: estimatedY, rowHeight: rowHeight,
+            stackHeight: children.count * estimate - spacing)
         state.anchorOrdinal = ordinal
         state.anchorKey = children.key(at: ordinal)
         state.anchorOffsetWithin = 0
@@ -481,7 +533,9 @@ extension _VStackCore {
 
         var heldOffset: Int?
         if designatedKey == nil {
-            frame.advanceAnchor(to: window.offset, viewportHeight: window.viewportHeight)
+            frame.advanceAnchor(
+                to: window.offset, viewportHeight: window.viewportHeight,
+                linesBelow: window.linesBelow)
             state.anchorKey = children.key(at: state.anchorOrdinal)
         } else {
             // A DESIGNATED row owns the anchor: the scroll position follows the
@@ -491,9 +545,11 @@ extension _VStackCore {
             // drag the anchor off the designated row every frame, which is
             // exactly what made `.row` behave as "hold the top visible row".
             // A below-top hold rides up when the content above it shrinks past
-            // its held line, the view scrolling to the top with it;
-            // `lastDerivedOffset` is still synced so no phantom delta
-            // accumulates if the designation is later cleared.
+            // its held line: once the rows above it run out, its place is exact
+            // and the offset is the one that holds it, the row riding up only
+            // past the content's top; while they fill its line, the header is
+            // taken off screen. `lastDerivedOffset` is still synced so no
+            // phantom delta accumulates if the designation is later cleared.
             heldOffset = clampDesignatedHold(frame: frame, state: state, window: &window)
             state.lastDerivedOffset = window.offset
         }
@@ -609,13 +665,15 @@ extension _VStackCore {
         let sliceOrigin = window.reply != nil ? (sorted.first?.y ?? 0) : 0
         var cursor = sliceOrigin
         var memo: [String: Int] = [:]
-        // Content-space y of the line whose row is reported back, and the row
-        // found there (see ``ScrollContentWindow/reportsIDAt``): the first
-        // whose bottom lies past the line, as on the other two paths.
+        // The line whose row is reported back, in this stack's coordinates,
+        // and the row found there (see ``ScrollContentWindow/reportsIDAt``):
+        // the first whose bottom lies past the line, as on the other two
+        // paths. A line of a section's header above this stack (a negative
+        // offset) reports the first row, as the exact paths do.
         let sampleY = window.sampleY(
             at: window.reportsIDAt ?? .top,
             contentBelow: lastPlaced < frame.children.count - 1
-                || bottomY > window.offset + window.viewportHeight)
+                || window.hasContentBelow(stackBottom: bottomY))
         var sampledOrdinal: Int?
         for (ordinal, y) in sorted {
             let rowHeight =
@@ -659,6 +717,14 @@ extension _VStackCore {
             if let key = frame.children.key(at: ordinal) { memo[key] = ordinal }
         }
         guard !frame.sawSpacer else { return nil }
+        // A line past every row drawn lies below the last row — the fill
+        // covers the viewport while rows remain — over what the scroll content
+        // draws below this stack: a section's footer. It reports the last row,
+        // as the other two paths clamp their sample to it; it named none, and
+        // the binding kept a stale id or none.
+        if window.reportsIDAt != nil, sampledOrdinal == nil {
+            sampledOrdinal = sorted.last?.ordinal
+        }
         for (ordinal, y) in grafts {
             // The graft's y is an ESTIMATE (ordinal distance × running pitch
             // average), and on this path's whole domain — variable-height
@@ -707,6 +773,8 @@ extension _VStackCore {
         if let reply = window.reply {
             reply.sliceOriginY = sliceOrigin
             reply.sliceTotalHeight = total
+            reply.sliceHoldsFirstRow = (sorted.first?.ordinal ?? 0) == 0
+            reply.sliceHoldsLastRow = remaining <= 0
             // Anchored absolute space is estimate-derived: the unmeasured
             // remainder is priced at the running pitch average, and the band
             // origin itself drifts with past estimates. Even at the tail
@@ -742,7 +810,11 @@ extension _VStackCore {
         }
         let rowHeight = frame.pitch(of: target) - (target < count - 1 ? spacing : 0)
 
-        let topShown = (seek.topInset > 0 && window.offset > 0) ? 1 : 0
+        // The indicators are the scroll content's: a section's header above
+        // this stack is content above, its footer content below
+        // (`ScrollContentWindow/linesAbove`, `linesBelow`).
+        let above = window.linesAbove
+        let topShown = (seek.topInset > 0 && window.offset + above > 0) ? 1 : 0
         var lastVisible = anchor
         var walked = -state.anchorOffsetWithin
         while lastVisible < count - 1,
@@ -754,19 +826,26 @@ extension _VStackCore {
         let lastHeight =
             frame.pitch(of: lastVisible) - (lastVisible < count - 1 ? spacing : 0)
         let contentBelow =
-            lastVisible < count - 1 || walked + lastHeight > window.viewportHeight
+            lastVisible < count - 1
+            || walked + lastHeight + window.linesBelow > window.viewportHeight
         let bottomShown = (seek.bottomInset > 0 && contentBelow) ? 1 : 0
 
         if y >= topShown, y + rowHeight <= window.viewportHeight - bottomShown {
             return window.offset  // fully visible: strict no-op
         }
         if y < topShown {
-            let destination = window.offset + y
-            let topPad = (seek.topInset > 0 && destination > 0) ? 1 : 0
-            return max(0, destination - topPad)
+            // The first row's top is the stack's, 0, whatever the walk says:
+            // walked from an anchor placed by an estimate, rows near the top
+            // can sit a line or two off it. Under a section's header that line
+            // was the header's — the seek scrolled to the first row and left
+            // the header hidden, where the same seek in a column shows it.
+            let destination = target == 0 ? 0 : window.offset + y
+            let topPad = (seek.topInset > 0 && destination + above > 0) ? 1 : 0
+            return max(-above, destination - topPad)
         }
-        let bottomPad = (seek.bottomInset > 0 && target < count - 1) ? 1 : 0
-        return max(0, window.offset + y + rowHeight - window.viewportHeight + bottomPad)
+        let bottomPad =
+            (seek.bottomInset > 0 && (target < count - 1 || window.linesBelow > 0)) ? 1 : 0
+        return max(-above, window.offset + y + rowHeight - window.viewportHeight + bottomPad)
     }
 
     /// Memo hit, else one key scan (never builds a row view). Shared by the

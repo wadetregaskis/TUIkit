@@ -26,6 +26,7 @@ struct ScrollContentWindow: Sendable, Hashable {
         lhs.offset == rhs.offset && lhs.viewportHeight == rhs.viewportHeight
             && lhs.contentIdentity == rhs.contentIdentity && lhs.edgeInset == rhs.edgeInset
             && lhs.reportsIDAt == rhs.reportsIDAt && lhs.seek == rhs.seek
+            && lhs.linesAbove == rhs.linesAbove && lhs.linesBelow == rhs.linesBelow
     }
 
     func hash(into hasher: inout Hasher) {
@@ -35,8 +36,14 @@ struct ScrollContentWindow: Sendable, Hashable {
         hasher.combine(edgeInset)
         hasher.combine(reportsIDAt)
         hasher.combine(seek)
+        hasher.combine(linesAbove)
+        hasher.combine(linesBelow)
     }
 
+    /// The scroll offset in the coordinates of the stack that consumes this
+    /// window: the scroll view's offset less ``linesAbove``. So it is negative
+    /// while any line drawn above the stack is on screen, and every stack path
+    /// takes a negative offset as "the band starts at row 0".
     var offset: Int
     var viewportHeight: Int
 
@@ -50,7 +57,8 @@ struct ScrollContentWindow: Sendable, Hashable {
 
     /// Whether a view at `identity` is reached from the scroll view's content
     /// by single-child steps (``contentIdentity``), and so is at the content's
-    /// origin: a stack there consumes this window.
+    /// origin: a stack there consumes this window, and a view drawing lines
+    /// around its content there relays it (`ScrollWindowRelay`).
     func isAtOrigin(_ identity: ViewIdentity) -> Bool {
         guard let contentIdentity else { return true }
         return identity.isDirectDescent(from: contentIdentity)
@@ -100,8 +108,13 @@ struct ScrollContentWindow: Sendable, Hashable {
     /// remains below. At the very bottom the last viewport line is readable
     /// content — charging it anyway sampled one row too high, so a
     /// bottom-anchored `.scrollPosition` never reported the final row.
+    ///
+    /// Asked in the scroll view's content, not the stack's: the top indicator
+    /// shows whenever the CONTENT is scrolled, a section's header included
+    /// (``linesAbove``), and `contentBelow` counts a footer below the stack
+    /// (``hasContentBelow(stackBottom:)``). The line it returns is the stack's.
     func sampleY(at unit: UnitPoint, contentBelow: Bool) -> Int {
-        let topPad = (edgeInset > 0 && offset > 0) ? 1 : 0
+        let topPad = (edgeInset > 0 && offset + linesAbove > 0) ? 1 : 0
         let bottomPad = (edgeInset > 0 && contentBelow) ? 1 : 0
         let usable = max(1, viewportHeight - topPad - bottomPad)
         return offset + topPad + Int((Double(usable - 1) * unit.y).rounded(.down))
@@ -113,6 +126,75 @@ struct ScrollContentWindow: Sendable, Hashable {
     /// — and reports the offset via ``ScrollContentReply/seekResolvedOffset``
     /// for the ScrollView to adopt.
     var seek: ScrollToRequest?
+
+    /// The scroll content's lines above the stack that consumes this window,
+    /// and below it: a `Section`'s header and footer, which the section draws
+    /// around a lazy stack at its own identity, so the stack is still reached
+    /// from the content by single-child steps and still bands itself. `0` for a
+    /// stack that is the whole content.
+    ///
+    /// The section hands its content this window moved into the stack's
+    /// coordinates (``beneath(linesAbove:linesBelow:reply:)``) and moves the
+    /// reply back into its own. Until it did, the stack banded itself as if it
+    /// were all the content: under a header every row was drawn a line below
+    /// where the window put it and the content's last line was never shown,
+    /// and over a footer the scroll view took the stack's height for the
+    /// content's and never showed the footer.
+    ///
+    /// These are what the stack cannot see and a seek, the read-back sample and
+    /// a held row must: whether the content is scrolled at all, whether any of
+    /// it lies below the viewport, and how far it can scroll — each asked of
+    /// the content (``sampleY(at:contentBelow:)``,
+    /// ``offset(realising:targetY:rowHeight:stackHeight:)``,
+    /// ``scrollableOffsets(stackHeight:)``). Asked of the stack alone, a `.top`
+    /// seek to the first row under a header left it under the "more above"
+    /// indicator, and a seek could not scroll the header or the footer into
+    /// view. The anchored window reads ``linesBelow`` at its end as well: the
+    /// footer, not the viewport's bottom, is where a jump to the end puts the
+    /// last row, and a footer taller than the viewport may take that row off
+    /// screen.
+    var linesAbove = 0
+    var linesBelow = 0
+
+    /// Whether any of the scroll content lies below the viewport, for a stack
+    /// whose own content ends at `stackBottom` (in its coordinates): its rows,
+    /// or what is drawn below it (``linesBelow``).
+    func hasContentBelow(stackBottom: Int) -> Bool {
+        offset + viewportHeight < stackBottom + linesBelow
+    }
+
+    /// The offsets the scroll content can take, in the stack's coordinates:
+    /// from the top of what is drawn above the stack to the viewport's last
+    /// full screen of what is drawn below it.
+    func scrollableOffsets(stackHeight: Int) -> ClosedRange<Int> {
+        -linesAbove...max(-linesAbove, stackHeight + linesBelow - viewportHeight)
+    }
+
+    /// The offset that realises `seek` for a row of `rowHeight` whose top is at
+    /// `targetY`, both in the stack's coordinates — asked of the whole scroll
+    /// content (``ScrollToRequest/windowOffset(targetY:rowHeight:currentOffset:viewportHeight:totalHeight:)``,
+    /// whose indicator headroom and clamp are the content's) and answered in
+    /// the stack's.
+    func offset(
+        realising seek: ScrollToRequest, targetY: Int, rowHeight: Int, stackHeight: Int
+    ) -> Int {
+        seek.windowOffset(
+            targetY: targetY + linesAbove, rowHeight: rowHeight,
+            currentOffset: offset + linesAbove, viewportHeight: viewportHeight,
+            totalHeight: linesAbove + stackHeight + linesBelow) - linesAbove
+    }
+
+    /// This window as content drawn `above` lines further down, with `below`
+    /// lines drawn under it, sees it — a section's content, between its header
+    /// and its footer — answering into `reply`.
+    func beneath(linesAbove above: Int, linesBelow below: Int, reply: ScrollContentReply?) -> Self {
+        var window = self
+        window.offset -= above
+        window.linesAbove += above
+        window.linesBelow += below
+        window.reply = reply
+        return window
+    }
 }
 
 /// The Stage-6 reply channel from a windowed stack back to its ScrollView:
@@ -132,6 +214,14 @@ final class ScrollContentReply: @unchecked Sendable, Hashable {
     /// assert precision the geometry doesn't have. The uniform path's
     /// arithmetic totals are hypothesis-exact and leave this `false`.
     var sliceTotalIsEstimate = false
+    /// Whether the slice starts with the stack's first row, and whether it
+    /// ends with its last: what a view drawing lines of its own around the
+    /// stack reads to know whether they join the band (`ScrollWindowRelay`).
+    /// The origin cannot say it: the anchored window places its rows from an
+    /// anchor, by estimate — a row held by `.anchorPosition(.row)` among them
+    /// — so its first row need not sit at 0, nor the row at 0 be its first.
+    var sliceHoldsFirstRow = false
+    var sliceHoldsLastRow = false
     /// The id of the row under ``ScrollContentWindow/reportsIDAt``, when one
     /// was asked for and the provider has ids to give. This is the READ half
     /// of `.scrollPosition(id:)`: the seek machinery matches on stringified

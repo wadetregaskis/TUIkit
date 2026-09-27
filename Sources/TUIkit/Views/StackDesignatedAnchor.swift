@@ -32,11 +32,12 @@ extension StackWindowState {
     ///
     /// - Parameters:
     ///   - key: the designated row's stable `ForEach` key.
-    ///   - rowY: its top in absolute content space.
+    ///   - rowY: its top in the stack's coordinates.
     ///   - rowHeight: its extent, so the ADOPTION clamp can hold a row that is
     ///     partly off-screen at the edge it is nearest.
     ///   - window: the window as published (pre-correction).
-    ///   - totalHeight: the content extent, for the scrollable-range clamp.
+    ///   - totalHeight: the stack's extent, for the scrollable-range clamp
+    ///     (`ScrollContentWindow/scrollableOffsets(stackHeight:)`).
     ///
     /// The screen line is adopted ONCE, on the frame the designation changes,
     /// and held from then on. Re-deriving it every frame would defeat the
@@ -63,10 +64,12 @@ extension StackWindowState {
         }
         // The hold is best-effort at the ends: near an edge the offset runs out
         // of room before the held line is reached, and the row rides up (or
-        // down) to wherever it can sit.
-        let maxOffset = max(0, totalHeight - window.viewportHeight)
+        // down) to wherever it can sit. The ends are the scroll content's — a
+        // section's header above the stack is room to hold a row lower than
+        // the stack's own rows reach.
         let desired = rowY - anchorHeldScreenLine
-        let clamped = min(max(desired, 0), maxOffset)
+        let range = window.scrollableOffsets(stackHeight: totalHeight)
+        let clamped = min(max(desired, range.lowerBound), range.upperBound)
         // When an edge forced the row off its held line, RE-ANCHOR at the line
         // it actually landed on. The priority with a designated row is to
         // minimise its visual movement: once it has been pushed (e.g. rows

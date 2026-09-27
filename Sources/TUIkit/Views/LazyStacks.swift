@@ -27,7 +27,10 @@
 ///   `onAppear` fires on visibility, matching SwiftUI. (A `LazyVStack` nested
 ///   *below* other scroll content isn't at the content origin, so it is left
 ///   un-windowed — and so is one alone inside an outer lazy stack, which takes
-///   the window itself. Every row of such a stack is measured and drawn, as
+///   the window itself. A `Section`'s header and footer are not such content:
+///   the section hands its content the window moved below its header, so a
+///   lazy stack there windows, seeks and reports its row as it would with
+///   neither. Every row of a stack left un-windowed is measured and drawn, as
 ///   in a `VStack`, so its cost per frame tracks its row count — and in a row
 ///   of an outer lazy stack it is measured whenever the outer stack places
 ///   that row, on screen or not. `pinnedViews:` is still absent — §2.8 of

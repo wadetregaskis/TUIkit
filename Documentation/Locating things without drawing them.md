@@ -754,6 +754,30 @@ So a windowed stack marks the origin passed for its rows
 (`RenderContext.leaveScrollOrigin()`), and a stack under the mark is drawn
 whole like any other nested one (`NestedLazyStackOriginTests`).
 
+The opposite case is a small push, and it ships: a `Section` draws its content
+at its own identity between its header and its footer, so a lazy stack there
+IS reached by single-child steps, and banded itself as if it were all the
+content — every row a header's height off, the content's last line never
+shown, a footer never shown. Drawing it whole instead is correct and gives up
+everything that rides the window: seeks (into eager content too), read-back,
+a held row, and the band, so every row's `onAppear` fires on the first frame.
+The section knows what the stack does not — how many lines it draws above and
+below — so it hands the stack the window moved below its header, with those
+lines named (`ScrollContentWindow.linesAbove`, `linesBelow`), and moves the
+reply back (`ScrollWindowRelay`, `SectionScrollWindowTests`). The stack bands
+itself in its own coordinates, where a negative offset means the header is on
+screen, and asks the content, not itself, what only the content knows: whether
+it is scrolled, whether any of it lies below, and how far it scrolls. The
+anchored window, which places rows outward from an anchor, reads the lines
+around it at its ends too: a jump to the end puts the last row above the
+footer rather than at the viewport's bottom, a footer taller than the viewport
+may take the last row wholly off screen, and a held row whose rows above fill
+its line leaves the header no room, so the hold scrolls the header off. It is a
+push, not the pull above, and it works because the section knows its lines
+before its content is drawn — its header's by drawing it first, its footer's
+by measuring it. A wrapper that adds lines the same way and does not relay the
+window — `.padding(.vertical)` — still has the old defect.
+
 That walk is Ω(rows) per measure, and it is priced by who reads it:
 
 - **Where the stack is drawn** — this example, whose whole `VStack` is drawn —

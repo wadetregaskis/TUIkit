@@ -779,10 +779,9 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         guard let index = slots.firstIndex(where: { $0.child.matchesSeekKey(seek.key) })
         else { return }
         let total = slots.last.map { $0.y + $0.height } ?? 0
-        reply.seekResolvedOffset = seek.windowOffset(
-            targetY: slots[index].y, rowHeight: slots[index].height,
-            currentOffset: window.offset, viewportHeight: window.viewportHeight,
-            totalHeight: total)
+        reply.seekResolvedOffset = window.offset(
+            realising: seek, targetY: slots[index].y, rowHeight: slots[index].height,
+            stackHeight: total)
     }
 
     /// Renders only the children intersecting an enclosing ScrollView's visible
@@ -847,10 +846,9 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
             window.seek = nil
             if let index = slots.firstIndex(where: { $0.child.matchesSeekKey(seek.key) }) {
                 let total = slots.last.map { $0.y + $0.height } ?? 0
-                let newOffset = seek.windowOffset(
-                    targetY: slots[index].y, rowHeight: slots[index].height,
-                    currentOffset: window.offset, viewportHeight: window.viewportHeight,
-                    totalHeight: total)
+                let newOffset = window.offset(
+                    realising: seek, targetY: slots[index].y, rowHeight: slots[index].height,
+                    stackHeight: total)
                 window.offset = newOffset
                 window.reply?.seekResolvedOffset = newOffset
             }
@@ -873,9 +871,13 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         let top = min(window.offset, max(0, walkedTotal - window.viewportHeight))
         let bottom = top + window.viewportHeight
 
+        // The sample is taken at the offset clamped to the scroll CONTENT's
+        // extent instead, which a section's footer below the stack extends past
+        // the stack's last screenful.
         reportExactWalkSample(
-            slots: slots, window: window, top: top, walkedTotal: walkedTotal,
-            context: childContext)
+            slots: slots, window: window,
+            top: min(window.offset, window.scrollableOffsets(stackHeight: walkedTotal).upperBound),
+            walkedTotal: walkedTotal, context: childContext)
 
         // The enumerate visitor's row set (§5d/§6a): the rows meeting the
         // viewport, plus one margin row past each edge (so a directional
@@ -1001,7 +1003,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         var sampling = window
         sampling.offset = top
         let line = sampling.sampleY(
-            at: unit, contentBelow: top + window.viewportHeight < walkedTotal)
+            at: unit, contentBelow: sampling.hasContentBelow(stackBottom: walkedTotal))
         // The first row whose bottom lies past the sampled line (a line in an
         // inter-row gap belongs to the row below it), clamped to the last row.
         let ordinal = slots.firstIndex { line < $0.y + $0.height } ?? (slots.count - 1)

@@ -1099,7 +1099,10 @@ extension EnvironmentValues {
 /// Consumed once: the responding stack clears it for its children, so it only
 /// affects a `LazyVStack` sitting at the scroll content's origin. A `LazyVStack`
 /// nested below other content isn't at `offset == 0` in the ScrollView's
-/// coordinate space, so it is left un-windowed (renders normally).
+/// coordinate space, so it is left un-windowed (renders normally). A `Section`
+/// that draws a header or footer around its content hands the window on moved
+/// below its header (`ScrollWindowRelay`), since single-child steps still lead
+/// from the content to a stack there.
 private struct ScrollContentWindowKey: EnvironmentKey {
     static let defaultValue: ScrollContentWindow? = nil
 }

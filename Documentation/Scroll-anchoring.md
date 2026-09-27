@@ -412,7 +412,15 @@ sticky-top clamp (`clampDesignatedHold`) rides the row up if the rows above it
 are deleted past its held line, so it never leaves a blank strip — and, every
 row above it measured then, scrolls the view to the top with it, as the other
 two paths clamp such a row: riding up at the offset it had, the first row was
-drawn at that offset, under "N more lines above" with nothing above it.
+drawn at that offset, under "N more lines above" with nothing above it. The
+top is the content's: a section's header above the stack is room to hold the
+row lower than its rows reach, so once they run out the offset is the one that
+holds the row on its line, as on the other two paths, and the row rides up
+only past the header's first line. Ridden up by the header's lines on screen
+at the offset it had instead, a row held under a header of two lines or more
+would be drawn off its line, with the header gone, when a row is inserted above
+it or the header grows, and a scroll that takes a header line off screen would
+move the row where the other two paths undo the scroll.
 
 A designation naming a row the data does not hold — a position restored before
 its data loads — holds nothing until the row arrives, on every path, as a

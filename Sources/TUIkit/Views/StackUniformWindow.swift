@@ -433,6 +433,14 @@ extension _VStackCore {
         // as the exact walk clamps (`renderViewportWindow`), the band is the
         // last rows: drawn if the rows really are uniform, refuted by the first
         // that is not, and the exact walk draws the frame instead.
+        //
+        // The read-back sample is taken at the offset clamped to the scroll
+        // CONTENT's extent instead: a section's footer below the stack is room
+        // to scroll past the stack's last screenful, and a sample from the
+        // band's offset named a row the footer had pushed off the top.
+        var sampling = window
+        sampling.offset = min(
+            window.offset, window.scrollableOffsets(stackHeight: totalHeight).upperBound)
         window.offset = min(window.offset, max(0, totalHeight - window.viewportHeight))
 
         let candidates = candidateOrdinals(
@@ -496,8 +504,10 @@ extension _VStackCore {
         if let reply = window.reply {
             reply.sliceOriginY = sliceOrigin
             reply.sliceTotalHeight = totalHeight
+            reply.sliceHoldsFirstRow = (rows.first?.ordinal ?? 0) == 0
+            reply.sliceHoldsLastRow = (rows.last?.ordinal ?? count - 1) == count - 1
             reply.anchorID = sampledID(
-                children, window: window, pitch: pitch, totalHeight: totalHeight)
+                children, window: sampling, pitch: pitch, totalHeight: totalHeight)
         } else if cursor < totalHeight {
             result.appendVertically(FrameBuffer(emptyWithHeight: totalHeight - cursor), spacing: 0)
         }
@@ -707,7 +717,7 @@ extension _VStackCore {
     ) -> AnyHashable? {
         guard let unit = window.reportsIDAt, pitch > 0, !children.isEmpty else { return nil }
         let sampled = window.sampleY(
-            at: unit, contentBelow: window.offset + window.viewportHeight < totalHeight)
+            at: unit, contentBelow: window.hasContentBelow(stackBottom: totalHeight))
         let ordinal = min(max(0, (sampled + spacing) / pitch), children.count - 1)
         return children.anyID(at: ordinal)
     }
@@ -728,9 +738,9 @@ extension _VStackCore {
         window.seek = nil
         guard let ordinal = resolveOrdinal(forKey: seek.key, children: children, state: state)
         else { return (window, nil) }
-        let newOffset = seek.windowOffset(
-            targetY: ordinal * pitch, rowHeight: extent, currentOffset: window.offset,
-            viewportHeight: window.viewportHeight, totalHeight: totalHeight)
+        let newOffset = window.offset(
+            realising: seek, targetY: ordinal * pitch, rowHeight: extent,
+            stackHeight: totalHeight)
         window.offset = newOffset
         return (window, newOffset)
     }

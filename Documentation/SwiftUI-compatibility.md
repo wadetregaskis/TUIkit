@@ -482,7 +482,16 @@ window**, not a deferred-creation machine:
   which takes the window itself — measured and drawn over every row, as a
   `VStack` is, so its cost per frame tracks its row count, including in a row
   of an outer lazy stack that is out of sight — and `pinnedViews:` is still
-  absent.
+  absent. A `Section`'s header and footer do not make a stack nested: the
+  section passes the window to its content moved below its header
+  (`ScrollWindowRelay`), so `ScrollView { Section("Feed") { LazyVStack { … } } }`
+  windows, answers `scrollTo` and `.scrollPosition`, holds an
+  `.anchorPosition(.row)` and fires `onAppear` on visibility, as the stack
+  alone does. Other wrappers that draw lines around their content at its own
+  identity — `.padding(.vertical)` — do not relay it yet, and a lazy stack
+  under one bands itself as if it were all the content: the scroll view takes
+  the stack's height for the content's, and End stops short of the stack's
+  last row and the padding below it.
 - **Cross-axis sizing** hugs the widest *placed* child (identical to
   `VStack`), which is stabler than SwiftUI's first-subview ideal — TUIkit
   has rendered every visible child anyway, so it knows the real width.

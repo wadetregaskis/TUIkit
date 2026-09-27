@@ -245,25 +245,61 @@ private struct _SectionCore<Parent: View, Content: View, Footer: View>: View, Re
             faded += buffer.shiftedOpacityRegions(byX: 0, y: dy)
             lines.append(contentsOf: buffer.lines)
         }
+        // A header or footer outside a scroll band is not drawn, but its
+        // controls are carried at their place beside the band, as a windowed
+        // stack grafts an off-band row: a focus move onto one still finds where
+        // to scroll.
+        func carry(_ buffer: FrameBuffer, at dy: Int) {
+            overlays += buffer.shiftedOverlays(byX: 0, y: dy)
+            regions += buffer.shiftedHitTestRegions(byX: 0, y: dy)
+        }
 
         // Header and footer render under a chrome role, so their text resolves
         // the role's default styling (header bold+dim, footer dim) plus any
         // `.chrome(...)` theme overrides through the normal cascade — see
         // ``ChromeRole`` and ``Text``.
+        var headerBuffer: FrameBuffer?
         if !(header is EmptyView) {
-            let headerBuffer = TUIkit.renderToBuffer(
+            let rendered = TUIkit.renderToBuffer(
                 header, context: sectionChromeContext(context, .sectionHeader))
             // Drop a blank header (e.g. `header: { Text("") }`) rather than show
             // an empty line above the content.
-            if !sectionBufferIsBlank(headerBuffer) { take(headerBuffer) }
+            if !sectionBufferIsBlank(rendered) { headerBuffer = rendered }
         }
 
-        take(TUIkit.renderToBuffer(content, context: context))
+        // A lazy stack in the content still bands itself against a scroll
+        // window — single-child steps lead to it — so it is handed the window
+        // as the content sees it, below the header and above the footer.
+        let relay = ScrollWindowRelay(
+            context: context, linesAbove: headerBuffer?.height ?? 0,
+            linesBelow: { footerLinesBelowScrollContent(context: context) })
+        let contentBuffer = TUIkit.renderToBuffer(
+            content, context: relay?.contentContext(context) ?? context)
 
+        var footerBuffer: FrameBuffer?
         if !(footer is EmptyView) {
-            let footerBuffer = TUIkit.renderToBuffer(
+            let rendered = TUIkit.renderToBuffer(
                 footer, context: sectionChromeContext(context, .sectionFooter))
-            if !sectionBufferIsBlank(footerBuffer) { take(footerBuffer) }
+            if !sectionBufferIsBlank(rendered) { footerBuffer = rendered }
+        }
+
+        let placement =
+            relay?.answer(contentBuffer: contentBuffer, linesBelow: footerBuffer?.height ?? 0)
+            ?? ScrollWindowRelay.Placement()
+        if let headerBuffer {
+            if placement.drawsAbove {
+                take(headerBuffer)
+            } else {
+                carry(headerBuffer, at: min(placement.contentTop, 0) - headerBuffer.height)
+            }
+        }
+        take(contentBuffer)
+        if let footerBuffer {
+            if placement.drawsBelow {
+                take(footerBuffer)
+            } else {
+                carry(footerBuffer, at: placement.contentTop + placement.contentHeight)
+            }
         }
 
         var buffer = FrameBuffer(lines: lines)
@@ -280,6 +316,28 @@ private struct _SectionCore<Parent: View, Content: View, Footer: View>: View, Re
         // section is as translucent while being measured as while being drawn.
         buffer.opacityRegions = faded
         return buffer
+    }
+
+    /// The footer's lines, for a lazy stack in the content that bands itself
+    /// against a scroll window (`ScrollWindowRelay`, which asks only when it
+    /// relays one) and needs them before the footer is drawn: drawn after the
+    /// content, the footer's controls join the focus ring after the content's.
+    ///
+    /// So they are drawn once first as a measure draws them — no control
+    /// registers there — and a footer that draws blank has none, as the
+    /// render drops it. Measured instead, a blank footer counted its lines,
+    /// and the stack answered for content longer than the content drawn: at
+    /// the end, over a blank footer of one line, the read-back sample was
+    /// charged a "more below" line that was not drawn, and named the row above
+    /// the last.
+    private func footerLinesBelowScrollContent(context: RenderContext) -> Int {
+        guard !(footer is EmptyView) else { return 0 }
+        let drawn = TUIkit.renderToBuffer(
+            footer,
+            context: fixedMeasureContext(
+                proposal: ProposedSize(width: context.availableWidth, height: nil),
+                context: sectionChromeContext(context, .sectionFooter)))
+        return sectionBufferIsBlank(drawn) ? 0 : drawn.height
     }
 }
 
