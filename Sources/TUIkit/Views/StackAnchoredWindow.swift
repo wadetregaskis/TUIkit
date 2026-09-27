@@ -413,14 +413,18 @@ extension _VStackCore {
     /// above it or the header grows, and a scroll that takes a header line off
     /// screen rides the row up rather than leaving it on its line.
     ///
-    /// When the rows above the held row fill its line, none of the header can
-    /// be on screen, so a negative offset is raised — to where the topmost of
-    /// those rows starts at the stack's top, the highest the fill places a
-    /// row — and returned likewise. Left negative, the row sat the header's
-    /// lines above its line, where that floor stopped the rows above it: a row
-    /// designated off screen under a header showed on line 0, not under the
-    /// "more above" line on line 1, and moved down to it on the first line
-    /// scrolled.
+    /// When the rows above the held row fill its line, the topmost of them
+    /// must start at the stack's top or below it — the highest the fill places
+    /// a row — so an offset that would put it higher is raised to where it
+    /// starts at the top, and returned likewise. Left alone, the fill's floor
+    /// stopped that row, the band started lower than the viewport's top, and
+    /// the scroll view showed it from its first line: the held row sat that
+    /// many lines above its line. A row designated off screen from the top,
+    /// under the "more above" line, showed on line 0 when the row above it was
+    /// taller than one line, and under the indicator itself once the view
+    /// scrolled a line; under a section's header (a negative offset, none of
+    /// the header on screen once the rows fill the line) it showed on line 0
+    /// whatever the row above.
     private func clampDesignatedHold(
         frame: AnchoredWindowFrame, state: StackWindowState, window: inout ScrollContentWindow
     ) -> Int? {
@@ -438,7 +442,7 @@ extension _VStackCore {
             window.offset = offset
             return offset
         }
-        guard window.offset < 0 else { return nil }
+        guard window.offset < available - heldLine else { return nil }
         window.offset = available - heldLine
         return window.offset
     }
@@ -547,9 +551,10 @@ extension _VStackCore {
             // A below-top hold rides up when the content above it shrinks past
             // its held line: once the rows above it run out, its place is exact
             // and the offset is the one that holds it, the row riding up only
-            // past the content's top; while they fill its line, the header is
-            // taken off screen. `lastDerivedOffset` is still synced so no
-            // phantom delta accumulates if the designation is later cleared.
+            // past the content's top; while they fill its line, the offset
+            // moves down when they would start above the stack's top.
+            // `lastDerivedOffset` is still synced so no phantom delta
+            // accumulates if the designation is later cleared.
             heldOffset = clampDesignatedHold(frame: frame, state: state, window: &window)
             state.lastDerivedOffset = window.offset
         }

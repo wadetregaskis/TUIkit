@@ -420,7 +420,13 @@ only past the header's first line. Ridden up by the header's lines on screen
 at the offset it had instead, a row held under a header of two lines or more
 would be drawn off its line, with the header gone, when a row is inserted above
 it or the header grows, and a scroll that takes a header line off screen would
-move the row where the other two paths undo the scroll.
+move the row where the other two paths undo the scroll. The clamp's other half
+moves the offset down when the rows that fill the held line would start above
+the stack's top, where `fill` places none, and reports it as the other two
+paths report a hold's offset: without it, a row revealed from near the top
+under the "more above" line, a row taller than one line above it, was drawn a
+line or more above its line — on line 0, then under the indicator once the
+view scrolled.
 
 A designation naming a row the data does not hold — a position restored before
 its data loads — holds nothing until the row arrives, on every path, as a

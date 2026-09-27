@@ -400,4 +400,40 @@ struct DesignatedRowAnchorTests {
             tuiContext: tuiContext, focusManager: focusManager)
         #expect(screenLine(of: 40, in: after) != nil, "designating revealed it: \(after)")
     }
+
+    /// Revealed at the top edge, under the "more above" line, an off-screen
+    /// row sits one line down, and the rows above it fill that line — from
+    /// where the stack's top is, at the highest. Row 299 is three lines tall:
+    /// at the top of the list the rows filling the line would start above the
+    /// stack's top, where the fill places none, so the band started at the
+    /// row itself and the scroll view showed it from line 0.
+    @Test("Anchored walk: a row designated off screen from the top lands under the \"more above\" line, and stays there")
+    func anchoredWalkRevealLandsOnItsLine() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        var position = ScrollPosition()
+        let list = ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<400, id: \.self) { i in
+                    Text("row \(i)").frame(height: i % 3 + 1)
+                }
+            }
+        }
+        .scrollPosition(Binding(get: { position }, set: { position = $0 }))
+        .scrollIndicatorStyle(.text)
+        .frame(height: Self.viewport)
+        func frame() -> [String] {
+            renderVisible(list, anchored: 300, tuiContext: tuiContext, focusManager: focusManager)
+        }
+
+        _ = renderVisible(list, anchored: nil, tuiContext: tuiContext, focusManager: focusManager)
+        var held: [String] = []
+        for _ in 0..<3 { held = frame() }
+        #expect(screenLine(of: 300, in: held) == 1, "row 300 under the \"more above\" line: \(held)")
+
+        // Scrolled back toward the top, where the row cannot stay on its line.
+        position.scrollTo(y: 1)
+        let scrolled = frame()
+        #expect(screenLine(of: 300, in: scrolled) == 1, "\(held) → \(scrolled)")
+    }
 }
