@@ -333,9 +333,9 @@ enum SessionRunner {
         Swift.print(
             String(
                 format: "  memoized rows: %d composed, %d served (%.1f/step, %.1f/step); "
-                    + "value memos: %d hits, %d misses, %d stores",
+                    + "value memos: %d hits, %d misses, %d stores; subtree clears: %d (%d entries visited)",
                 rows.rendered, rows.served, Double(rows.rendered) / steps, Double(rows.served) / steps,
-                stats.hits, stats.misses, stats.stores))
+                stats.hits, stats.misses, stats.stores, stats.subtreeClears, stats.clearVisits))
         for line in report.checkpoints { Swift.print("  " + line) }
         if let finish = report.finish { Swift.print("  finish: " + finish) }
         if !report.lastScreen.isEmpty {

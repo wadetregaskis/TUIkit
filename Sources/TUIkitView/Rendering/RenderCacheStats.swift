@@ -63,8 +63,16 @@ extension RenderCache {
         /// Number of times ``clearAll()`` was called.
         public var clears: Int = 0
 
-        /// Number of times ``clearAffected(by:keepingSizes:includingDescendants:)`` was called.
+        /// Number of subtree clears: one for every call of
+        /// ``clearAffected(by:keepingSizes:includingDescendants:)``, and one for
+        /// every writer the frame-start drain clears for, however many it clears
+        /// for in one walk.
         public var subtreeClears: Int = 0
+
+        /// Number of cached entries — buffers and sizes — that subtree clears
+        /// have asked whether they reach: each table's entries once per walk.
+        /// What a clear COSTS, where ``subtreeClears`` is how many there were.
+        public var clearVisits: Int = 0
 
         /// Creates a new Stats instance with default values.
         public init(
@@ -72,13 +80,15 @@ extension RenderCache {
             misses: Int = 0,
             stores: Int = 0,
             clears: Int = 0,
-            subtreeClears: Int = 0
+            subtreeClears: Int = 0,
+            clearVisits: Int = 0
         ) {
             self.hits = hits
             self.misses = misses
             self.stores = stores
             self.clears = clears
             self.subtreeClears = subtreeClears
+            self.clearVisits = clearVisits
         }
 
         /// The total number of lookups (hits + misses).
@@ -96,7 +106,8 @@ extension RenderCache {
                 misses: misses - earlier.misses,
                 stores: stores - earlier.stores,
                 clears: clears - earlier.clears,
-                subtreeClears: subtreeClears - earlier.subtreeClears
+                subtreeClears: subtreeClears - earlier.subtreeClears,
+                clearVisits: clearVisits - earlier.clearVisits
             )
         }
     }

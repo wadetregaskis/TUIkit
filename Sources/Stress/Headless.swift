@@ -299,11 +299,11 @@ enum Headless {
         print(
             String(
                 format: "  rows/frame: %.1f composed, %.1f served (%.0f%%); "
-                    + "cell values/frame: %.1f; clears: %d whole, %d subtree",
+                    + "cell values/frame: %.1f; clears: %d whole, %d subtree (%d entries visited)",
                 Double(work.rendered) / divisor, Double(work.served) / divisor,
                 work.rendered + work.served > 0
                     ? Double(work.served) / Double(work.rendered + work.served) * 100 : 0,
-                Double(work.cellValues) / divisor, render.clears, render.subtreeClears))
+                Double(work.cellValues) / divisor, render.clears, render.subtreeClears, render.clearVisits))
     }
 
     /// Renders one scenario `iterations` times and reports timing + a checksum
