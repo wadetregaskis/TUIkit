@@ -10,7 +10,8 @@
 //
 //  So does the terminal's cell geometry, which the render loop reads from the
 //  tty every frame and publishes at the root: a font change moves it with
-//  nothing a memo keys on moving.
+//  nothing a memo keys on moving. And so does the terminal's size, read and
+//  published the same way, for a view offered the same cells at every size.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -147,6 +148,62 @@ struct RenderGlobalsCacheTests {
         let moved = before != EnvironmentSnapshot(from: environment)
         #expect(moved, "the \(field) moved and the loop would clear nothing")
     }
+
+    /// A memoized card in a frame of its own size says how big the terminal
+    /// is. A resize moves nothing the memo keys on — the card is offered the
+    /// same twelve cells at every terminal size — so it is only a clear that
+    /// can redraw it. Through the real loop, resized as `SIGWINCH` resizes it:
+    /// the loop published the size inside `renderContent`, after the snapshot,
+    /// and the snapshot did not carry it, so the card went on saying "60x16".
+    @Test("A memoized row that reads the terminal's size is not served at another")
+    func terminalSize() {
+        func frame(_ app: HeadlessApp<TerminalSizeApp>, _ index: Int) {
+            app.frame(atNanos: 1_000_000_000 + Int64(index) * 16_666_667)
+        }
+        let app = HeadlessApp(TerminalSizeApp(), width: 60, height: 16)
+        for index in 0..<3 { frame(app, index) }
+        app.resize(width: 70, height: 20)
+        frame(app, 3)
+        let control = HeadlessApp(TerminalSizeApp(), width: 70, height: 20)
+        frame(control, 0)
+        #expect(
+            control.screen.contains { $0.contains("70x20") },
+            "precondition: the card says the size it was drawn at, or this proves nothing")
+        #expect(app.screen == control.screen, "served the card drawn for the size before")
+    }
+
+    /// The loop's rule itself, for both halves of the size.
+    @Test("The snapshot carries the terminal's size", arguments: ["width", "height"])
+    func terminalSizeIsInTheSnapshot(_ field: String) {
+        var environment = EnvironmentValues()
+        let before = EnvironmentSnapshot(from: environment)
+        switch field {
+        case "width": environment.terminalWidth = 132
+        default: environment.terminalHeight = 50
+        }
+        let moved = before != EnvironmentSnapshot(from: environment)
+        #expect(moved, "the \(field) moved and the loop would clear nothing")
+    }
+}
+
+/// A memoized card, in a frame of its own size, that says how big the
+/// terminal is.
+private struct TerminalSizeApp: App {
+    init() {}
+
+    var body: some Scene {
+        WindowGroup {
+            Card(title: "size", content: TerminalSizeLabel()).equatable().frame(width: 12, height: 1)
+        }
+    }
+}
+
+/// The terminal's size, as the environment publishes it.
+private struct TerminalSizeLabel: View {
+    @Environment(\.terminalWidth) private var width
+    @Environment(\.terminalHeight) private var height
+
+    var body: some View { Text(verbatim: "\(width)x\(height)") }
 }
 
 /// A memoized disc: a radial ramp behind three rows of eight cells.

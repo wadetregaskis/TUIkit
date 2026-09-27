@@ -66,6 +66,15 @@ internal struct EnvironmentSnapshot: Equatable {
     /// terminal is resampled to it.
     let imageCellPixels: TerminalCellPixels
 
+    /// The terminal's size in cells, which the render loop reads every frame
+    /// and publishes at the root, as `\.terminalWidth` and `\.terminalHeight`.
+    /// A view in a frame of its own size — a card, a status line — is offered
+    /// the same cells at every terminal size, so nothing a memo keys on moves
+    /// on a resize; without these a memoized row that read the size went on
+    /// drawing for the one before, beside fresh rows drawn for the new one.
+    let terminalWidth: Int
+    let terminalHeight: Int
+
     /// Creates a snapshot from fully-built environment values.
     init(from environment: EnvironmentValues) {
         self.palette = ComparablePalette(environment.palette)
@@ -75,5 +84,7 @@ internal struct EnvironmentSnapshot: Equatable {
         self.scenePhase = environment.scenePhase
         self.imageCellAspect = environment.imageCellAspect
         self.imageCellPixels = environment.imageCellPixels
+        self.terminalWidth = environment.terminalWidth
+        self.terminalHeight = environment.terminalHeight
     }
 }

@@ -502,7 +502,7 @@ extension RenderLoop {
         // and the bar can be sized for it in this pass rather than the next.
         resolveStatusBarTooltip(terminalWidth: terminalWidth, nowNanos: frameNowNanos)
         let statusBarHeight = statusBar.height
-        publishCellGeometry(into: &environment)
+        publishTerminalGeometry(into: &environment, width: terminalWidth, height: terminalHeight)
         invalidateCacheIfEnvironmentChanged(environment: environment)
 
         // Render the scene into the content area — resolving the app-header
@@ -685,14 +685,8 @@ extension RenderLoop {
         terminalHeight: Int,
         statusBarHeight: Int
     ) -> FrameBuffer {
-        // Publish the true screen height into the environment so overlays (e.g. a
-        // Picker drop-down) can size to the visible area. Unlike a context's
-        // `availableHeight` — which a ScrollView inflates to a tall measure budget —
-        // this is set once at the root and never overridden, so it survives intact
-        // however deep the consumer sits.
+        // The overlay content height is published below, once it is known.
         var environment = environment
-        environment.terminalHeight = terminalHeight
-        environment.terminalWidth = terminalWidth
         // Determine header height. On the first frame, we perform a measurement
         // pass to discover the actual header height before outputting anything.
         // This prevents visible content jumping.
@@ -1302,8 +1296,14 @@ extension RenderLoop {
         tuiContext.renderCache.logFrameStats()
     }
 
-    /// Publishes the terminal cell's geometry, as the terminal reports it this
-    /// frame, at the root of the environment.
+    /// Publishes the terminal's size and its cell's geometry, as the terminal
+    /// reports them this frame, at the root of the environment.
+    ///
+    /// The size (`width` × `height` cells) is the true screen, so an overlay —
+    /// a `Picker`'s drop-down — can size to the visible area. Unlike a
+    /// context's `availableHeight`, which a ScrollView inflates to a tall
+    /// measure budget, it is set once at the root and never overridden, so it
+    /// survives intact however deep the consumer sits.
     ///
     /// The aspect keeps an image undistorted and a centred ramp round;
     /// terminals that don't report their pixel size keep the 2.0 default (or a
@@ -1313,11 +1313,15 @@ extension RenderLoop {
     /// host must implement: see `CellGeometryReporting`.
     ///
     /// BEFORE ``invalidateCacheIfEnvironmentChanged(environment:)``, which is
-    /// the point: a font change moves the geometry with nothing a memo keys on
-    /// moving, so the snapshot has to see it. It was published inside
-    /// `renderContent`, after the snapshot had been taken, and a memoized row
-    /// went on drawing for the cell before the change.
-    fileprivate func publishCellGeometry(into environment: inout EnvironmentValues) {
+    /// the point: a font change moves the geometry, and a resize the size, with
+    /// nothing a memo keys on moving — a view in a frame of its own size is
+    /// offered the same cells at every terminal size — so the snapshot has to
+    /// see them. Each was published inside `renderContent`, after the snapshot
+    /// had been taken, and a memoized row that read one went on drawing for the
+    /// terminal before the change.
+    fileprivate func publishTerminalGeometry(into environment: inout EnvironmentValues, width: Int, height: Int) {
+        environment.terminalWidth = width
+        environment.terminalHeight = height
         let geometry = terminal as? any CellGeometryReporting
         if let cellAspect = geometry?.cellPixelAspect() {
             environment.imageCellAspect = cellAspect
@@ -1331,10 +1335,10 @@ extension RenderLoop {
     ///
     /// Compares this frame's `EnvironmentSnapshot` with the previous frame's. On
     /// mismatch, all `EquatableView`-cached subtrees are invalidated so they
-    /// re-render with the new palette, appearance, glyphs, locale, scene phase
-    /// or cell geometry.
+    /// re-render with the new palette, appearance, glyphs, locale, scene phase,
+    /// cell geometry or terminal size.
     ///
-    /// This runs once per frame (a palette comparison and six small ones) and
+    /// This runs once per frame (a palette comparison and eight small ones) and
     /// ensures developers never need to manually invalidate the cache after theme
     /// changes — including a palette whose colours were edited under the same id.
     fileprivate func invalidateCacheIfEnvironmentChanged(environment: EnvironmentValues) {
