@@ -246,6 +246,7 @@ public struct _LayoutCore<L: Layout, Content: View>: View, Renderable, Layoutabl
         // `_GridCore`. Saying otherwise here is what hid a bug for a month.
         let gradientFrame = context.gradientContentFrame(
             width: bounds.width, height: bounds.height)
+        var showingThrough: [AnimatedCellRun] = []
         for entry in placements.entries {
             let child = subviews[entry.index].child
             let childSize = child.measure(proposal: entry.proposal, context: context)
@@ -256,8 +257,16 @@ public struct _LayoutCore<L: Layout, Content: View>: View, Renderable, Layoutabl
             // In place: `composited` rebuilds every line of the canvas per
             // call, so folding n children through it is n × canvas even though
             // each child covers a couple of rows.
+            showingThrough += result.runsShowingThrough(rendered, at: (x: entry.x, y: entry.y))
             result.compositeCarryingClaimsOverNothing(
                 with: rendered, at: (x: entry.x, y: entry.y), palette: context.environment.palette)
+        }
+        // An earlier subview's runs a later one shows the field of, whose frames turn
+        // it: punched under the later one, they ask for a render at their steps.
+        if !showingThrough.isEmpty {
+            context.requestWake(
+                token: "layout-base-run-\(context.identity.path)",
+                forNextStepOf: showingThrough.map { ($0.clock, $0.frameTicks) })
         }
         return result
     }

@@ -117,7 +117,26 @@ extension OverlayModifier: Renderable {
                 of: overlay, size: overlaySize, alignment: alignment.vertical, in: baseHeight)
             ?? alignment.vertical.childOffset(childHeight: overlayHeight, in: baseHeight)
 
-        // Composite the overlay onto the base
+        // Composite the overlay onto the base, asking for a render at each step of a
+        // run of the base whose field the overlay shows and whose frames turn it: the
+        // composite punches the run there.
+        //
+        // Asked under this modifier's type as well as its identity, the key
+        // `AnimationStore` gives a modifier's animations: the base renders at this
+        // identity, so `.overlay { A }.overlay { B }` puts two overlays at one path,
+        // and a wake is kept per token. Under the path alone the outer's request
+        // replaced the inner's, and the inner's label held its field between the
+        // outer run's steps. The outer's `Base` holds the inner's type, so the two
+        // are never one type — unless each one's base is an `AnyView`, which draws
+        // its content at its own identity too. The type is spelled by its metadata
+        // pointer, which no two types share, not by a hash of it, which two could.
+        let showingThrough = baseBuffer.runsShowingThrough(
+            overlayBuffer, at: (x: horizontalOffset, y: verticalOffset))
+        if !showingThrough.isEmpty {
+            context.requestWake(
+                token: "overlay-base-run-\(context.identity.path)-\(UInt(bitPattern: ObjectIdentifier(Self.self)))",
+                forNextStepOf: showingThrough.map { ($0.clock, $0.frameTicks) })
+        }
         let composite = baseBuffer.compositedCarryingClaimsOverNothing(
             with: overlayBuffer, at: (x: horizontalOffset, y: verticalOffset),
             palette: context.environment.palette)

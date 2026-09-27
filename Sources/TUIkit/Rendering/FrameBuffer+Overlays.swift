@@ -116,6 +116,13 @@ extension FrameBuffer {
                 // reads as no field and fills, and every such menu, drop-down,
                 // popover and toast showed the colour under its first cell through
                 // it (`Opacity as composition.md` §98).
+                //
+                // A run of what is below that the layer shows the field of, and whose
+                // frames turn it, is punched here as a `ZStack` punches one, but nothing
+                // asks for a render at its steps (`FrameBuffer.runsShowingThrough`): this
+                // runs after the walk, with no render context to ask from, so an
+                // `.offset` label over a breathing fill holds the drawn frame's field
+                // between renders — a known gap (§109).
                 result = result.compositedResolvingOpacity(
                     with: content, at: (x: placed.x, y: placed.y), palette: palette,
                     overlayIsPainted: layer.isOpaque)

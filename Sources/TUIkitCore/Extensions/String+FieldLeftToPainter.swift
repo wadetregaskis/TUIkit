@@ -85,6 +85,34 @@ extension String {
         }
     }
 
+    /// For each of the first `width` columns of this line, whether a compositor laying
+    /// the line on a base fills its background slot with the base's field there: it
+    /// names no colour in that slot, a stated 49 among them
+    /// (`String.paintedOver(background:)`) — shown as the cell's field, or, reversed, as
+    /// its ink. A column past the end of the line is not the line's.
+    ///
+    /// - Parameter width: How many columns to answer for.
+    /// - Returns: One entry per column, `true` where the base's field is filled in.
+    package func columnsTakingBaseField(width: Int) -> [Bool] {
+        columns(width: width, beyondTheEnd: false) { _, state, _ in !state.namesBackground }
+    }
+
+    /// For each of the first `width` columns of this line, the field the cell shows of
+    /// its own: its background — a stated 49 as ``SGRState/Colour/statedTerminalField``
+    /// — or, reversed, its ink — the terminal's own as
+    /// ``SGRState/Colour/terminalForegroundField``; `nil` where it says nothing about
+    /// the field since the last reset, and shows what is under it. A column past the
+    /// end of the line says nothing.
+    ///
+    /// - Parameter width: How many columns to answer for.
+    /// - Returns: One field per column.
+    package func columnsFieldShown(width: Int) -> [SGRState.Colour?] {
+        columns(width: width, beyondTheEnd: nil) { stated, state, _ in
+            if state.reversesVideo { return state.foregroundColour ?? SGRState.Colour.terminalForegroundField }
+            return stated ? state.backgroundColour ?? SGRState.Colour.statedTerminalField : nil
+        }
+    }
+
     /// For each of the first `width` columns of this line, whether it is reversed on
     /// the terminal's own ink (`ESC[7;39…m`): the field it shows is the terminal's
     /// foreground, which no background code spells, so a compositor draws a cell laid

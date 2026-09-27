@@ -146,6 +146,9 @@ private struct _ZStackCore<Content: View>: View, Renderable {
             lines: Array(
                 repeating: String(repeating: " ", count: frameWidth),
                 count: frameHeight))
+        // The runs of a lower layer a later one shows the field of, whose frames turn
+        // it: punched under the later layer, they ask for a render at their steps.
+        var showingThrough: [AnimatedCellRun] = []
         for (index, buffer) in buffers.enumerated() {
             let dx =
                 horizontalRun?.offsets[index]
@@ -153,8 +156,14 @@ private struct _ZStackCore<Content: View>: View, Renderable {
             let dy =
                 verticalRun?.offsets[index]
                 ?? alignment.vertical.childOffset(childHeight: buffer.height, in: frameHeight)
+            showingThrough += result.runsShowingThrough(buffer, at: (x: dx, y: dy))
             result = result.compositedCarryingClaimsOverNothing(
                 with: buffer, at: (x: dx, y: dy), palette: context.environment.palette)
+        }
+        if !showingThrough.isEmpty {
+            context.requestWake(
+                token: "zstack-base-run-\(context.identity.path)",
+                forNextStepOf: showingThrough.map { ($0.clock, $0.frameTicks) })
         }
         return result
     }

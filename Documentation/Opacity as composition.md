@@ -7406,3 +7406,86 @@ render drew the page; `CompositorOverNothingTests` pins a run's red cell there.
 `RepeatingFadeRunWidthTests` replays the nested breath over text through the run loop: before,
 23 issues. `TranslucentFillFieldTests` replays a run inside a `.background` inside a `ZStack`
 over a translucent colour as §105 replays one inside a compositing painter.
+
+## 109. A layer over a run of its base asks for a render at the run's steps (2026-09-27)
+
+A compositor inside the tree (a `ZStack`, an `.overlay`, a custom `Layout`) punches a base's run
+under a later layer's footprint (`FrameBuffer.animatedCellsPunched`): the layer's cells replace
+the base's, and a run replaying there would paint over them. But a layer's cell that names no
+field of its own shows the base's, which the composite fills in from the frame the render drew
+(§99). Where the run's frames disagree about that field, a render at a later step draws the
+layer's glyph on another field, and nothing replays it. Measured on this tree before the fix,
+through the run loop (`ReplayOracle`): a two-cell run turning its field red and blue every three
+ticks, with `Text("x")` laid on its first cell by each of the three compositors, held `x` on
+`rgb(200, 0, 0)` at every tick where a render drew it on `rgb(0, 0, 200)` (12 of 24 ticks). It
+predates the fade work of §108 and every round of it.
+
+**The rule.** The layer's cell and the run's frame are two things one cell shows, and a run
+carries one. So the compositor keeps punching the run, and asks for a render at each of its
+steps (`FrameBuffer.runsShowingThrough(_:at:)`, `requestWake(token:forNextStepOf:)`), the answer
+a breathing `List` row gives for the runs it drops (§69.4): each render draws the cell as it is
+then. Only a run whose frames disagree about the field of a cell the layer fills with the
+base's (`String.columnsTakingBaseField(width:)`, `String.columnsFieldShown(width:)`) — in the
+line the layer draws, or in a frame of one of its own runs — asks: a spinner under an unfaded
+label, whose frames change only their glyphs there, shows the label on one field at every step,
+and asks for nothing. Composing the layer's cells into the base run's frames would replay it
+exactly, and is declined: it is a second compositor over every frame of every run under every
+layer, where the shape is rare.
+
+**One token per `.overlay`.** A `ZStack` and a `Layout` gather the runs under all their layers
+and ask once, under their own identity. An `.overlay` renders its base at its own identity, so
+`.overlay { A }.overlay { B }` puts two overlays at one path, and a wake is kept per token:
+asked under the path alone, the outer's request replaced the inner's, and the inner's label held
+its field between the outer run's steps (a run every 3 ticks under one label and one every 7
+under the other: 10 mismatches over 24 steps, and 11 renders, the 7-tick run's alone). Each
+overlay asks under its path and its own type, the key `AnimationStore` gives a modifier's
+animations: the outer's `Base` holds the inner's type, so the two are never one type, unless
+each one's base is an `AnyView`, which draws its content at its own identity too.
+
+**What it costs.** A render per step of such a run, and only while the layer is over it: the
+probe's three-tick run asks for 24 renders over its 24 steps, 20 a second, its own rate. A base
+with no run under a layer asks nothing more; one with a run reads the layer's row once and each
+of the run's frames once. The shape that pays it most is a label an `.overlay` lays on a focused
+`List`'s cursor row: the row's breath is a row-wide run whose frames turn the row's field, so
+the label asks for a render at each of its steps, 24 over 24 steps, for as long as the cursor is
+on that row, where the same list without the label asks for none. Before, the label's cells held
+the shade the row was drawn at while the row breathed round them (23 of 24 ticks).
+
+**What it does not cover yet (known issue).** The rule reads the raw layer, which is right for a
+cell that does not fade. A layer that fades over the run, or names a translucent field there, is
+resolved over the run's DRAWN frame: it loses its glyph to the run's (a contest below ½, or a
+blank veil), or mixes its ink and field toward the run's. The composite punches the run all the
+same, and nothing asks for it, so the cell holds the drawn frame between renders. Measured, 12
+of 24 ticks under each compositor, with no render asked for: `Text("x").opacity(0.4)` and a
+one-cell `Color.rgb(0, 0, 0).opacity(0.5)` scrim over a run turning only its glyphs (the run's
+glyph held, `⠋` where a render draws `⠙`), and `Text("x").background(green).opacity(0.5)` over
+one turning its field (the chip mixed toward the drawn frame's red where a render mixes it toward
+blue). A scrim over a whole spinner freezes it:
+`Spinner().overlay { Color.rgb(0, 0, 0).opacity(0.4) }` held the drawn glyph at 22 of 24 ticks,
+and no replay moved it. It predates this section: the compositor has always resolved a layer over
+the drawn base and punched the run. The follow-up is to ask for a render at the run's steps where
+the layer fades over it too, on any difference between its frames there — glyph and ink as well
+as field — or to read the resolved layer rather than the raw one. Asking for every animating run
+under any layer clears all nine shapes at 24 renders each (a perturbation, not kept), but also
+asks for the unfaded label over a glyph-only run, which needs none.
+
+**Nor where the root lays a floating layer (known issue).** The root's flatten of floating
+layers (`FrameBuffer.compositingOverlays`) punches a base's run under a layer the same way — an
+`.offset` or `.position` label, any layer that is not a surface — and asks for nothing: it runs
+after the walk, with no render context to ask from. Measured through the run loop (2026-09-28):
+`Text("x").offset(y: -1)` laid on the probe's run from the line below it, and
+`Text("x").position(x: 0, y: 0)` in a `ZStack` over it, each held `x` on the drawn frame's red at
+12 of 24 ticks, where a render draws it on blue, and asked for no render. It predates this
+section. The follow-up is for the run loop to ask its scheduler for the runs the flatten punches
+under a layer that shows their field: the rule above, asked where the flatten lands each layer.
+
+**A later layer that hides the cell (cost).** A `ZStack` and a `Layout` gather the runs as each
+layer lands and never look again: under a label and then an opaque chip laid over the same two
+cells, the probe's run still asks for 24 renders over its 24 steps, which change nothing on
+screen (measured through the run loop, 2026-09-28). Asking against the finished canvas would ask
+for none there; the shape is contrived, and it is left.
+
+`LayerOverABaseRunTests` pins the three compositors (12 mismatches each before) and the render
+count, a run turning only its glyphs under the label (no render asked for, as before), two
+chained `.overlay`s (31 renders, the two runs' steps), and the fading layers and the floating
+labels above as known issues.
