@@ -889,16 +889,7 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
         // resolve the intent). Off-window renders land in the full-height
         // buffer where the ScrollView's clip hides them — invisible, but
         // registered.
-        var rendersRow = [Bool](repeating: false, count: slots.count)
-        for (index, slot) in slots.enumerated() {
-            rendersRow[index] = slot.y + slot.height > top && slot.y < bottom
-        }
-        if let first = rendersRow.firstIndex(of: true), first > 0 {
-            rendersRow[first - 1] = true
-        }
-        if let last = rendersRow.lastIndex(of: true), last < slots.count - 1 {
-            rendersRow[last + 1] = true
-        }
+        var rendersRow = Self.windowRows(of: slots, top: top, bottom: bottom)
         // What the ScrollView may show of this canvas without drawing it again:
         // it moves its offset after this returns (the bottom re-glue, a focus
         // snap), and a move past this band lands on placeholders.

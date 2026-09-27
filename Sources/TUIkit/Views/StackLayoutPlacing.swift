@@ -117,6 +117,21 @@ extension _VStackCore {
         return slots
     }
 
+    /// The rows the full walk draws for a viewport from `top` to `bottom`, in
+    /// the stack's lines: those meeting it, plus one margin row past each edge
+    /// of that run, so a directional focus move can step just beyond the
+    /// window. A contiguous run, whose lines ``drawnLines(of:renders:)`` names.
+    static func windowRows(of slots: [RowSlot], top: Int, bottom: Int) -> [Bool] {
+        var renders = slots.map { $0.y + $0.height > top && $0.y < bottom }
+        if let first = renders.firstIndex(of: true), first > 0 {
+            renders[first - 1] = true
+        }
+        if let last = renders.lastIndex(of: true), last < slots.count - 1 {
+            renders[last + 1] = true
+        }
+        return renders
+    }
+
     /// The content lines drawn for real when the rows `renders` marks are the
     /// only ones drawn and the rest are placeholders — from the top of the
     /// first slot (its spacing included) to the bottom of the last row, or
