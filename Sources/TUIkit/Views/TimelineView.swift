@@ -145,7 +145,11 @@ private struct _TimelineViewCore<Schedule: TimelineSchedule, Content: View>: Vie
     /// only because every walk of the frame resolves the same entry, against
     /// the frame's one date (``frameDate(_:)``).
     ///
-    /// Sizes go too: a row's text is the date's. And the depth goes up for the
+    /// Sizes go too: a row's text is the date's. That moves the cache's
+    /// size-clear generation, so every windowed stack on the page re-checks the
+    /// width it keeps against its widest row — under an `.animation` schedule,
+    /// on every frame. A known cost; scoping the challenge to this timeline's
+    /// subtree is a planned follow-up. And the depth goes up for the
     /// content, as an `AnyView`'s does, so a timeline whose content is another
     /// timeline — both drawn at this identity — notes under a slot of its own.
     private func timelineContext(
