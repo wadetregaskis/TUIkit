@@ -425,8 +425,15 @@ moves the offset down when the rows that fill the held line would start above
 the stack's top, where `fill` places none, and reports it as the other two
 paths report a hold's offset: without it, a row revealed from near the top
 under the "more above" line, a row taller than one line above it, was drawn a
-line or more above its line — on line 0, then under the indicator once the
-view scrolled.
+line or more above its line — on line 0, then under the indicator once the view
+scrolled. A sticky bottom (`sinkDesignatedHold`) is the same rule at the other
+end: within a screen of the end of the data the rows below a held row (and a
+section's footer below them) cannot fill the viewport under its line, so the
+row rides down until the content's last line meets the viewport's, where the
+other two paths' clamp to the scrollable range puts it, and is re-anchored
+there. Held on its line, the band ended above the viewport's bottom, the scroll
+view pulled the offset back and drew the band from its first line: row 399 of
+400, designated from the top, sat on line 3 over blank lines.
 
 A designation naming a row the data does not hold — a position restored before
 its data loads — holds nothing until the row arrives, on every path, as a

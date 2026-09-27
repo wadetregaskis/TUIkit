@@ -436,4 +436,37 @@ struct DesignatedRowAnchorTests {
         let scrolled = frame()
         #expect(screenLine(of: 300, in: scrolled) == 1, "\(held) → \(scrolled)")
     }
+
+    /// Within a screen of the end of the data, the rows below a held row cannot
+    /// fill the viewport under its line: the row rides down until the data's
+    /// last line meets the viewport's, where the other two paths' clamp to the
+    /// scrollable range puts it. Held on the line it was revealed on, the band
+    /// ended above the viewport's bottom, the content was shorter than the
+    /// offset needed, and the scroll view drew the band from its first line
+    /// over blank lines — row 399 on line 3, under row 398.
+    @Test("Anchored walk: a row designated within a screen of the end, from the top, lands where the data ends")
+    func anchoredWalkRevealNearTheEnd() {
+        let tuiContext = TUIContext()
+        let focusManager = FocusManager()
+        var position = ScrollPosition()
+        let list = ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(0..<400, id: \.self) { i in
+                    Text("row \(i)").frame(height: i % 3 + 1)
+                }
+            }
+        }
+        .scrollPosition(Binding(get: { position }, set: { position = $0 }))
+        .scrollIndicatorStyle(.text)
+        .frame(height: Self.viewport)
+
+        _ = renderVisible(list, anchored: nil, tuiContext: tuiContext, focusManager: focusManager)
+        var held: [String] = []
+        for _ in 0..<3 {
+            held = renderVisible(list, anchored: 399, tuiContext: tuiContext, focusManager: focusManager)
+        }
+        #expect(screenLine(of: 399, in: held) == Self.viewport - 1, "on the last line: \(held)")
+        #expect(screenLine(of: 398, in: held) == Self.viewport - 4, "the rows above it fill the lines above it: \(held)")
+        #expect(screenLine(of: 396, in: held) == 1, "\(held)")
+    }
 }

@@ -328,6 +328,34 @@ struct SectionHeldRowTests {
         #expect(held.dropFirst().first?.hasPrefix("head 5") == true, "\(held)")
     }
 
+    @Test("On the anchored window, a row designated within a screen of the end sits above the footer, which ends the screen")
+    func anchoredHeldRowNearTheEndAboveTheFooter() {
+        // The footer is part of what fills the viewport below the held row:
+        // the row rides down until the footer's last line meets the
+        // viewport's, and no further.
+        let (tui, focusManager) = (TUIContext(), FocusManager())
+        let view = ScrollView {
+            Section {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<300, id: \.self) { sectionRow($0, variable: true) }
+                }
+            } footer: {
+                Text("footer")
+            }
+        }
+        .scrollIndicatorStyle(.text)
+        .frame(height: 8)
+        _ = heldBuffer(view, holding: nil, tui: tui, focusManager: focusManager)
+        var held: [String] = []
+        for _ in 0..<3 {
+            held = heldBuffer(view, holding: 298, tui: tui, focusManager: focusManager).lines.map(\.stripped)
+        }
+        // Row 298 is two lines, row 299 three.
+        #expect(held.last?.hasPrefix("footer") == true, "\(held)")
+        #expect(held.firstIndex { $0.hasPrefix("row 299 ") } == 4, "\(held)")
+        #expect(held.firstIndex { $0.hasPrefix("row 298 ") } == 2, "\(held)")
+    }
+
     @Test("On the anchored window, a header's control left out of the band is kept above it, not over the row on top")
     func anchoredHeaderControlStaysAboveTheBand() {
         // The anchored window's positions are estimates: the row revealed at

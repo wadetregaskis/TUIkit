@@ -428,6 +428,7 @@ extension _VStackCore {
     private func clampDesignatedHold(
         frame: AnchoredWindowFrame, state: StackWindowState, window: inout ScrollContentWindow
     ) -> Int? {
+        sinkDesignatedHold(frame: frame, state: state, window: window)
         let heldLine = -state.anchorOffsetWithin
         var available = 0
         var ordinal = state.anchorOrdinal - 1
@@ -445,6 +446,35 @@ extension _VStackCore {
         guard window.offset < available - heldLine else { return nil }
         window.offset = available - heldLine
         return window.offset
+    }
+
+    /// Sticky bottom, the other end of the same rule: a held row cannot sit
+    /// higher on screen than the rows below it — with what the scroll content
+    /// draws below this stack, a section's footer — can fill, down to the
+    /// viewport's bottom. Within a screen of the end of the data there are not
+    /// enough of them, and the row rides down until the content's last line
+    /// meets the viewport's, where the other two paths' clamp to the scrollable
+    /// range puts it (`offsetHoldingDesignatedRow`). It is re-anchored there,
+    /// as they re-anchor, and does not spring back up when rows arrive below
+    /// it. Bounded by the viewport. Runs first, so the rows above fill the line
+    /// it lands on (`clampDesignatedHold`).
+    ///
+    /// Held higher, the band ended above the viewport's bottom, the content
+    /// the scroll view was told of was shorter than the offset needed, and it
+    /// pulled the offset back and drew the band from its first line: a row
+    /// designated within a screen of the end, from near the top, was drawn off
+    /// its line over blank lines, with nothing to scroll.
+    private func sinkDesignatedHold(
+        frame: AnchoredWindowFrame, state: StackWindowState, window: ScrollContentWindow
+    ) {
+        let needed = window.viewportHeight + state.anchorOffsetWithin
+        var below = window.linesBelow
+        var ordinal = state.anchorOrdinal
+        while ordinal < frame.children.count, below < needed {
+            below += frame.pitch(of: ordinal)
+            ordinal += 1
+        }
+        if below < needed { state.anchorOffsetWithin = below - window.viewportHeight }
     }
 
     /// Resolves a pending `scrollTo` against the anchored geometry: pins the
