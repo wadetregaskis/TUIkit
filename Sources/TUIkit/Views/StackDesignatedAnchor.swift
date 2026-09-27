@@ -89,6 +89,18 @@ extension StackWindowState {
         designatedAnchorKey = nil
         anchorHeldScreenLine = 0
     }
+
+    /// Forgets the adopted line on a frame whose designation names a row the
+    /// data does not hold, unless it is the row already held — which left the
+    /// data and keeps its line for when it returns. A designation naming no
+    /// row is none, so the one before it is forgotten as it is on a frame with
+    /// no designation, on every path (the anchored window forgets it on the
+    /// same frame): remembered, re-designating that row later snapped it back
+    /// to the line it had before the view scrolled, where the anchored window
+    /// adopts it where it sits.
+    func forgetDesignatedAnchor(unlessHolding key: String) {
+        if designatedAnchorKey != key { clearDesignatedAnchor() }
+    }
 }
 
 /// The designated row key in scope, if the effective anchor mode names one.
@@ -122,6 +134,7 @@ extension _VStackCore {
         guard let ordinal = resolveOrdinal(forKey: key, children: children, state: state) else {
             // An unknown id is a no-op, as it is for `scrollTo` — the row may
             // simply not have been inserted yet.
+            state.forgetDesignatedAnchor(unlessHolding: key)
             return (window, nil)
         }
         var window = window
@@ -143,8 +156,10 @@ extension _VStackCore {
             state.clearDesignatedAnchor()
             return
         }
-        guard let index = slots.firstIndex(where: { $0.child.identityChildKey == key })
-        else { return }
+        guard let index = slots.firstIndex(where: { $0.child.identityChildKey == key }) else {
+            state.forgetDesignatedAnchor(unlessHolding: key)
+            return
+        }
         let offset = state.offsetHoldingDesignatedRow(
             key: key, rowY: slots[index].y, rowHeight: slots[index].height,
             window: window, totalHeight: slots.last.map { $0.y + $0.height } ?? 0)

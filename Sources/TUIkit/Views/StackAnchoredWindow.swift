@@ -282,6 +282,16 @@ extension _VStackCore {
     /// it currently occupies (`adoptDesignatedRow`), so designating — or, via
     /// the §1.2 shadow switch, selecting — a visible row does not jerk the
     /// viewport to the top.
+    ///
+    /// A row that is not in the data is not designated yet: nothing is held,
+    /// the frame is drawn as with no designation, and the row is adopted on
+    /// the frame it arrives, as the other two paths adopt it
+    /// (`offsetHoldingDesignatedRow`) — and as a `scrollTo` of it moves
+    /// nothing. Held from the start, the row at the anchor stood in for it at
+    /// the viewport's top, and since a designation owns the anchor, the offset
+    /// no longer moved it: a `.scrollPosition` scroll moved the scrollbar and
+    /// not the rows. Once adopted, a row that leaves the data is held by its
+    /// nearest neighbour (the ladder, `rebindAnchor`).
     private func applyDesignatedAnchor(
         frame: AnchoredWindowFrame, state: StackWindowState,
         window: ScrollContentWindow, context: RenderContext, mode: ScrollAnchorMode
@@ -293,8 +303,15 @@ extension _VStackCore {
             return nil
         }
         if state.designatedAnchorKey != key {
+            guard
+                let designated = resolveOrdinal(
+                    forKey: key, children: frame.children, state: state)
+            else {
+                state.designatedAnchorKey = nil
+                return nil
+            }
             state.designatedAnchorKey = key
-            adoptDesignatedRow(frame: frame, state: state, window: window, key: key)
+            adoptDesignatedRow(frame: frame, state: state, window: window, designated: designated)
         }
         state.anchorKey = key
         return key
@@ -307,16 +324,8 @@ extension _VStackCore {
     /// keeps a non-negative `within`: cells hidden ABOVE the top.)
     private func adoptDesignatedRow(
         frame: AnchoredWindowFrame, state: StackWindowState,
-        window: ScrollContentWindow, key: String
+        window: ScrollContentWindow, designated: Int
     ) {
-        guard
-            let designated = resolveOrdinal(forKey: key, children: frame.children, state: state)
-        else {
-            // The row is not in the data yet; reveal it at the top when it
-            // appears (matches the implicit-anchor default until then).
-            state.anchorOffsetWithin = 0
-            return
-        }
         let line = adoptedHeldLine(
             frame: frame, state: state, window: window, designated: designated)
         state.anchorOrdinal = designated
@@ -439,7 +448,16 @@ extension _VStackCore {
         let designatedKey = applyDesignatedAnchor(
             frame: frame, state: state, window: window, context: context, mode: anchorMode)
 
-        frame.rebindAnchor(mode: anchorMode)
+        // A designation naming no row is none (`applyDesignatedAnchor`), and
+        // the anchor is re-bound as with none: by the declared mode. Re-bound
+        // as `.row`, the row at the top was held by its key in the missing
+        // row's place, and an insert above it left the rows where they were,
+        // where with no designation they move down.
+        frame.rebindAnchor(
+            mode: anchorMode == .row && designatedKey == nil
+                ? ScrollAnchorMode.effective(
+                    boundAnchor: nil, defaultScrollAnchor: context.environment.defaultScrollAnchor)
+                : anchorMode)
 
         var window = window
         let resolvedSeek = resolveAnchoredSeek(

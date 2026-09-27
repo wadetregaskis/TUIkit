@@ -411,6 +411,23 @@ old single-margin-row behaviour when the anchor is at/above the top). A
 sticky-top clamp (`clampDesignatedHold`) rides the row up if the rows above it
 are deleted past its held line, so it never leaves a blank strip.
 
+A designation naming a row the data does not hold — a position restored before
+its data loads — holds nothing until the row arrives, on every path, as a
+`scrollTo` of the id moves nothing: the view is drawn as with no designation,
+and the row is adopted on the frame it appears. The anchored walk used to adopt
+it at once, standing the row at its anchor in for it at the viewport's top, and
+since a designated row owns that anchor, the offset stopped moving the rows: a
+`.scrollPosition` scroll moved the scrollbar and nothing else. Drawn as with no
+designation means re-bound as with none too: by the declared mode, not by the
+top row's key, which held that row through an insert above it where with no
+designation the rows move down. And the designation before it is forgotten, as
+a frame with no designation forgets it, so re-designating that row later adopts
+it where it sits; the uniform window and the exact walk remembered it, and
+snapped the row back to the line it had before the view scrolled. Once
+adopted, a designated row that leaves the data is still held by its nearest
+neighbour on the anchored walk (the §5f ladder), and keeps its line for its
+return on every path.
+
 ### Overscroll shipped on every scrollable (§1.5)
 
 `.scrollOverscroll(top:bottom:)` is live on `ScrollView`. The constrained design
