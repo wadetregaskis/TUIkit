@@ -242,7 +242,14 @@ owns, a `step(_:)` that makes that step's data changes on the model and
 returns the input to deliver, and, wherever the page shows something the model
 decides, a `check(_:after:)` that says what must be on the screen — plus a
 `SessionDescriptor` in `Sessions.all`. Give the rows something the check can
-find: a message number, a line number. A session that clicks or wheels over
+find: a message number, a line number. Make a row view `Equatable`, every
+field compared, unless the session is about rows that are not: that is what
+Option C asks of a row before it re-checks it after a write above it, rather
+than drawing it again, so a session of rows that are not `Equatable` would
+tell a change to C nothing. The rows of `editor`, `inbox`, `log`, `chat`,
+`notes`, `playlist` and `residual` say they are; `residual-opaque`'s do not,
+on purpose. Nothing reads the conformance today: a `ForEach` row is
+memoized by its element, not by its view. A session that clicks or wheels over
 something where it is DRAWN says `looksBeforeEachStep` and is shown the screen
 before each step (`look(at:)`), so both instances of a verified run aim at the
 same cell.

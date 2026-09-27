@@ -65,6 +65,11 @@ private struct LogRow: View {
     }
 }
 
+// Every field compared, as the synthesized `==` does: a row equal to the one
+// drawn draws the same, which is what Option C asks of a row before it
+// re-checks it after a write above it. Isolated, as the view is.
+extension LogRow: @MainActor Equatable {}
+
 // MARK: - The script
 
 /// A build or a server tailing its log: lines in bursts, the odd long one that

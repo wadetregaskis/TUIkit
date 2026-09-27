@@ -68,6 +68,11 @@ private struct TrackRow: View {
     }
 }
 
+// Every field compared, as the synthesized `==` does: a row equal to the one
+// drawn draws the same, which is what Option C asks of a row before it
+// re-checks it after a write above it. Isolated, as the view is.
+extension TrackRow: @MainActor Equatable {}
+
 // MARK: - The script
 
 /// Someone arranging a playlist: walking up and down it, moving a track a

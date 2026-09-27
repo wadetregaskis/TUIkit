@@ -84,6 +84,11 @@ private struct Bubble: View {
     }
 }
 
+// Every field compared, as the synthesized `==` does: a row equal to the one
+// drawn draws the same, which is what Option C asks of a row before it
+// re-checks it after a write above it. Isolated, as the view is.
+extension Bubble: @MainActor Equatable {}
+
 // MARK: - The script
 
 /// A busy conversation: messages arrive, some long enough to wrap for lines,

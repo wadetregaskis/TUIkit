@@ -144,6 +144,11 @@ private struct NoteRow: View {
     }
 }
 
+// Every field compared, as the synthesized `==` does: a row equal to the one
+// drawn draws the same, which is what Option C asks of a row before it
+// re-checks it after a write above it. Isolated, as the view is.
+extension NoteRow: @MainActor Equatable {}
+
 /// One note, open: its title and number over an editor of its text — or word
 /// that it is gone, when it was deleted or archived while open.
 private struct NoteDetail: View {
