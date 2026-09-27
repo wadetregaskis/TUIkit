@@ -505,6 +505,12 @@ public final class RenderCache: @unchecked Sendable {
     /// than drop it — see ``RevalidationState``.
     package let revalidation = RevalidationState()
 
+    /// Counts the observation registrations bodies drawn with this cache arm,
+    /// fire and drop, by kind of reader, when a harness or a test installs one;
+    /// `nil` otherwise, which is the whole of its cost — see
+    /// ``ObservationCensus``. Read only where a scope armed.
+    package var observationCensus: ObservationCensus?
+
     /// Ids interned per view identity that have to live exactly as long as the
     /// entries here do — in practice the mouse dispatcher's handler ids, which
     /// a stored buffer carries baked into its hit-test regions. Pruned in

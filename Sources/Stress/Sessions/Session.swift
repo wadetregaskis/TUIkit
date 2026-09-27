@@ -132,6 +132,10 @@ final class DrivenSession {
     let checkpointEvery: Int?
     /// The session's ``StressSession/finish()``.
     let finish: () -> String?
+    /// Installs an ``ObservationCensus`` on the app's render cache, and reads
+    /// it: what `--census` counts.
+    let installCensus: () -> Void
+    let census: () -> ObservationCensus.Counts?
     /// What `TUIKIT_VERIFY_RENDER_MEMO` found: each served buffer that a fresh
     /// render of the same subtree disagreed with. Empty unless it is set.
     let staleServes: () -> [String]
@@ -174,6 +178,8 @@ final class DrivenSession {
         check = { session.check($0, after: $1) }
         checkpointEvery = session.checkpointEvery
         finish = { session.finish() }
+        installCensus = { app.renderCache.observationCensus = ObservationCensus() }
+        census = { app.renderCache.observationCensus?.snapshot }
         staleServes = { app.renderCache.renderMemoMismatches }
         staleSizes = { app.renderCache.measureMemoMismatches }
         cacheCounts = { (app.renderCache.stats, app.renderCache.rowWork) }

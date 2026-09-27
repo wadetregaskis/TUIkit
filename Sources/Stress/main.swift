@@ -26,7 +26,7 @@
 //
 //  Sessions (interaction scripts played over time — see Sessions/Session.swift):
 //    --sessions                                  list them
-//    --session <id> [--steps N] [--verify] [--resize-every N] [--cols C] [--rows R] [--show] [--trace]
+//    --session <id> [--steps N] [--verify] [--resize-every N] [--cols C] [--rows R] [--show] [--trace] [--census]
 //    --bench --scenario session/<id> ...         a session as a benchmark
 
 import Dispatch
@@ -58,7 +58,7 @@ let usageText = """
     Benchmark:    Stress --bench --scenario <id> [--variant V] [--iterations N] [--cols C] [--rows R] [--cold]
     Variants:     Stress --variants
     Sessions:     Stress --sessions
-    Session:      Stress --session <id> [--steps N] [--verify] [--resize-every N] [--cols C] [--rows R] [--show] [--trace]
+    Session:      Stress --session <id> [--steps N] [--verify] [--resize-every N] [--cols C] [--rows R] [--show] [--trace] [--census]
                   (and Stress --bench --scenario session/<id>, which ab_bench.py can A/B)
 
     Scenario ids (the interactive menu shows titles, not ids):
@@ -113,6 +113,7 @@ if rawArgs.contains("--help") || rawArgs.contains("-h") {
     options.resizeEvery = flagValue("--resize-every").flatMap(Int.init) ?? 0
     options.show = rawArgs.contains("--show")
     options.trace = rawArgs.contains("--trace")
+    options.census = rawArgs.contains("--census")
     let code = await MainActor.run { () -> Int32 in
         guard let descriptor = Sessions.byID(id) else {
             print("session: unknown session '\(id)'. Known: \(Sessions.all.map(\.id).joined(separator: ", "))")

@@ -6,14 +6,17 @@
 //
 //  Every body evaluated under `withObservationTracking` arms one registration
 //  on each property it read, and a registration is freed only when one of
-//  those properties is written. So a body evaluated on every frame that reads
-//  a property nobody writes adds a registration every frame, for good — about
-//  0.7 KB each in a scratch probe — and the first write, whenever it comes,
-//  runs every one of them on the writer's thread. That is main's behaviour,
-//  for the one body it observes. Option C observes more readers (a body read
-//  while measuring, a style's body, a control's `Binding`), and each is a
-//  reader of this kind; this session is the long run their cost is measured
-//  on, reader by reader, against main's.
+//  those properties is written or every object it read from is
+//  deinitialized. So a body evaluated on every frame that reads a property
+//  nobody writes adds a registration every frame for as long as its model
+//  lives — here, the whole run; about 1.2 KB each, as `--census` measured this
+//  page, more for a deeper reader, since each holds its reader's identity
+//  chain — and the first write, whenever it comes, runs every one of them on
+//  the writer's thread. That is main's behaviour, for the one body it
+//  observes. Option C observes more readers (a body read while measuring, a
+//  style's body, a control's `Binding`), and each is a reader of this kind;
+//  this session is the long run their cost is measured on, reader by reader,
+//  against main's.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -135,10 +138,10 @@ final class AccumulateSession: StressSession {
         id: "accumulate",
         summary: "a clock moving every step over four readers of a property nothing writes until the end",
         exercises:
-            "observation registrations that are never freed: a drawn body, a body only measured, a custom "
-            + "ButtonStyle's makeBody and a @Bindable-bound Toggle, each reading a never-written @Observable "
-            + "property on every frame; resident size every 9,000 steps and the time of the first write at "
-            + "the end",
+            "observation registrations that nothing frees while their model lives: a drawn body, a body "
+            + "only measured, a custom ButtonStyle's makeBody and a @Bindable-bound Toggle, each reading a "
+            + "never-written @Observable property on every frame; resident size every 9,000 steps and the "
+            + "time of the first write at the end",
         make: { _, width, height, cold in
             DrivenSession(AccumulateSession(), width: width, height: height, cold: cold)
         })

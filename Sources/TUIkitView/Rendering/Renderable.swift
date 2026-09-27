@@ -269,9 +269,10 @@ private func renderResolved<V: View>(_ view: V, context: RenderContext) -> Frame
 ///   never held it. The whole-cache clear remains only where there is no cache
 ///   to scope to (a headless render with no `RenderCache` in the environment).
 /// - The `onChange` holds the cache WEAKLY. A registration lives until a
-///   property it read is written, which for a property nothing writes is for
-///   good, and a strong capture kept the cache — every buffer and size in it —
-///   alive with it, after the app that owned the cache had gone. See
+///   property it read is written or every object it read from is
+///   deinitialized (for a property nothing writes, as long as its model
+///   lives), and a strong capture kept the cache — every buffer and size in
+///   it — alive with it, after the app that owned the cache had gone. See
 ///   ``reportObservedChange(at:to:hadCache:fallback:)``.
 ///
 /// `@inline(__always)` so the render walk's own copy compiles to what it was
@@ -283,13 +284,41 @@ package func evaluateCompositeBody<V: View>(of view: V, context: RenderContext) 
     resolveEnvironmentProperties(of: view, in: context.environment)
     bindStateProperties(
         of: view, identity: context.identity, storage: context.stateStorage!)
-    let body = withObservationTracking {
-        view.body
-    } onChange: { [weak cache = context.renderCache, hadCache = context.renderCache != nil, identity = context.identity] in
-        reportObservedChange(at: identity, to: cache, hadCache: hadCache)
-    }
+    let body = withObservationTracking(
+        { view.body },
+        onChange: observedChange(of: context, kind: context.isMeasuring ? .bodyMeasure : .bodyRender))
     context.stateStorage!.markActive(context.identity)
     return body
+}
+
+/// The `onChange` a scope of `kind` arms at `context`'s identity, counted in
+/// the cache's ``ObservationCensus`` when one is installed.
+///
+/// Called as the `onChange:` argument of `withObservationTracking`, an
+/// autoclosure, which the tracking evaluates only when the scope read
+/// something — exactly when it arms a registration. So the count is exact,
+/// and a scope that reads nothing observable pays for none of this: not the
+/// census lookup, not the closure. `kind` is written at the call site for the
+/// same reason: evaluated only on arming. A body a measure evaluates (a `List`
+/// asking a view of the app's which rows its body holds) is counted as
+/// measured, whichever site evaluated it.
+///
+/// The closure holds the cache weakly — see
+/// ``reportObservedChange(at:to:hadCache:fallback:)`` — and, when a census is
+/// installed, its ``ObservationCensus/Registration`` strongly: the closure is
+/// freed exactly when the registration is, so the token counts it as fired
+/// when the closure runs and as dropped when every object the scope read from
+/// is deinitialized and the closure goes without running. It keeps the census
+/// (a few counters) alive too, so a registration that fires or goes after its
+/// cache has gone still counts. With no census it is `nil`: one pointer, as
+/// the census reference it replaces was.
+@inline(__always)
+package func observedChange(of context: RenderContext, kind: ObservationCensus.Kind) -> @Sendable () -> Void {
+    let registration = context.renderCache?.observationCensus?.arm(kind)
+    return { [weak cache = context.renderCache, hadCache = context.renderCache != nil, identity = context.identity] in
+        registration?.fire()
+        reportObservedChange(at: identity, to: cache, hadCache: hadCache)
+    }
 }
 
 /// Where an observed body's change goes: to the cache the body was drawn
@@ -298,13 +327,14 @@ package func evaluateCompositeBody<V: View>(of view: V, context: RenderContext) 
 /// with a cache that has since gone.
 ///
 /// The last case is why the registration holds the cache weakly. A
-/// registration is freed only when a property it read is written, so one
-/// armed by a body that reads a property nothing ever writes lives for as
-/// long as the model does — and held strongly, it kept the whole render cache
-/// alive with it, long after the app, the `TUIContext` or the test that owned
-/// the cache had let it go. A cache that has gone has nothing left to
-/// invalidate, and whatever replaced it arms registrations of its own the
-/// first time it draws, so the change is dropped.
+/// registration is freed when a property it read is written or when every
+/// object it read from is deinitialized, so one armed by a body that reads a
+/// property nothing ever writes lives for as long as the model does — and
+/// held strongly, it kept the whole render cache alive with it, long after
+/// the app, the `TUIContext` or the test that owned the cache had let it go.
+/// A cache that has gone has nothing left to invalidate, and whatever
+/// replaced it arms registrations of its own the first time it draws, so the
+/// change is dropped.
 ///
 /// - Parameters:
 ///   - identity: The identity whose body read the property.

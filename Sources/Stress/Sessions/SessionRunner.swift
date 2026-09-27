@@ -39,6 +39,10 @@ enum SessionRunner {
         /// ``StressSession/check(_:after:)``). Outside the timed region, but
         /// off for `--bench`, which measures and nothing else.
         var checks = true
+        /// Count the observation registrations the warm instance's bodies
+        /// arm and fire, by kind of reader (``ObservationCensus``), and print
+        /// them at each checkpoint and at the end.
+        var census = false
     }
 
     /// What one kind of step cost, over every step of that kind.
@@ -110,6 +114,11 @@ enum SessionRunner {
         /// What the session did once its steps were played
         /// (``StressSession/finish()``).
         var finish: String?
+        /// The census's counts: at the opening frame, after the last step,
+        /// and after the session's finish, when `--census` asked for one.
+        var censusAtOpen: ObservationCensus.Counts?
+        var censusAtEnd: ObservationCensus.Counts?
+        var censusAfterFinish: ObservationCensus.Counts?
     }
 
     /// The sizes a resizing run cycles through.
@@ -137,6 +146,7 @@ enum SessionRunner {
         var report = Report()
         let sizes = resizeSizes(options)
 
+        if options.census { warm.installCensus() }
         // The page as it opens, drawn before the clock starts, as an app's
         // first frame is drawn before anyone touches it.
         warm.frame(0)
@@ -144,6 +154,7 @@ enum SessionRunner {
         if options.checks { checkFrame(of: warm, after: -1, action: "open", into: &report) }
 
         let countsAtOpen = warm.cacheCounts()
+        report.censusAtOpen = warm.census()
         var staleSoFar = warm.staleServes().count
         var staleSizesSoFar = warm.staleSizes().count
         for index in 0..<options.steps {
@@ -182,9 +193,7 @@ enum SessionRunner {
                 report.staleSizeSteps.append(index)
                 staleSizesSoFar = warm.staleSizes().count
             }
-            if let every = warm.checkpointEvery, (index + 1).isMultiple(of: every) {
-                report.checkpoints.append(checkpoint(after: index + 1))
-            }
+            recordCheckpoint(of: warm, after: index + 1, into: &report)
 
             guard let cold else { continue }
             var twin = cold.step(index)
@@ -205,7 +214,9 @@ enum SessionRunner {
                 }
             }
         }
+        report.censusAtEnd = warm.census()
         finish(warm, cold, at: options.steps, checks: options.checks, into: &report)
+        if report.finish != nil { report.censusAfterFinish = warm.census() }
         if options.show { report.lastScreen = warm.screen().map(\.stripped) }
         let counts = warm.cacheCounts()
         report.cacheStats = counts.stats.delta(since: countsAtOpen.stats)
@@ -217,12 +228,49 @@ enum SessionRunner {
         return report
     }
 
-    /// One checkpoint's line: the steps played and the process's resident size
-    /// and footprint now.
-    private static func checkpoint(after steps: Int) -> String {
+    /// Files a checkpoint's line when `steps` is one of the session's
+    /// checkpoints.
+    @MainActor
+    private static func recordCheckpoint(of session: DrivenSession, after steps: Int, into report: inout Report) {
+        guard let every = session.checkpointEvery, steps.isMultiple(of: every) else { return }
+        report.checkpoints.append(checkpoint(after: steps, census: session.census()))
+    }
+
+    /// One checkpoint's line: the steps played, the process's resident size
+    /// and footprint now, and the registrations alive by kind when a census
+    /// is counting.
+    private static func checkpoint(after steps: Int, census: ObservationCensus.Counts?) -> String {
         let mb = { (bytes: UInt64?) in bytes.map { String(format: "%.1fMB", Double($0) / 1_048_576) } ?? "-" }
+        let live = census.map { "; live registrations: " + liveByKind($0) } ?? ""
         return "checkpoint after \(steps) steps: rss=\(mb(ProcessMemory.currentResidentBytes())) "
-            + "footprint=\(mb(ProcessMemory.currentFootprintBytes()))"
+            + "footprint=\(mb(ProcessMemory.currentFootprintBytes()))" + live
+    }
+
+    /// The registrations alive, by every kind that has any, and in all.
+    private static func liveByKind(_ counts: ObservationCensus.Counts) -> String {
+        let kinds = ObservationCensus.Kind.allCases.filter { counts.armed($0) > 0 }
+        let each = kinds.map { "\($0) \(counts.live($0))" }.joined(separator: ", ")
+        return (each.isEmpty ? "" : each + ", ") + "all \(counts.live)"
+    }
+
+    /// The census's lines for the report: per kind of reader, what the steps
+    /// armed (and per step), what fired, what was dropped with the objects it
+    /// read, and what is alive at the end.
+    private static func censusLines(_ report: Report) -> [String] {
+        guard let open = report.censusAtOpen, let end = report.censusAtEnd else { return [] }
+        let steps = Double(max(1, report.steps))
+        var lines = ["census (observation registrations over the steps, by kind of reader):"]
+        for kind in ObservationCensus.Kind.allCases where end.armed(kind) > 0 {
+            let armed = end.armed(kind) - open.armed(kind)
+            lines.append(
+                String(
+                    format: "  %@ armed %d (%.2f/step), fired %d, dropped %d, alive at the end %d",
+                    kind.description, armed, Double(armed) / steps, end.fired(kind) - open.fired(kind),
+                    end.dropped(kind) - open.dropped(kind), end.live(kind)))
+        }
+        if lines.count == 1 { lines.append("  none armed") }
+        if let after = report.censusAfterFinish { lines.append("  after the finish: alive " + liveByKind(after)) }
+        return lines
     }
 
     /// Lets both instances do what their sessions do once the steps are played,
@@ -337,6 +385,7 @@ enum SessionRunner {
                 rows.rendered, rows.served, Double(rows.rendered) / steps, Double(rows.served) / steps,
                 stats.hits, stats.misses, stats.stores, stats.subtreeClears, stats.clearVisits))
         for line in report.checkpoints { Swift.print("  " + line) }
+        for line in censusLines(report) { Swift.print("  " + line) }
         if let finish = report.finish { Swift.print("  finish: " + finish) }
         if !report.lastScreen.isEmpty {
             Swift.print("  last frame:")
