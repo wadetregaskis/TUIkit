@@ -121,17 +121,19 @@ file_header:
 # zero-width space (U+200B), zero-width non-joiner (U+200C) or U+FEFF inside a
 # string literal. This project's literals are full of terminal-width cases, and
 # a character that draws nothing is invisible in an editor and in a diff, so
-# the rest of the characters that draw nothing are added: in a literal they
-# must be spelled as `\u{…}` escapes, which a reviewer can see — as the width
-# corpus (`bidi_lrm`, `bidi_rlm`) and `ScalarWidthFastPathTests` (U+202D,
-# U+202C) already spell them.
+# the ones a literal here has any use for are added: in a literal they must be
+# spelled as `\u{…}` escapes, which a reviewer can see — as the width corpus
+# (`bidi_lrm`, `bidi_rlm`) and `ScalarWidthFastPathTests` (U+202D, U+202C)
+# already spell them. Escape one BY HAND: the rule autocorrects by DELETING the
+# character, and a deleted control draws nothing either, so a width test built
+# on one would go on passing without testing it. Never `--fix` this rule.
 #   - the bidi controls behind "Trojan Source" (CVE-2021-42574): the
 #     embeddings and overrides U+202A–202E and the isolates U+2066–2069;
 #   - the direction marks U+200E, U+200F and U+061C;
 #   - the word joiner and invisible operators U+2060–2064, and the soft hyphen
 #     U+00AD.
 # Deliberately NOT added: U+200D ZERO WIDTH JOINER and the tag characters
-# U+E0020–E007F, which occur raw 98 and 6 times outside comments today, as the
+# U+E0020–E007F, which occur raw 96 and 6 times in string literals today, as the
 # content of emoji-sequence and subdivision-flag literals (they read as the
 # glyph they build), and the variation selectors, which change how a character
 # looks.
@@ -157,6 +159,14 @@ invisible_character:
     - "2067"
     - "2068"
     - "2069"
+
+# `redundant_final` (enabled 2026-09-28) and this rule disagree about a `class`
+# member of a final class: this one asked for `final class func`, which that
+# one then reports as redundant, and `swiftlint --fix` swapped one pair of
+# errors for the other on every run. `static_over_final_class` rejects both
+# spellings anyway; asking for `static` is the one answer all three accept.
+non_overridable_class_declaration:
+  final_class_modifier: static
 
 line_length:
   warning: 160
