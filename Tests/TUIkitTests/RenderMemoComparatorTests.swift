@@ -234,36 +234,44 @@ struct RenderMemoComparatorTests {
     @Test("ProgressView and GeometryProxy compare every stored property")
     func valueViews() {
         let base = ProgressView(
-            fractionCompleted: 0.5, style: .block, label: Text("l"),
+            fractionCompleted: 0, style: .block, label: Text("l"),
             currentValueLabel: Text("v"))
         expectDistinguishes(
             "ProgressView", base,
             identical: ProgressView(
-                fractionCompleted: 0.5, style: .block, label: Text("l"),
+                fractionCompleted: 0, style: .block, label: Text("l"),
                 currentValueLabel: Text("v")),
             variants: [
                 (
-                    "fractionCompleted",
+                    "fraction",
                     ProgressView(
                         fractionCompleted: 0.25, style: .block, label: Text("l"),
                         currentValueLabel: Text("v"))
                 ),
                 (
+                    // The base is determinate at 0, the stored fraction an
+                    // indeterminate bar also holds: only the flag differs.
+                    "isDeterminate",
+                    ProgressView(
+                        fractionCompleted: nil, style: .block, label: Text("l"),
+                        currentValueLabel: Text("v"))
+                ),
+                (
                     "style",
                     ProgressView(
-                        fractionCompleted: 0.5, style: .bar, label: Text("l"),
+                        fractionCompleted: 0, style: .bar, label: Text("l"),
                         currentValueLabel: Text("v"))
                 ),
                 (
                     "label",
                     ProgressView(
-                        fractionCompleted: 0.5, style: .block, label: Text("other"),
+                        fractionCompleted: 0, style: .block, label: Text("other"),
                         currentValueLabel: Text("v"))
                 ),
                 (
                     "currentValueLabel",
                     ProgressView(
-                        fractionCompleted: 0.5, style: .block, label: Text("l"),
+                        fractionCompleted: 0, style: .block, label: Text("l"),
                         currentValueLabel: Text("other"))
                 ),
             ])

@@ -70,17 +70,45 @@ import Foundation
 /// The bar fills the full `availableWidth`. When a label or currentValueLabel
 /// is provided, the view is 2 lines tall; otherwise 1 line.
 public struct ProgressView<Label: View, CurrentValueLabel: View>: View {
-    /// The normalized fraction completed (0.0–1.0), or nil for indeterminate.
-    let fractionCompleted: Double?
+    // Declared so the common shape has no padding: the per-pass memos key a
+    // view by its raw bytes, and padding is whatever the memory held before.
+    // The fraction was a `Double?`, nine bytes at eight-byte alignment, which
+    // left seven undefined bytes before the style; stored as a `Double` and a
+    // flag, and the flag placed after the style's odd 79 bytes, a bar with no
+    // labels has none (97 → 90 bytes; `ControlLayoutPaddingTests`).
+
+    /// The normalized fraction completed (0.0–1.0) when ``isDeterminate``;
+    /// ``fractionCompleted`` is the API.
+    private let fraction: Double
 
     /// The visual style of the progress bar.
     var style: TrackStyle
+
+    /// Whether ``fraction`` holds a value: `false` is an indeterminate bar.
+    private let isDeterminate: Bool
 
     /// The label view displayed above the bar (left-aligned).
     let label: Label?
 
     /// The current value label displayed above the bar (right-aligned).
     let currentValueLabel: CurrentValueLabel?
+
+    /// The memberwise shape the stored layout replaced, for the framework's
+    /// own callers.
+    init(fractionCompleted: Double?, style: TrackStyle, label: Label?, currentValueLabel: CurrentValueLabel?) {
+        (self.fraction, self.isDeterminate) = Self.stored(fractionCompleted)
+        self.style = style
+        self.label = label
+        self.currentValueLabel = currentValueLabel
+    }
+
+    /// The normalized fraction completed (0.0–1.0), or nil for indeterminate.
+    var fractionCompleted: Double? { isDeterminate ? fraction : nil }
+
+    /// The two stored halves of a fraction that may be absent.
+    private static func stored(_ fraction: Double?) -> (Double, Bool) {
+        (fraction ?? 0, fraction != nil)
+    }
 
     public var body: some View {
         _ProgressViewCore(
@@ -100,7 +128,7 @@ extension ProgressView where Label == EmptyView, CurrentValueLabel == EmptyView 
     /// Use this when a task's progress cannot be measured. The bar shows a
     /// highlighted segment sweeping continuously across the track.
     public init() {
-        self.fractionCompleted = nil
+        (self.fraction, self.isDeterminate) = Self.stored(nil)
         self.style = .block
         self.label = nil
         self.currentValueLabel = nil
@@ -123,7 +151,7 @@ extension ProgressView where Label == Text, CurrentValueLabel == EmptyView {
     /// - Parameter title: A string that describes the task in progress.
     @_disfavoredOverload
     public init<S: StringProtocol>(_ title: S) {
-        self.fractionCompleted = nil
+        (self.fraction, self.isDeterminate) = Self.stored(nil)
         self.style = .block
         self.label = Text(String(title))
         self.currentValueLabel = nil
@@ -135,7 +163,7 @@ extension ProgressView where CurrentValueLabel == EmptyView {
     ///
     /// - Parameter label: A view that describes the task in progress.
     public init(@ViewBuilder label: () -> Label) {
-        self.fractionCompleted = nil
+        (self.fraction, self.isDeterminate) = Self.stored(nil)
         self.style = .block
         self.label = label()
         self.currentValueLabel = nil
@@ -151,7 +179,7 @@ extension ProgressView where Label == EmptyView, CurrentValueLabel == EmptyView 
     ///   - value: The completed amount (nil for indeterminate).
     ///   - total: The total amount (default: 1.0).
     public init<V: BinaryFloatingPoint>(value: V?, total: V = 1.0) {
-        self.fractionCompleted = Self.normalizedFraction(value: value, total: total)
+        (self.fraction, self.isDeterminate) = Self.stored(Self.normalizedFraction(value: value, total: total))
         self.style = .block
         self.label = nil
         self.currentValueLabel = nil
@@ -170,7 +198,7 @@ extension ProgressView where CurrentValueLabel == EmptyView {
         total: V = 1.0,
         @ViewBuilder label: () -> Label
     ) {
-        self.fractionCompleted = Self.normalizedFraction(value: value, total: total)
+        (self.fraction, self.isDeterminate) = Self.stored(Self.normalizedFraction(value: value, total: total))
         self.style = .block
         self.label = label()
         self.currentValueLabel = nil
@@ -191,7 +219,7 @@ extension ProgressView {
         @ViewBuilder label: () -> Label,
         @ViewBuilder currentValueLabel: () -> CurrentValueLabel
     ) {
-        self.fractionCompleted = Self.normalizedFraction(value: value, total: total)
+        (self.fraction, self.isDeterminate) = Self.stored(Self.normalizedFraction(value: value, total: total))
         self.style = .block
         self.label = label()
         self.currentValueLabel = currentValueLabel()
@@ -230,7 +258,7 @@ extension ProgressView where Label == Text, CurrentValueLabel == EmptyView {
         value: V?,
         total: V = 1.0
     ) {
-        self.fractionCompleted = Self.normalizedFraction(value: value, total: total)
+        (self.fraction, self.isDeterminate) = Self.stored(Self.normalizedFraction(value: value, total: total))
         self.style = .block
         self.label = Text(String(title))
         self.currentValueLabel = nil
@@ -286,10 +314,22 @@ private enum ProgressStateIndex {
 
 /// Internal view that handles the actual rendering of ProgressView.
 private struct _ProgressViewCore<Label: View, CurrentValueLabel: View>: View, Renderable, Layoutable {
-    let fractionCompleted: Double?
+    // Laid out as `ProgressView` is, and for its reason.
+    private let fraction: Double
     let style: TrackStyle
+    private let isDeterminate: Bool
     let label: Label?
     let currentValueLabel: CurrentValueLabel?
+
+    init(fractionCompleted: Double?, style: TrackStyle, label: Label?, currentValueLabel: CurrentValueLabel?) {
+        self.fraction = fractionCompleted ?? 0
+        self.style = style
+        self.isDeterminate = fractionCompleted != nil
+        self.label = label
+        self.currentValueLabel = currentValueLabel
+    }
+
+    var fractionCompleted: Double? { isDeterminate ? fraction : nil }
 
     var body: Never {
         fatalError("_ProgressViewCore renders via Renderable")
