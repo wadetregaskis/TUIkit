@@ -214,7 +214,10 @@ struct ContentWidthRecord {
     /// walk and never drawn, is watched by nothing else once the frame that
     /// walked it has gone (see `ObservationLeases`). A flat list rather than
     /// a lease holding the one before, so a log extended every frame builds no
-    /// chain as long as its history for a release to recurse down.
+    /// chain as long as its history for a release to recurse down. Anything
+    /// else that keeps a result outside the cache and watches
+    /// `sizeClearGeneration` must do the same: `ObservationLeaseHolderScanTests`
+    /// fails a source file that reads it without opening a lease computation.
     var walkLeases: [ObservationLease] = []
     var challengeLease: ObservationLease?
 
