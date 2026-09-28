@@ -125,7 +125,9 @@ struct StorageFailureTests {
             // every write below it fails with ENOTDIR. More portable than
             // relying on a permission mode, which root ignores.
             let blocker = root.appendingPathComponent("blocked")
-            FileManager.default.createFile(atPath: blocker.path, contents: Data())
+            // `_ =`: Darwin's Foundation marks the result discardable, and
+            // swift-corelibs-foundation does not, so Linux warned here.
+            _ = FileManager.default.createFile(atPath: blocker.path, contents: Data())
 
             let storage = JSONFileStorage(fileURL: blocker.appendingPathComponent("settings.json"))
             storage.setValue(42, forKey: "answer")
