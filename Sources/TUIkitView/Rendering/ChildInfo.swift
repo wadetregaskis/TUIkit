@@ -511,6 +511,10 @@ private func measureBeneathProbe<V: View>(
         return served
     }
     cache.measuresBeneathProbes += 1
+    if cache.probeMissLog != nil {
+        cache.probeMissLog?.append(
+            "\(V.self) \(key); held: \(cache.measureKeys(sharingTypeAndIdentityWith: key))")
+    }
     return measureChildUncached(view, proposal: proposal, context: context)
 }
 

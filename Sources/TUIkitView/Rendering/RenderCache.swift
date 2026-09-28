@@ -362,6 +362,19 @@ public final class RenderCache: @unchecked Sendable {
     /// own answers. Counted on the probe's path only.
     package internal(set) var measuresBeneathProbes = 0
 
+    /// A test's record of each measure counted in ``measuresBeneathProbes``:
+    /// the view's type and key, and every key this pass's memo held for the
+    /// same type at the same identity — so a count that comes out differently
+    /// says which view missed, and whether it was its value or a width that
+    /// failed to match. `nil`, and never written, unless a test sets it; kept
+    /// on the probe's path, which an ordinary measure never takes.
+    package var probeMissLog: [String]?
+
+    /// This pass's memo keys for `key`'s view type at `key`'s identity.
+    package func measureKeys(sharingTypeAndIdentityWith key: MeasureKey) -> [MeasureKey] {
+        measureEntries.keys.filter { $0.viewType == key.viewType && $0.identityHash == key.identityHash }
+    }
+
     /// How many measures of a lazy stack NESTED in a scroll view's content —
     /// below a header, or in a row of an outer lazy stack — have walked the
     /// rows their budget reaches rather than estimating them, over every pass.

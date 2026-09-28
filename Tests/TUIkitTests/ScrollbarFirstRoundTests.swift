@@ -177,7 +177,7 @@ struct ScrollbarFirstRoundTests {
     /// nothing here depends on an opening frame.
     private func writeFrame(
         _ shape: ScrollbarRoundShape, indicators: ScrollIndicatorVisibility
-    ) -> (lookups: Int, rowMeasures: Int, screen: [String], screenBefore: [String]) {
+    ) -> (lookups: Int, rowMeasures: Int, screen: [String], screenBefore: [String], split: String) {
         let measures = RowMeasures()
         let app = HeadlessApp(
             RoundsApp(shape: shape, indicators: indicators, measures: measures), width: 40, height: 20)
@@ -193,7 +193,10 @@ struct ScrollbarFirstRoundTests {
             lookups: lookupsAfter.hits + lookupsAfter.misses - lookupsBefore.hits - lookupsBefore.misses,
             rowMeasures: measures.count - measuresBefore,
             screen: app.screen.map(\.stripped),
-            screenBefore: screenBefore)
+            screenBefore: screenBefore,
+            split: "\(lookupsAfter.hits - lookupsBefore.hits) hits, "
+                + "\(lookupsAfter.misses - lookupsBefore.misses) misses, "
+                + "\(measures.count - measuresBefore) rows measured")
     }
 
     private func drawsBar(_ screen: [String]) -> Bool {
@@ -216,18 +219,26 @@ struct ScrollbarFirstRoundTests {
     /// rung.
     @Test("Deciding the bar over a lazy stack costs the same at 100,000 rows as at 10,000")
     func barCostDoesNotGrowWithTheRows() {
+        // Linux reported costs from 27 to 39, differing between the two row
+        // counts and from run to run, where macOS reports equal ones; nothing
+        // on macOS reproduces it. The split says which side moved.
+        var splits: [String] = []
         func barCost(rows: Int) -> Int {
             let decided = writeFrame(.lazy(rows: rows), indicators: .automatic)
             let hidden = writeFrame(.lazy(rows: rows), indicators: .hidden)
             #expect(drawsBar(decided.screen), "precondition: \(rows) rows draw the bar: \(decided.screen)")
             #expect(!drawsBar(hidden.screen), "precondition: the twin draws none: \(hidden.screen)")
+            splits.append("\(rows) rows — decided: \(decided.split); hidden: \(hidden.split)")
             return decided.lookups - hidden.lookups
         }
         let tenThousand = barCost(rows: 10_000)
         let hundredThousand = barCost(rows: 100_000)
         #expect(
             hundredThousand == tenThousand,
-            "deciding the bar cost \(hundredThousand) lookups over 100,000 rows, \(tenThousand) over 10,000")
+            """
+            deciding the bar cost \(hundredThousand) lookups over 100,000 rows, \(tenThousand) over 10,000
+            \(splits.joined(separator: "\n"))
+            """)
     }
 
     /// The shapes the shortcut must leave alone. For content that fits, "does

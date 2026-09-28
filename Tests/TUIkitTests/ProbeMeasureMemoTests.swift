@@ -244,10 +244,14 @@ struct ProbeMeasureMemoTests {
     func standardProbeMeasuresOnlyTheRow(style: ButtonStyleCase, disabled: Bool) throws {
         let context = probeMemoisedContext(width: Self.width)
         let cache = try #require(context.renderCache)
+        // Linux measured 2 or 3 here where macOS measures 1, varying from run
+        // to run, and nothing on macOS reproduces it; the log says which view
+        // missed and what the memo held for it.
+        cache.probeMissLog = []
         let button = style.apply(to: Button(action: {}, label: { ProbedFillingLabel() }))
         let size = measureChild(AnyView(button.disabled(disabled)), proposal: Self.proposal, context: context)
         #expect(size.isWidthFlexible, "precondition: the filling label's button probed")
-        #expect(cache.measuresBeneathProbes == 1)
+        #expect(cache.measuresBeneathProbes == 1, "\((cache.probeMissLog ?? []).joined(separator: "\n"))")
     }
 }
 
