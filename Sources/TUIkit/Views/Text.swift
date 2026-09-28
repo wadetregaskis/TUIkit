@@ -37,14 +37,13 @@ public struct Text: View, Equatable {
     /// spelling.
     public typealias TruncationMode = TUIkit.TruncationMode
 
+    // Declared so there is no padding between them for the per-pass memos'
+    // raw-byte key to read (see the note on `TextStyle`'s properties): the two
+    // 8-byte-aligned fields first, then `style`, whose 33 bytes end on a byte
+    // boundary. Style between them left 7 undefined bytes before `runs`.
+
     /// The text to display.
     let content: String
-
-    /// The style of the text (color, formatting, etc.).
-    ///
-    /// For a concatenated text this is the *base* beneath every run's own
-    /// attributes — see ``Text/+(_:_:)``.
-    var style: TextStyle
 
     /// The runs this text is made of, or `nil` when it is a single fragment.
     ///
@@ -52,6 +51,12 @@ public struct Text: View, Equatable {
     /// takes the original render path untouched — no re-attribution, no extra
     /// allocation, byte-identical output. See ``Text/+(_:_:)``.
     var runs: [Run]?
+
+    /// The style of the text (color, formatting, etc.).
+    ///
+    /// For a concatenated text this is the *base* beneath every run's own
+    /// attributes — see ``Text/+(_:_:)``.
+    var style: TextStyle
 
     /// Creates a text view displaying a localized string.
     ///
@@ -425,6 +430,24 @@ struct TextStyle: Sendable, Equatable {
         return copy
     }
 
+    // The stored properties are declared widest alignment first, so the
+    // struct has no padding between them: the per-pass memos key a view by its
+    // raw bytes (`viewValueHash`), and a padding byte is whatever the memory
+    // held before — two equal styles can differ there. Linux did, and a
+    // button's caps missed the memo on every probe. `lineLimit` (8-byte
+    // aligned) comes first; everything after it is byte-aligned.
+    // `TextLayoutPaddingTests` pins it.
+
+    /// How many lines the text may occupy, or `nil` to inherit `\.lineLimit`
+    /// from the environment.
+    ///
+    /// Optional for the same reason ``truncationMode`` is, and with one extra
+    /// twist: the limit's own "no limit" answer is a *value*
+    /// (``LineLimit/unlimited``), not the absence of one — otherwise
+    /// `Text(x).lineLimit(nil)` inside a `.lineLimit(2)` subtree could not say
+    /// "not me" and the inherited cap would be unresettable.
+    var lineLimit: LineLimit?
+
     /// The foreground color of the text.
     var foregroundColor: Color?
 
@@ -486,16 +509,6 @@ struct TextStyle: Sendable, Equatable {
     /// Whether truncation cuts only at word boundaries rather than at any
     /// character position.
     var truncatesAtWordBoundary: Bool = false
-
-    /// How many lines the text may occupy, or `nil` to inherit `\.lineLimit`
-    /// from the environment.
-    ///
-    /// Optional for the same reason ``truncationMode`` is, and with one extra
-    /// twist: the limit's own "no limit" answer is a *value*
-    /// (``LineLimit/unlimited``), not the absence of one — otherwise
-    /// `Text(x).lineLimit(nil)` inside a `.lineLimit(2)` subtree could not say
-    /// "not me" and the inherited cap would be unresettable.
-    var lineLimit: LineLimit?
 
     /// Creates a default TextStyle with no formatting.
     init() {}
