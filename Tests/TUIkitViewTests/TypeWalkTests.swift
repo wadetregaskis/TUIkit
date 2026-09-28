@@ -5,7 +5,6 @@
 //  License: MIT
 
 import Foundation
-@_spi(Reflection) import Swift
 import Testing
 
 @testable import TUIkitCore
@@ -18,8 +17,8 @@ import Testing
 /// The type walk answers from a type's field metadata, with no instance, what
 /// a value of it can hold: a source reader (`Binding`), an existential, a
 /// closure. Each rule is pinned by a type built to exercise it, and the
-/// stdlib reflection SPI it rests on is pinned too, so a toolchain that
-/// changes what `_forEachField` reports fails here, on every lane.
+/// runtime field metadata it rests on (``RuntimeFields``) is pinned too, so a
+/// runtime that changes what it reports fails here, on every lane.
 @Suite("A type can say what it holds without an instance")
 struct TypeWalkTests {
     // MARK: Types that exercise the rules
@@ -141,7 +140,7 @@ struct TypeWalkTests {
     @Test("A struct or tuple that is not POD and lists no fields is refused: its field metadata was stripped")
     func strippedMetadataRefused() {
         // What the runtime does for a type from a module built without
-        // reflection metadata: `_forEachField` says it described the type,
+        // reflection metadata: the runtime says it described the type,
         // and lists no fields.
         var walk = TypeWalk(listFields: { _, _, _ in true })
         #expect(walk.verdict(for: HoldsExistential.self).refusal == .noFieldMetadata(path: "HoldsExistential"))
@@ -157,7 +156,7 @@ struct TypeWalkTests {
 
     @Test("A type the lister does not describe is refused")
     func undescribedRefused() {
-        // `_forEachField` answers `false` only for a class asked without the
+        // The runtime lister answers `false` only for a class asked without the
         // class option, or when its body stops it; the walk does neither, so
         // this refusal is a guard the runtime never reaches.
         var walk = TypeWalk(listFields: { _, _, _ in false })
@@ -195,9 +194,9 @@ struct TypeWalkTests {
         }
     }
 
-    // MARK: The SPI it rests on
+    // MARK: The runtime metadata it rests on
 
-    @Test("_forEachField lists a struct's stored fields, in order, with their types and kinds")
+    @Test("The runtime lists a struct's stored fields, in order, with their types and kinds")
     func spiListsStructFields() {
         struct Sample {
             var count: Int
@@ -209,7 +208,7 @@ struct TypeWalkTests {
             var carrier: Carrier
         }
         var fields: [String] = []
-        let described = _forEachField(of: Sample.self) { name, _, type, kind in
+        let described = RuntimeFields.forEach(of: Sample.self) { name, _, type, kind in
             fields.append("\(String(cString: name)):\(type == Int.self ? "Int" : "…"):\(kind)")
             return true
         }
@@ -221,29 +220,43 @@ struct TypeWalkTests {
             ])
     }
 
-    @Test("_forEachField lists a class's fields only with the class option, whose raw value is 1")
+    @Test("The runtime lists a class's fields only with the class option, whose raw value is the stdlib's, 1")
     func spiListsClassFieldsWithTheOption() {
         var without = 0
-        _ = _forEachField(of: Shared.self) { _, _, _, _ in
+        let refused = RuntimeFields.forEach(of: Shared.self) { _, _, _, _ in
             without += 1
             return true
         }
         var with = 0
-        let described = _forEachField(of: Shared.self, options: _EachFieldOptions(rawValue: 1 << 0)) { _, _, _, _ in
+        let described = RuntimeFields.forEach(of: Shared.self, options: .classType) { _, _, _, _ in
             with += 1
             return true
         }
-        #expect(without == 0)
+        #expect(!refused && without == 0)
         #expect(described && with == 2)
+        #expect(!RuntimeFields.forEach(of: Plain.self, options: .classType) { _, _, _, _ in true })
+        #expect(RuntimeFields.Options.classType.rawValue == 1)
     }
 
-    @Test("_forEachField describes a noncopyable field as ()")
+    @Test("The runtime's kind for a type needs no field of it")
+    func kindReadFromTheType() {
+        #expect(RuntimeFields.Kind(of: Int.self) == .struct)
+        #expect(RuntimeFields.Kind(of: Shared.self) == .class)
+        #expect(RuntimeFields.Kind(of: Carrier.self) == .enum)
+        #expect(RuntimeFields.Kind(of: Int?.self) == .optional)
+        #expect(RuntimeFields.Kind(of: (Int, Int).self) == .tuple)
+        #expect(RuntimeFields.Kind(of: (() -> Void).self) == .function)
+        #expect(RuntimeFields.Kind(of: (any Payload).self) == .existential)
+        #expect(RuntimeFields.Kind(of: Int.Type.self) == .metatype)
+    }
+
+    @Test("The runtime describes a noncopyable field as ()")
     func spiDescribesNoncopyableAsVoid() {
         #if canImport(Synchronization)
             if #available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *) {
                 final class Guarded { let lock = Mutex(0) }
                 var types: [Any.Type] = []
-                _ = _forEachField(of: Guarded.self, options: _EachFieldOptions(rawValue: 1 << 0)) { _, _, type, _ in
+                RuntimeFields.forEach(of: Guarded.self, options: .classType) { _, _, type, _ in
                     types.append(type)
                     return true
                 }

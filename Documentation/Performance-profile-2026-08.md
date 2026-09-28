@@ -4320,6 +4320,23 @@ So `resolveEnvironmentProperties` goes back to its form before §55: a
 per-type negative memo, then a `Mirror` walk for any type that has
 `@Environment` properties.
 
+**2026-09-28: the trap was walked into again.** Option C's type walk
+(`TypeWalk`, which decides whether a row may be re-checked by its value) used
+`_forEachField` under `@_spi(Reflection) import Swift`, and every Xcode lane —
+macOS 15, 26 and 27, and the parity and DocC jobs, which build with Xcode —
+failed at `TUIkitView` on the first push to reach CI. It could not fall back to
+`Mirror`: the walk's point is to answer with no instance. So it now reads the
+runtime's field metadata through `RuntimeFields`, which binds with
+`@_silgen_name` the runtime entry points `_forEachField` is itself built on
+(`swift_reflectionMirror_recursiveCount`, `…RecursiveChildMetadata`,
+`…RecursiveChildOffset`, `swift_getMetadataKind`; not `swift_isClassType`, which
+the compiler reserves and warns about — the kind answers it). That is
+not the ABI guess rejected above: they take a metadata pointer, an `Int` and a
+pointer to a small C struct the runtime fills in, not a non-`@frozen` stdlib
+struct, and the stdlib declares them the same way. The one layout depended on
+is that C struct's, unchanged since 5.2 and padded against a runtime that
+appends to it. All of the entry points are in the SDK's `libswiftCore.tbd`.
+
 ### What that costs now
 
 §55's −11.6% came from `_MenuItemRow`, and on the `menu` tree it was the only
