@@ -7485,7 +7485,26 @@ cells, the probe's run still asks for 24 renders over its 24 steps, which change
 screen (measured through the run loop, 2026-09-28). Asking against the finished canvas would ask
 for none there; the shape is contrived, and it is left.
 
-`LayerOverABaseRunTests` pins the three compositors (12 mismatches each before) and the render
+**A row's background view (2026-09-28).** `.listRowBackground(_:)` with a view lays the row's
+content over it (`_ListRowBackgroundView`), punching its runs under the content as a `ZStack`
+does, and asked for nothing: `Text("x").listRowBackground(run)` held `x` on the drawn frame's red
+at 12 of 24 ticks. It asks now, by the rule above, under its identity and its own type as an
+`.overlay` does, since the row's content renders at the modifier's identity and a second
+`.listRowBackground` on the row is at the same path (two chained, each over a run of its own
+under a letter of the label: 10 mismatches and 11 renders under one token, none and 31 under
+two). A fading layer over its run is the known issue above, as under the other compositors. A
+background view with no run asks nothing more. No Example page and no Stress scenario lays a row
+over a background view.
+
+What it does not cover (known issue, older than this section): a background view shorter than
+the row is repeated down it as lines alone (`filled`), its runs left on the first copy. Where the
+run's own line shows its field the wake above renders every copy at each step; where nothing
+there does — a chip naming its own field over the run — nothing asks, and the copies below hold
+the drawn frame's field between renders: a three-line row over the one-line run replayed its
+second and third lines on the drawn red at 12 of 24 ticks each, with no render asked for. The
+follow-up is to repeat the runs with the lines, or to ask for their steps wherever a copy shows.
+
+`LayerOverABaseRunTests` pins the four compositors (12 mismatches each before) and the render
 count, a run turning only its glyphs under the label (no render asked for, as before), two
-chained `.overlay`s (31 renders, the two runs' steps), and the fading layers and the floating
-labels above as known issues.
+chained `.overlay`s and two chained row backgrounds (31 renders each, the two runs' steps), and
+the fading layers, the floating labels and the repeated background above as known issues.

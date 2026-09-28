@@ -2,7 +2,8 @@
 //  LayerOverABaseRunTests.swift
 //
 //  A layer composited over a run of its base — a `ZStack`'s later child, an
-//  `.overlay`, a `Layout`'s later subview — punches the run under its footprint:
+//  `.overlay`, a `Layout`'s later subview, a `List` row's content over its
+//  `.listRowBackground` view — punches the run under its footprint:
 //  the layer's cells replace the base's, and a run replaying there would paint
 //  over them. But a layer's cell that names no field of its own shows the base's
 //  field, which the composite fills in from the frame the render drew. Where the
@@ -142,6 +143,63 @@ private struct ChainedOverlaysApp: App {
     }
 }
 
+/// Two cells turning their field every `frameTicks` ticks, after `offsetX` plain ones.
+private struct TurningFieldAt: View, Renderable {
+    let offsetX: Int
+    let frameTicks: Int
+    var body: Never { fatalError("renders via Renderable") }
+
+    func renderToBuffer(context: RenderContext) -> FrameBuffer {
+        let run = AnimatedCellRun(
+            offsetX: offsetX, offsetY: 0, width: 2, frames: TurningField.fields, frameTicks: frameTicks,
+            clock: .content)
+        let elapsed = Double(context.environment.frameNowNanos) / 1_000_000_000
+        var buffer = FrameBuffer(lines: [String(repeating: " ", count: offsetX) + run.frame(atElapsed: elapsed)])
+        guard !context.isMeasuring else { return buffer }
+        context.environment.volatileReadTracker?.recordRenderSideEffect()
+        buffer.animatedCells = [run]
+        return buffer
+    }
+}
+
+/// A row's label over two background views chained on it, each with a run under a
+/// letter of the label: the inner's at `x` every 3 ticks, the outer's at `y` every 7.
+private struct ChainedRowBackgroundsApp: App {
+    var body: some Scene {
+        WindowGroup {
+            VStack(spacing: 0) {
+                Button("focus") {}
+                List {
+                    Text("x   y")
+                        .listRowBackground(TurningFieldAt(offsetX: 0, frameTicks: 3))
+                        .listRowBackground(TurningFieldAt(offsetX: 4, frameTicks: 7))
+                }
+            }
+        }
+    }
+}
+
+/// A three-line row over the one-line run as its background view, which the row
+/// repeats down itself; on the run's own line a chip that names its field covers
+/// the run, so nothing there shows the run's field.
+private struct TallRowOverARunApp: App {
+    var body: some Scene {
+        WindowGroup {
+            VStack(spacing: 0) {
+                Button("focus") {}
+                List {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("xy").background(Color.rgb(0, 160, 0))
+                        Text("b")
+                        Text("c")
+                    }
+                    .listRowBackground(TurningField())
+                }
+            }
+        }
+    }
+}
+
 @MainActor
 @Suite("A layer over a run of its base")
 struct LayerOverABaseRunTests {
@@ -151,6 +209,8 @@ struct LayerOverABaseRunTests {
         case zStack
         case overlay
         case layout
+        /// A `List` row's content over a background view: `.listRowBackground(_:)`.
+        case rowBackground
 
         var testDescription: String { rawValue }
 
@@ -160,6 +220,7 @@ struct LayerOverABaseRunTests {
             case .zStack: ZStack(alignment: .leading) { base; layer.view }
             case .overlay: base.overlay(alignment: .leading) { layer.view }
             case .layout: Stacked { base; layer.view }
+            case .rowBackground: List { layer.view.listRowBackground(base) }
             }
         }
     }
@@ -235,6 +296,39 @@ struct LayerOverABaseRunTests {
         // walked, and the 7-tick run's 11, 4 of them at the same instants.
         #expect(found.scheduledRenders == 31, "\(found.scheduledRenders) renders asked for")
         for mismatch in found.mismatches { Issue.record(Comment(rawValue: mismatch)) }
+    }
+
+    /// Two `.listRowBackground` views chained on one row, each with a run under a
+    /// letter of the label, the inner's every 3 ticks and the outer's every 7: each
+    /// letter is on the field each step shows. The row's content renders at the
+    /// modifier's own identity, as an `.overlay`'s base does, so the two share one;
+    /// under one token for both, the outer's request replaced the inner's.
+    @Test("Chained row backgrounds each ask for the steps of the run under their own label")
+    func chainedRowBackgrounds() throws {
+        let found = ReplayOracle.compare({ ChainedRowBackgroundsApp() }, ticks: 24, size: (30, 8))
+        try #require(found.compared >= 24, "only \(found.compared) rows were compared")
+        // As for the chained overlays: the 3-tick run's 24 steps and the 7-tick run's
+        // 11, 4 of them at the same instants.
+        #expect(found.scheduledRenders == 31, "\(found.scheduledRenders) renders asked for")
+        for mismatch in found.mismatches { Issue.record(Comment(rawValue: mismatch)) }
+    }
+
+    /// Known issue: a background view shorter than its row is repeated down the row
+    /// as lines alone (`_ListRowBackgroundView.filled`), its run left on the first
+    /// copy. Where nothing on the run's own line shows its field — here a chip that
+    /// names its own covers it — nothing asks for a render, and the copies below hold
+    /// the drawn frame's field between renders: `b` on `rgb(200, 0, 0)` where a render
+    /// draws it on `rgb(0, 0, 200)`. Older than §109; pinned until the copies carry
+    /// the run, or ask for its steps.
+    @Test("A background view repeated down a tall row holds its copies' drawn field (known issue)")
+    func aBackgroundRepeatedDownATallRow() throws {
+        let found = ReplayOracle.compare({ TallRowOverARunApp() }, ticks: 24, size: (30, 10))
+        try #require(found.compared >= 24, "only \(found.compared) rows were compared")
+        withKnownIssue("a repeated background's copies carry no run and ask for no render (§109)") {
+            #expect(
+                found.mismatches.isEmpty,
+                "\(found.mismatches.count) mismatches, first \(found.mismatches.first ?? "")")
+        }
     }
 
     /// Known issue: a layer that fades, or names a translucent field, over a run of

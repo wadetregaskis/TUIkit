@@ -216,6 +216,18 @@ extension _ListRowBackgroundView: Renderable {
         // hit-test regions and overlays are the ones that survive — a
         // background must not swallow a button in the row.
         var result = filled(backdrop, toWidth: width, height: foreground.height)
+        // A run of the background whose field the content shows, and whose frames
+        // turn it, is punched under the content as a `ZStack`'s lower layer is, so it
+        // asks for a render at each of its steps (`Opacity as composition.md` §109).
+        // Under this modifier's type as well as its identity, as an `.overlay` asks:
+        // the content renders at this identity, so a second `.listRowBackground` on
+        // the row is at the same path, and a wake is kept per token.
+        let showingThrough = result.runsShowingThrough(foreground, at: (x: 0, y: 0))
+        if !showingThrough.isEmpty {
+            context.requestWake(
+                token: "row-background-run-\(context.identity.path)-\(UInt(bitPattern: ObjectIdentifier(Self.self)))",
+                forNextStepOf: showingThrough.map { ($0.clock, $0.frameTicks) })
+        }
         result = result.compositedResolvingOpacity(
             with: foreground, at: (x: 0, y: 0), palette: context.environment.palette)
         return result.replacingLines(result.lines).withRegions(of: foreground)
@@ -223,6 +235,10 @@ extension _ListRowBackgroundView: Renderable {
 
     /// Repeats the backdrop's own lines to cover the whole row — a one-line
     /// `Color` fills a three-line row, which is what "behind the row" means.
+    ///
+    /// Lines alone: a run of the backdrop stays on the first copy, so an animating
+    /// background's copies hold the drawn frame between renders unless something
+    /// asks for its steps — a known gap (`Opacity as composition.md` §109).
     private func filled(_ buffer: FrameBuffer, toWidth width: Int, height: Int) -> FrameBuffer {
         guard !buffer.lines.isEmpty else { return FrameBuffer(emptyWithHeight: height) }
         let lines = (0..<height).map { row -> String in

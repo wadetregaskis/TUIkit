@@ -2,7 +2,8 @@
 //  FrameBuffer+RunsUnderALayer.swift
 //
 //  A layer composited over a run of its base — a `ZStack`'s later child, an
-//  `.overlay`, a `Layout`'s later subview — punches the run under its footprint
+//  `.overlay`, a `Layout`'s later subview, a `List` row's content over its
+//  `.listRowBackground` view — punches the run under its footprint
 //  (`FrameBuffer.animatedCellsPunched`): the layer's cells replace the base's, and a
 //  run replaying there would paint over them. But a layer's cell that names no field
 //  shows the base's, which the composite fills in from the frame the render drew. A
