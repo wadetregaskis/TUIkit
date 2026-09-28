@@ -98,12 +98,14 @@ extension Binding: _ReadsItsSource {}
 /// - **Objective-C and foreign classes, and builtins** (the opaque kind, a
 ///   buffer's reference): leaves.
 /// - **A source reader** (``_ReadsItsSource``): refused.
-/// - **A field reported as `()`**: refused. That is how the runtime describes
-///   a noncopyable field — `Mutex`, `Atomic` — whose contents it cannot see;
-///   a real `()` field is vanishingly rare, and a POD struct holding one is a
-///   leaf before its fields are asked. Only a class can hold a noncopyable
-///   field and still be copied, and inside a class only a source reader
-///   counts.
+/// - **A field reported as `()`**: refused. That is how a runtime before
+///   Swift 6.4 describes a noncopyable field — `Mutex`, `Atomic` — whose
+///   contents it cannot see; a real `()` field is vanishingly rare, and a POD
+///   struct holding one is a leaf before its fields are asked. The 6.4 runtime
+///   reports the field's own type instead, which the walk walks like any
+///   other. Either way the verdict is the same where it can arise: only a class
+///   can hold a noncopyable field and still be copied, and inside a class only
+///   a source reader counts.
 /// - **No field metadata** — a struct or tuple that is not POD and lists no
 ///   fields: refused. A value with no stored fields is POD, so one that is
 ///   not and lists none is one whose module was built without reflection

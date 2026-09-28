@@ -250,8 +250,13 @@ struct TypeWalkTests {
         #expect(RuntimeFields.Kind(of: Int.Type.self) == .metatype)
     }
 
-    @Test("The runtime describes a noncopyable field as ()")
-    func spiDescribesNoncopyableAsVoid() {
+    /// A runtime before Swift 6.4 describes a noncopyable field as `()`; the
+    /// 6.4 runtime (Linux 6.4 and trunk, and macOS 27) reports its own type,
+    /// `Mutex<Int>`. Either is fine, because inside a class — the only place a
+    /// copyable value can hold one — the verdict does not depend on it; what
+    /// is pinned is that it is one of the two, so a third answer is noticed.
+    @Test("The runtime describes a noncopyable field as (), or from Swift 6.4 as its own type")
+    func spiDescribesNoncopyableAsVoidOrItself() {
         #if canImport(Synchronization)
             if #available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *) {
                 final class Guarded { let lock = Mutex(0) }
@@ -260,7 +265,9 @@ struct TypeWalkTests {
                     types.append(type)
                     return true
                 }
-                #expect(types.count == 1 && types[0] == Void.self, "\(types)")
+                #expect(types.count == 1, "\(types)")
+                #expect(
+                    types.first.map { $0 == Void.self || "\($0)".hasPrefix("Mutex<") } == true, "\(types)")
                 #expect(verdict(Guarded.self) == .init(refusal: nil, holdsFunctions: false), "inside a class, a leaf")
             }
         #endif
