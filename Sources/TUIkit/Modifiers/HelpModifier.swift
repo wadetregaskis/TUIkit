@@ -108,15 +108,22 @@ extension HelpModifier: Renderable {
         // `.exited` the control it explains needs for its own hover face —
         // `Button("Save") {}.help("…")` never lit up under the pointer. See
         // `MouseEventDispatcher.registerHoverObserver(in:_:)`.
-        let handlerID = dispatcher.registerHoverObserver(in: context) { [weak invalidation] event in
+        let handlerID = dispatcher.registerHoverObserver(in: context) { [weak invalidation, weak dispatcher] event in
             switch event.phase {
             case .entered:
                 // The event's own arrival time, not this frame's clock: the
                 // pointer entered between frames, and measuring the rest from a
                 // stale frame stamp would let a tooltip appear early by up to a
-                // frame.
+                // frame. Read on the clock of the dispatcher delivering it — the
+                // monotonic clock, which frames are stamped on, in an app; the
+                // caller's in a `HeadlessApp`, which stamps its own frames.
+                // Read off the machine's clock there, two instances fed one
+                // script put the tooltip in different frames. Weakly, as
+                // `invalidation` is, and because the dispatcher keeps this
+                // closure in its own table: it is alive whenever it calls it.
+                let arrival = dispatcher.map { Int64(bitPattern: $0.nowNanos()) } ?? FrameClock.nowNanos
                 tooltips.hovering(
-                    captured, handlerID: idBox.id, nowNanos: FrameClock.nowNanos,
+                    captured, handlerID: idBox.id, nowNanos: arrival,
                     style: capturedStyle, delaySeconds: capturedDelay)
                 // This view is the candidate now, which is tooltip-session
                 // state no memo keys on: a row memoized above it was served as

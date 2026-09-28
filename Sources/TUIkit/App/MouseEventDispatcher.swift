@@ -248,8 +248,11 @@ final class MouseEventDispatcher: @unchecked Sendable {
     /// multi-click sequence (400 ms — a common desktop double-click threshold).
     private static let multiClickWindowNanos: UInt64 = 400_000_000
 
-    /// Monotonic time source (nanoseconds), injectable for tests. Defaults to
-    /// the same clock the run loop uses.
+    /// Monotonic time source (nanoseconds): the clock an event's arrival is
+    /// read on, both for a press's place in a multi-click sequence and for the
+    /// hover that starts a tooltip's delay (`HelpModifier`). Defaults to the
+    /// same clock the run loop uses; injectable for tests, and a `HeadlessApp`
+    /// runs it on its caller's time.
     var nowNanos: () -> UInt64 = { MonotonicClock.nowNanoseconds }
 
     init() {}

@@ -30,9 +30,12 @@ import Testing
 private final class Twin<A: App> {
     let warm: HeadlessApp<A>
     let cold: HeadlessApp<A>
-    /// On the monotonic clock's own scale, so a deadline a session counts from
-    /// `FrameClock.nowNanos` — a tooltip's delay — falls among these frames.
-    private(set) var now = FrameClock.nowNanos
+    /// The script's own clock, a sixtieth of a second a frame from zero as the
+    /// Stress sessions' is: an event arrives at the instant of the frame before
+    /// it (see `HeadlessApp`), so whatever counts from an arrival — a tooltip's
+    /// delay — counts on this clock alone, the same in both apps however long
+    /// the machine takes between them.
+    private(set) var now: Int64 = 0
     /// Every frame on which the two drew different screens, described.
     private(set) var divergences: [String] = []
     private var frames = 0
@@ -428,6 +431,15 @@ struct SessionReadsUnderMemoTests {
     /// whenever it is told to and so cannot see a frame the app would not have
     /// drawn; in the status bar, where the loop draws the tooltip itself, the
     /// wake is all there is to lose.
+    ///
+    /// The delay runs from the hover's arrival, which each app once read off
+    /// the machine's clock for itself: the two wakes were compared to within a
+    /// millisecond, and a loaded machine took longer than that between the two
+    /// deliveries — long enough, now and then, for the tooltip to show a frame
+    /// sooner in one app — or so long over the frames before the hover that the
+    /// tooltip was due after the last frame played. On the script's clock the
+    /// wake is one instant in both, the delay after the frame the pointer
+    /// arrived behind.
     @Test(
         "A tooltip appears over a memoized row the pointer rests on, on time",
         arguments: [TooltipStyle.popover, .statusBar])
@@ -435,16 +447,17 @@ struct SessionReadsUnderMemoTests {
         let twin = Twin { HelpApp(style: style) }
         twin.frames(3)
         let row = try #require(twin.position(of: "card 2"))
+        let arrival = twin.now
         twin.send(MouseEvent(button: .none, phase: .moved, x: row.x + 1, y: row.y))
         twin.frame()
-        // The delay runs from the hover's own arrival, on the real clock, and
-        // the two apps took it microseconds apart: the same wake, to a
-        // millisecond.
-        let coldWake = try #require(twin.cold.nextWake(after: twin.now), "precondition: the cold app asks to be woken")
+        // `tooltipDelay`'s default, 0.6 s.
+        let due = arrival + 600_000_000
+        let coldWake = twin.cold.nextWake(after: twin.now)
+        #expect(coldWake == due, "precondition: the cold app asks to be woken when the delay ends")
         let warmWake = twin.warm.nextWake(after: twin.now)
         #expect(
-            warmWake.map { abs($0 - coldWake) < 1_000_000 } == true,
-            "the kept app did not ask to be woken for the tooltip: \(String(describing: warmWake)) against \(coldWake)")
+            warmWake == due,
+            "the kept app did not ask to be woken for the tooltip: \(String(describing: warmWake)) against \(due)")
         twin.frames(60)
         #expect(
             twin.cold.screen.map(\.stripped).contains { $0.contains("about card 2") },

@@ -28,8 +28,19 @@ import Foundation
 ///
 /// Time is the caller's: ``frame(atNanos:)`` takes the frame's instant, so two
 /// instances fed the same script draw the same pictures, carets and spinners
-/// included. And a resize is what `SIGWINCH` does in the app — the terminal
-/// reports the new size and the diff writer forgets what it drew.
+/// included. A hover or a click arrives at the caller's time too — at the
+/// instant of the frame before it, which is the last time the caller named — so
+/// what counts from it counts the same in both: a tooltip's delay, and the
+/// window that makes two clicks a double click. Not every event path yet: the
+/// wheel's edge grace (`WheelEdgeHold`), a link's key-repeat window and a held
+/// arrow's repeat still read the machine's clock. Read off the machine's clock, as the
+/// hover once was, each instance stamped its own arrival, microseconds apart
+/// and further on a loaded machine, so a tooltip could appear a frame sooner in
+/// one than in the other; and its delay counted from wherever the machine's
+/// clock had got to, which a script stepping its own frames cannot see — a slow
+/// machine put the tooltip past the last frame the script played. And a resize
+/// is what `SIGWINCH` does in the app — the terminal reports the new size and
+/// the diff writer forgets what it drew.
 ///
 /// A change made inside `withAnimation` plays out over the frames that follow
 /// it, as it does in the app: each frame is fenced by an ``AnimationScheduler``
@@ -49,6 +60,9 @@ package final class HeadlessApp<A: App> {
     private let inputHandler: InputHandler
     private let tuiContext: TUIContext
     private let animationScheduler = AnimationScheduler()
+    /// The instant of the last frame, which the mouse dispatcher reads as the
+    /// time an event arrives. See the type's discussion.
+    private let eventClock = EventClock()
 
     /// Whether every frame starts from an EMPTY render cache — every memo
     /// missing, every kept size and buffer gone. `@State` survives, as it does
@@ -84,13 +98,21 @@ package final class HeadlessApp<A: App> {
         // names a key goes through the same chain the key does.
         let inputHandler = self.inputHandler
         tuiContext.synthesizeKeyEvent = { _ = inputHandler.handle($0) }
+        // The dispatcher's clock is the one an arrival is read on — the hover
+        // that starts a tooltip's delay, the press that may make a double click.
+        let eventClock = self.eventClock
+        tuiContext.mouseEventDispatcher.nowNanos = { eventClock.nanos }
     }
 
     /// Renders one frame at `nanos` on the monotonic clock's scale, and at
     /// `date` on the wall clock — the date a `TimelineView` resolves its
     /// schedule against. The wall clock now unless given, since a script that
     /// holds no timeline has no use for one of its own.
+    ///
+    /// Events sent after it arrive at `nanos`, and so does a hover the frame
+    /// itself moves onto a resting pointer.
     package func frame(atNanos nanos: Int64, date: Date = FrameClock.nowDate) {
+        eventClock.nanos = UInt64(bitPattern: nanos)
         if clearsRenderCacheEachFrame { tuiContext.renderCache.clearAll() }
         animationScheduler.beginFrame()
         renderer.render(animationScheduler: animationScheduler, frameNowNanos: nanos, frameDate: date)
@@ -142,6 +164,14 @@ package final class HeadlessApp<A: App> {
     package func nextWake(after nanos: Int64) -> Int64? {
         animationScheduler.nextFiring(after: nanos)
     }
+}
+
+/// The caller's clock, as the mouse dispatcher reads it: a box, so the
+/// dispatcher's closure holds the clock rather than the app that owns the
+/// dispatcher.
+private final class EventClock {
+    /// The last frame's instant; zero before the first frame.
+    var nanos: UInt64 = 0
 }
 
 // MARK: - In-Memory Terminal

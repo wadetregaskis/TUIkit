@@ -170,7 +170,11 @@ swift run -c release Stress -- --bench --scenario session/editor --iterations 20
 A session drives the REAL render loop headless (`HeadlessApp`): keys go through
 the app's five-layer input chain to the focused control, and a frame is the
 loop's own — header, status bar and diff writer included — at an instant the
-runner supplies, so two runs of one script draw the same pictures. Its report
+runner supplies, so two runs of one script draw the same pictures. A hover or a
+click arrives at the instant of the frame before it, so a double click's window
+and a tooltip's delay count on that clock too, not the machine's. The wheel's
+edge grace still reads the machine's clock, and the `notes` session's wheel can
+reach it at the top of its list. Its report
 prices each KIND of step separately (mean, p50, p95, max, bytes emitted), since
 a keystroke and a page-down are different frames, and counts what the render
 cache did over the steps: memoized rows composed and served, value-memo hits,

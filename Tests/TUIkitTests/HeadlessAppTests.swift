@@ -58,9 +58,42 @@ private struct SlidingPage: View {
     }
 }
 
+/// A line with help text, and a line that counts the double clicks on it.
+private struct PointerApp: App {
+    init() {}
+
+    var body: some Scene {
+        WindowGroup { PointerPage() }
+            // Motion reporting, for the hover; a headless app applies only what
+            // the scene says.
+            .mouseSupport(.full)
+    }
+}
+
+private struct PointerPage: View {
+    @State private var doubleClicks = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("explained").help("about it")
+            Text("double clicks: \(doubleClicks)").onTapGesture(count: 2) { doubleClicks += 1 }
+        }
+    }
+}
+
 /// Whether some line of `screen`, with its styling stripped, contains `text`.
 private func shows(_ text: String, on screen: [String]) -> Bool {
     screen.contains { $0.stripped.contains(text) }
+}
+
+/// Where `text` first appears on `screen`: column and row.
+private func position(of text: String, on screen: [String]) -> (x: Int, y: Int)? {
+    for (row, line) in screen.map(\.stripped).enumerated() {
+        if let range = line.range(of: text) {
+            return (line.distance(from: line.startIndex, to: range.lowerBound), row)
+        }
+    }
+    return nil
 }
 
 @MainActor
@@ -115,6 +148,45 @@ struct HeadlessAppTests {
         app.frame(atNanos: 16_666_667)
         #expect(app.bytesWritten > before, "the resized frame rewrote nothing")
         #expect(app.screen.contains { $0.stripped.count >= 60 }, "no line spans the new width")
+    }
+
+    /// Time is the caller's, events included: the pointer arrives at the
+    /// instant of the frame before it, so the tooltip's delay counts from
+    /// there. Read off the machine's clock, the wake fell wherever the machine
+    /// had got to — however long the frames before it took to draw — and two
+    /// instances fed one script asked for it at two instants.
+    @Test("A pointer arriving between frames arrives at the caller's time, and the tooltip's wake counts from it")
+    func aHoverArrivesAtTheCallersTime() throws {
+        let app = HeadlessApp(PointerApp(), width: 40, height: 10)
+        app.frame(atNanos: 16_666_667)
+        let (x, y) = try #require(position(of: "explained", on: app.screen), "precondition: the line is drawn")
+        app.send(MouseEvent(button: .none, phase: .moved, x: x + 1, y: y))
+        app.frame(atNanos: 33_333_334)
+        // `tooltipDelay`'s default, 0.6 s, after the frame the pointer arrived behind.
+        let wake = app.nextWake(after: 33_333_334)
+        #expect(wake == 616_666_667, "the tooltip's wake is at \(String(describing: wake))")
+    }
+
+    /// The other thing counted from an arrival: two presses make a double click
+    /// when they land within the window of each other on the caller's clock,
+    /// not on the machine's, where a script's clicks are all microseconds apart.
+    @Test("Two clicks a second apart on the caller's clock are two clicks, and two a frame apart are a double click")
+    func clicksAreTimedOnTheCallersClock() throws {
+        let app = HeadlessApp(PointerApp(), width: 40, height: 10)
+        var now: Int64 = 16_666_667
+        app.frame(atNanos: now)
+        let (x, y) = try #require(position(of: "double clicks", on: app.screen), "precondition: the line is drawn")
+        func click(after nanos: Int64) {
+            app.send(MouseEvent(button: .left, phase: .pressed, x: x + 1, y: y))
+            app.send(MouseEvent(button: .left, phase: .released, x: x + 1, y: y))
+            now += nanos
+            app.frame(atNanos: now)
+        }
+        click(after: 1_000_000_000)
+        click(after: 16_666_667)
+        #expect(shows("double clicks: 0", on: app.screen), "two clicks a second apart made a double click")
+        click(after: 16_666_667)
+        #expect(shows("double clicks: 1", on: app.screen), "two clicks a frame apart made no double click")
     }
 
     @Test("An instance with no render cache draws what one with a cache draws")

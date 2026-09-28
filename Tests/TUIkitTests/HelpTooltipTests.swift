@@ -39,6 +39,9 @@ struct HelpTooltipTests {
         // modifier's `requestFeature(.motion)`; with no run loop here the
         // dispatcher would refuse every `.moved` event, so grant it directly.
         tui.mouseEventDispatcher.setActiveSupport(.full)
+        // The pointer arrives on the dispatcher's clock, stopped here at the
+        // frame's instant, as `HeadlessApp` stops it.
+        tui.mouseEventDispatcher.nowNanos = { UInt64(bitPattern: now) }
         return (
             RenderContext(
                 availableWidth: 40, availableHeight: 10, environment: env, tuiContext: tui),
@@ -185,23 +188,27 @@ struct HelpTooltipTests {
 
     // MARK: - The hover half, and its delay
 
-    @Test("A hover tooltip waits for the delay, then shows")
+    /// The delay counts from the pointer's arrival on the dispatcher's clock —
+    /// the one a click's multi-click window is read on — which a test or a
+    /// headless app can stop. Read off the machine's clock instead, a harness
+    /// stepping its own frames could not say when the tooltip was due, and two
+    /// apps fed one script put it in different frames.
+    @Test("A hover tooltip waits for the delay, counted from the pointer's arrival, then shows")
     func hoverWaitsForTheDelay() {
-        let h = harness()
+        let h = harness(now: 7 * Self.second)
         let buffer = frame(Text("Coverage").help("Lines executed at least once"), h)
         #expect(!buffer.hitTestRegions.isEmpty, "help(_:) gave the Text a hit region")
 
         _ = h.dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 2, y: 0))
         #expect(h.tooltips.hovered?.text == "Lines executed at least once", "the pointer is on it")
-
-        let since = h.tooltips.hovered!.sinceNanos
         #expect(
-            h.tooltips.hovered!.showAtNanos == since + Int64(0.6 * Double(Self.second)),
-            "the deadline came from the modifier's own tooltipDelay")
-        #expect(h.tooltips.resolved(nowNanos: since) == nil, "not yet — the pointer has not rested")
+            h.tooltips.hovered?.sinceNanos == 7 * Self.second,
+            "the arrival was not read on the dispatcher's clock: \(String(describing: h.tooltips.hovered?.sinceNanos))")
+        let due = 7 * Self.second + 600_000_000
         #expect(
-            h.tooltips.resolved(nowNanos: h.tooltips.hovered!.showAtNanos)?.source == .hover,
-            "…and now it has")
+            h.tooltips.hovered?.showAtNanos == due, "the deadline came from the modifier's own tooltipDelay")
+        #expect(h.tooltips.resolved(nowNanos: due - 1) == nil, "not yet — the pointer has not rested")
+        #expect(h.tooltips.resolved(nowNanos: due)?.source == .hover, "…and now it has")
     }
 
     /// Hover beats focus: the pointer is a deliberate act aimed at one thing.
@@ -220,11 +227,8 @@ struct HelpTooltipTests {
         let region = buffer.hitTestRegions.first { $0.offsetY == 1 }
         #expect(region != nil, "the Text's region: \(buffer.hitTestRegions)")
         _ = h.dispatcher.dispatch(MouseEvent(button: .none, phase: .moved, x: 1, y: 1))
-        // At the hover candidate's own deadline: the closure stamps the real
-        // monotonic clock (the pointer arrived between frames), so a synthetic
-        // "now" is not comparable with it. Reading the deadline back is the only
-        // honest way to ask "is it due yet" from a test.
-        let shown = h.tooltips.resolved(nowNanos: h.tooltips.hovered!.showAtNanos)
+        // With no delay, due the instant the pointer arrived: the frame's.
+        let shown = h.tooltips.resolved(nowNanos: 0)
         #expect(shown?.source == .hover, "the pointer wins, got \(String(describing: shown))")
         #expect(shown?.text == "Lines executed at least once")
     }
