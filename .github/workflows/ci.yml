@@ -176,21 +176,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # `snapshot` is the swift.org toolchain to install; empty means use
-          # the Xcode-provided one. "6.4" resolves to the newest snapshot on
-          # swift.org's `swift-6_4_x-branch`; "latest" to the newest snapshot
-          # on any branch, which in practice is trunk (`development`) because
-          # it publishes most often.
+          # `swift` is the swift.org toolchain to install; empty means use the
+          # Xcode-provided one. `development` says whether it is a snapshot:
+          # with it, "6.4" resolves to the newest snapshot on swift.org's
+          # `swift-6_4_x-branch`, and "latest" to the newest snapshot on any
+          # branch, which in practice is trunk (`development`) because it
+          # publishes most often.
           - name: "macOS 15 · Xcode 26"
             runner: macos-15
             xcode: "26"
-            snapshot: ""
+            swift: ""
+            development: false
             smoke: quick
             experimental: false
           - name: "macOS 26 · Xcode 26"
             runner: macos-26
             xcode: "26"
-            snapshot: ""
+            swift: ""
+            development: false
             smoke: full
             experimental: false
           # Swift 6.4 from swift.org, NOT from the Xcode 27 beta: the beta
@@ -201,13 +204,15 @@ jobs:
           - name: "macOS 26 · Swift 6.4 snapshot"
             runner: macos-26
             xcode: ""
-            snapshot: "6.4"
+            swift: "6.4"
+            development: true
             smoke: quick
             experimental: true
           - name: "macOS 26 · Swift main snapshot"
             runner: macos-26
             xcode: ""
-            snapshot: "latest"
+            swift: "latest"
+            development: true
             smoke: quick
             experimental: true
     steps:
@@ -235,15 +240,15 @@ jobs:
       # spelling: from 6.4 on a first release is `swift-6.4.0-RELEASE`, where it
       # used to be `swift-6.3-RELEASE`, and 1.14.0 could not install an exact
       # `6.4.0` request. (The range `6.4` matched under either.)
-      - name: Install Swift ${{ matrix.snapshot }} snapshot
-        if: matrix.snapshot != ''
+      - name: Install Swift ${{ matrix.swift }} from swift.org
+        if: matrix.swift != ''
         uses: SwiftyLab/setup-swift@v1.14.1
         with:
-          swift-version: ${{ matrix.snapshot }}
-          development: true
+          swift-version: ${{ matrix.swift }}
+          development: ${{ matrix.development }}
           check-latest: true
 
-      # The snapshot toolchain is not the default `swift`; it has to be
+      # A swift.org toolchain is not the default `swift`; it has to be
       # selected per invocation. Every later step goes through $SWIFT so the
       # build/test/smoke steps stay identical across all four cells.
       #
@@ -253,7 +258,7 @@ jobs:
       # steps — hence the $RUNNER_TEMP variable.
       - name: Resolve toolchain and isolate preferences
         run: |
-          if [ -n "${{ matrix.snapshot }}" ]; then
+          if [ -n "${{ matrix.swift }}" ]; then
             echo "SWIFT=xcrun --toolchain ${TOOLCHAINS} swift" >> "$GITHUB_ENV"
           else
             echo "SWIFT=swift" >> "$GITHUB_ENV"
