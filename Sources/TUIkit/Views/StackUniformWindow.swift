@@ -409,7 +409,7 @@ extension _VStackCore {
         }
         let pitch = extent + spacing
         guard pitch > 0 else {
-            state.broken = true
+            refuteHypothesis(state, window: window)
             return nil
         }
         let count = children.count
@@ -481,7 +481,7 @@ extension _VStackCore {
                 grafted, children: children, extent: extent,
                 state: state, proposal: proposal, context: childContext)
         else {
-            state.broken = true
+            refuteHypothesis(state, window: window)
             return nil
         }
         recordWidths(
@@ -571,6 +571,16 @@ extension _VStackCore {
             slot = slot.clamped(toWidth: max(width, slot.width), height: extent)
         }
         return slot
+    }
+
+    /// Refutes the uniform hypothesis for good; the caller re-walks exactly,
+    /// this same frame. The stack's measure may already have answered from
+    /// it — the ScrollView sizes its canvas by that answer before it renders —
+    /// so the ScrollView is told to measure again
+    /// (``ScrollContentReply/measureWentStale``).
+    private func refuteHypothesis(_ state: StackWindowState, window: ScrollContentWindow) {
+        state.broken = true
+        window.reply?.measureWentStale = true
     }
 
     /// Builds each ordinal's child, verifying the uniform hypothesis as it

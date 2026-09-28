@@ -251,6 +251,17 @@ final class ScrollContentReply: @unchecked Sendable, Hashable {
     /// draw, so a line there is drawn correctly by being blank.
     var drawnLines: Range<Int>?
 
+    /// Whether this render refuted what the content's measure answered with
+    /// before it: the uniform window's hypothesis that every row is as tall as
+    /// the first (`renderUniformSeekWindow`). The canvas the ScrollView offered
+    /// was that measure's height, so the lines past it — the true height's
+    /// excess — were cut from the buffer, and an offset the render resolved
+    /// among them was clamped back into the canvas: in 200 rows of one line
+    /// with row 190 sixty lines tall, `scrollTo(191)` came to rest in row
+    /// 190, and row 191 was never shown. The ScrollView measures again and
+    /// draws once more (`renderedContent`).
+    var measureWentStale = false
+
     static func == (lhs: ScrollContentReply, rhs: ScrollContentReply) -> Bool { lhs === rhs }
     func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(self)) }
 }

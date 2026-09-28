@@ -389,3 +389,31 @@ struct AnchoredSeekNearTopTests {
         #expect(settled.lazy == settled.flat, "the frame after: \(settled.lazy) vs \(settled.flat)")
     }
 }
+
+@MainActor
+@Suite("A seek on the frame that refutes a short list's uniform rows lands where the column does")
+struct UniformRefutingSeekTests {
+    @Test(
+        "A seek to the row under the one tall row of 200 shows it, as the column does",
+        arguments: [UnitPoint?.none, .some(.bottom)], [false, true])
+    func seekPastTheTallRow(anchor: UnitPoint?, header: Bool) {
+        // Rows of one line, but row 190 of sixty. A stack under 256 rows takes
+        // its rows for as tall as the first until a drawn row says otherwise,
+        // and the scroll view's canvas is that measure's height: 200 lines.
+        // `scrollTo(191)` drew row 190, which refuted it, and the exact walk
+        // put row 191 on line 250 — past the canvas, whose lines there were
+        // cut, and the offset was clamped back into row 190. Row 191 was never
+        // shown, on the seek's frame or after. Under a section's header the
+        // content answers through the header's relay.
+        let pair = TallHeadPair {
+            TallHeadPage(box: $0, header: header, flat: $1, count: 200, tall: 190..<191, lines: 60)
+        }
+        for _ in 0..<3 { pair.frame() }
+        pair.apply { $0.proxy?.scrollTo(191, anchor: anchor) }
+        let seek = pair.frame()
+        let settled = pair.frame()
+        #expect(seek.flat.last == "row 191", "precondition: \(seek.flat)")
+        #expect(seek.lazy == seek.flat, "\(seek.lazy) vs \(seek.flat)")
+        #expect(settled.lazy == settled.flat, "the frame after: \(settled.lazy) vs \(settled.flat)")
+    }
+}

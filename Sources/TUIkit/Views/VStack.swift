@@ -543,11 +543,15 @@ struct _VStackCore<Content: View>: View, Renderable, Layoutable {
                 // estimates unmeasured rows at, so a measure the pass memoized
                 // before this render is no longer what a fresh one says. Moved
                 // is rare — the rounded average of the rows touched — and then
-                // the pass's sizes are dropped rather than served stale.
+                // the pass's sizes are dropped rather than served stale. So
+                // they are when the uniform hypothesis the measure answered
+                // from is refuted, once in the stack's life: the ScrollView
+                // measures again (``ScrollContentReply/measureWentStale``),
+                // and must not be handed the answer the render refuted.
                 let state = uniformWindowState(context: context)
-                let estimateBefore = state.measuredEstimate(spacing: spacing)
+                let before = (state.measuredEstimate(spacing: spacing), state.broken)
                 defer {
-                    if state.measuredEstimate(spacing: spacing) != estimateBefore {
+                    if (state.measuredEstimate(spacing: spacing), state.broken) != before {
                         context.renderCache?.forgetPassMeasures()
                     }
                 }

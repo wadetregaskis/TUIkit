@@ -210,11 +210,14 @@ extension _ScrollViewCore {
     ///   and each answer is a walk of the natural-extent budget ladder over the
     ///   whole content. `nil` re-measures, which is what the direct callers
     ///   (tests, and the non-`.automatic` scrollbar path) get.
+    /// - Parameter remeasured: Whether this is the render again after a render
+    ///   that refuted the content's measure (below), which is not repeated.
     func renderedContent(
         contentWidth: Int, viewportHeight: Int, horizontal: Bool,
         verticalScrollOffset: Int, seek: ScrollToRequest? = nil, edgeInset: Int = 0,
         handler: ScrollViewHandler? = nil,
-        context: RenderContext, settledExtents: (width: Int, height: Int)? = nil
+        context: RenderContext, settledExtents: (width: Int, height: Int)? = nil,
+        remeasured: Bool = false
     ) -> (
         buffer: FrameBuffer,
         slice: (originY: Int, totalHeight: Int, totalIsEstimate: Bool)?,
@@ -283,6 +286,24 @@ extension _ScrollViewCore {
         measureContext.availableWidth = extents.width
         measureContext.availableHeight = extents.height
         let buffer = TUIkit.renderToBuffer(content, context: measureContext)
+        if contentReply.measureWentStale, !remeasured, !context.isMeasuring {
+            // The canvas was the height of a measure this render refuted, so
+            // the lines past it were cut, and a seek resolved among them would
+            // be clamped back into it (``ScrollContentReply/measureWentStale``).
+            // Measured again, the canvas is the content's true height, and
+            // drawn again at the offset the seek resolved — the request itself
+            // is spent — the frame shows the row it asked for. Once in a
+            // stack's life: the refutation is for good. The scrollbars keep
+            // this frame's answer, which the refuted height could only make
+            // wrong for content it had fit within the viewport.
+            var redrawn = renderedContent(
+                contentWidth: contentWidth, viewportHeight: viewportHeight,
+                horizontal: horizontal,
+                verticalScrollOffset: contentReply.seekResolvedOffset ?? verticalScrollOffset,
+                edgeInset: edgeInset, handler: handler, context: context, remeasured: true)
+            redrawn.seekOffset = contentReply.seekResolvedOffset
+            return redrawn
+        }
         if let id = reply?.anchorID, let handler, !context.isMeasuring {
             reportVisibleID(id, handler: handler, context: context)
         }
