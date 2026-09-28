@@ -136,6 +136,10 @@ final class DrivenSession {
     /// it: what `--census` counts.
     let installCensus: () -> Void
     let census: () -> ObservationCensus.Counts?
+    /// What the app's render cache's observation leases have done so far,
+    /// and how many view types it knows to read.
+    let leaseCounts: () -> ObservationLeases.Counts
+    let readingTypes: () -> Int
     /// Whether the app's render cache's reference count has moved to a side
     /// table — what the first weak reference to it does, for good, putting
     /// every retain and release of it on the runtime's slow path. `nil` where
@@ -185,6 +189,8 @@ final class DrivenSession {
         finish = { session.finish() }
         installCensus = { app.renderCache.observationCensus = ObservationCensus() }
         census = { app.renderCache.observationCensus?.snapshot }
+        leaseCounts = { app.renderCache.leases.counts }
+        readingTypes = { app.renderCache.readingTypes.count }
         renderCacheSideTable = { ReferenceCountProbe.usesSideTable(app.renderCache) }
         staleServes = { app.renderCache.renderMemoMismatches }
         staleSizes = { app.renderCache.measureMemoMismatches }

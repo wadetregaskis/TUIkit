@@ -7,12 +7,14 @@
 //  registration, and the registration lives until a property it read is
 //  written — then its `onChange` runs, on the writer's thread, and it is
 //  gone — or until every object it read from has been deinitialized, which
-//  frees it without running anything. A body evaluated on every frame that
-//  reads a property nobody writes therefore adds a registration every frame
-//  for as long as the model lives, each holding its closure and what it
-//  captured — and the first write, whenever it comes, runs all of them.
-//  Nothing counted them, so nothing could say how many a change to what
-//  TUIkit observes adds.
+//  frees it without running anything — or until the observation lease it
+//  was armed under retires, which cancels it (`ObservationLeases`). Without
+//  that last, a body evaluated on every frame that reads a property nobody
+//  writes adds a registration every frame for as long as the model lives,
+//  each holding its closure and what it captured, and the first write,
+//  whenever it comes, runs all of them. The census is how that is counted:
+//  what each change to what TUIkit observes, or to when it stops observing,
+//  adds or frees.
 //
 //  Created by Wade Tregaskis
 //  License: MIT

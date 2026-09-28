@@ -63,11 +63,11 @@ package final class ObservationLeases {
     }
 
     /// What a new cache starts with: `TUIKIT_OBSERVATION_RETIREMENT` when it
-    /// names a rule, otherwise `never`.
+    /// names a rule, otherwise `leases`.
     package static let defaultRetirement: Retirement = {
         guard let name = ProcessInfo.processInfo.environment["TUIKIT_OBSERVATION_RETIREMENT"],
             let rule = Retirement(rawValue: name)
-        else { return .never }
+        else { return .leases }
         return rule
     }()
 
@@ -128,6 +128,9 @@ package final class ObservationLeases {
         package var uses = 0
         /// Passes ended.
         package var passes = 0
+
+        /// None yet.
+        package init() {}
     }
 
     /// What the bookkeeping has done so far.

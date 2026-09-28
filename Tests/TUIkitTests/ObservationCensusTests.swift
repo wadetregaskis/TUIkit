@@ -90,10 +90,15 @@ struct ObservationCensusTests {
         #expect(census.snapshot.armed(.bodyRender) == 0)
     }
 
-    @Test("A body read every frame and never written adds a registration every frame")
+    /// With nothing cancelled — the rule the cache had before observation
+    /// leases, kept as the baseline — a body read every frame and never
+    /// written adds a registration every frame, and the first write runs
+    /// them all.
+    @Test("Never cancelling, a body read every frame and never written adds a registration every frame")
     func buildUpCounted() {
         let model = Model()
         let tui = TUIContext()
+        tui.renderCache.leases.retirement = .never
         let census = ObservationCensus()
         tui.renderCache.observationCensus = census
         // Nothing memoizes a bare composite at the root, so its body is
@@ -102,6 +107,27 @@ struct ObservationCensusTests {
         #expect(census.snapshot.live(.bodyRender) == 50, "\(census.snapshot.live(.bodyRender)) alive")
         model.count = 1
         #expect(census.snapshot.fired(.bodyRender) == 50, "one write fired all fifty")
+        #expect(census.snapshot.live == 0)
+    }
+
+    /// What a cache does by default: the frame before's scope is cancelled
+    /// once the next is drawn, so a body read every frame and never written
+    /// leaves a bounded number alive — the one that taught the cache the type
+    /// reads, the frame on screen's and the frame being drawn's — and the
+    /// first write runs only those.
+    @Test("By default, a body read every frame and never written leaves a bounded number alive")
+    func buildUpBoundedByDefault() {
+        let model = Model()
+        let tui = TUIContext()
+        #expect(tui.renderCache.leases.retirement == .leases)
+        let census = ObservationCensus()
+        tui.renderCache.observationCensus = census
+        for _ in 0..<50 { Self.frame(Reader(model: model), tui: tui) }
+        #expect(census.snapshot.live(.bodyRender) <= 3, "\(census.snapshot.live(.bodyRender)) alive")
+        #expect(census.snapshot.cancelled(.bodyRender) >= 47)
+        #expect(census.snapshot.unleased(.bodyRender) == 1, "the first, which taught the cache the type reads")
+        model.count = 1
+        #expect(census.snapshot.fired(.bodyRender) <= 3)
         #expect(census.snapshot.live == 0)
     }
 

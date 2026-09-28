@@ -262,7 +262,7 @@ memos at the end of every frame.
 | `log-observable` | `log` with `.scrollPosition(id:)` bound through `@Bindable` |
 | `log-captures` | `log` whose rows carry a tap handler capturing the parent's growing list through `self`: today one copy of the list is alive at a time; a memo that serves rows keeps each drawn row's handler, and the list it captured when drawn |
 | `image-rows` | a `List` of rows each holding a decoded 64×32 picture (8 KB of pixels) that arrive, leave and are replaced: the resident size of what a memo keeps of a row's VALUE |
-| `accumulate` | a clock moving every step over four readers of an `@Observable` property nothing writes until the end — a drawn body, a body only measured (`ViewThatFits`' unchosen candidate), a custom `ButtonStyle`'s `makeBody` and a `@Bindable`-bound `Toggle`. Every body evaluated under observation arms a registration on what it read, freed when that is written or when the model it read is deinitialized, so a reader drawn every frame of a property nobody writes adds one a frame for as long as the model lives — here, the whole run. Reports resident size every 9,000 steps (a quarter of an hour at 10 Hz) and, at the end, how long the first write took: every registration armed since the page opened runs inside it. Play it without `--verify` for its numbers — the twin's registrations are in the same process |
+| `accumulate` | a clock moving every step over four readers of an `@Observable` property nothing writes until the end — a drawn body, a body only measured (`ViewThatFits`' unchosen candidate), a custom `ButtonStyle`'s `makeBody` and a `@Bindable`-bound `Toggle`. Every body evaluated under observation arms a registration on what it read, freed when that is written, when the model it read is deinitialized, or when the observation lease it was armed under retires — once nothing the render cache keeps depends on it — so what is alive stays flat however long the run; under `TUIKIT_OBSERVATION_RETIREMENT=never`, the cache as it was before leases, a reader drawn every frame of a property nobody writes adds one a frame for as long as the model lives. Reports resident size every 9,000 steps (a quarter of an hour at 10 Hz) and, at the end, how long the first write took: every registration still armed runs inside it. Play it without `--verify` for its numbers — the twin's registrations are in the same process |
 
 Adding one: a `StressSession` — a page built once over a model the session
 owns, a `step(_:)` that makes that step's data changes on the model and
@@ -291,15 +291,26 @@ times the write — and the runner then draws one more frame on both instances
 and compares it like any other.
 
 `--census` counts the observation registrations the warm instance arms, the
-ones that fire and the ones dropped, by kind of reader (`ObservationCensus`: a
-body drawn or measured, a style's body, a control's `Binding`). A registration
-lives until a property it read is written, when it fires, or until every
-object it read from is deinitialized, when it is dropped without running
-anything; one armed and neither fired nor dropped is alive, holding its closure
-and what that captured. The report gives each kind's registrations armed over
-the steps and per step, fired, dropped, and alive at the end (and after the
-finish), and each checkpoint adds what is alive. `accumulate --steps 36000
---census` is the long run that prices a change to what TUIkit observes.
+ones that fire, the ones cancelled and the ones dropped, by kind of reader
+(`ObservationCensus`: a body drawn or measured, a style's body, a control's
+`Binding`). A registration lives until a property it read is written, when it
+fires; until the observation lease it was armed under retires, when it is
+cancelled (`ObservationLeases`); or until every object it read from is
+deinitialized, when it is dropped without running anything. One armed and
+none of those is alive, holding its closure and what that captured; one armed
+before the cache knew its view type reads is `unleased`, and no lease can
+cancel it. The report gives each kind's registrations armed over the steps
+and per step, fired, cancelled, dropped, and alive at the end (and after the
+finish), then one line of per-step counts — registrations armed, fired and
+cancelled; the leases' computations opened, leases made, kept results used
+and scopes that read a sentinel; and the view types known to read — and each
+checkpoint adds what is alive. `--bench --scenario <id> --census` prints the
+same line per frame for a scenario. `TUIKIT_OBSERVATION_RETIREMENT` picks the
+rule a process's caches cancel by — `leases`, the default; `never`, the cache
+before leases, for a baseline in the same build; or the naive `perReader` and
+`perReaderAndPrune`, which the tests keep as negative controls.
+`accumulate --steps 36000 --census` is the long run that prices a change to
+what TUIkit observes.
 
 ## Profiling
 

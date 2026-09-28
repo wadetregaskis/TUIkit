@@ -120,6 +120,11 @@ enum SessionRunner {
         /// and after the session's finish, when `--census` asked for one.
         var censusAtOpen: ObservationCensus.Counts?
         var censusAtEnd: ObservationCensus.Counts?
+        /// What the observation leases had done at the opening frame and
+        /// after the last step, and how many reader types the cache knew.
+        var leasesAtOpen = ObservationLeases.Counts()
+        var leasesAtEnd = ObservationLeases.Counts()
+        var readingTypes = 0
         var censusAfterFinish: ObservationCensus.Counts?
         /// Whether the render cache's reference count had moved to a side
         /// table by the end — printed when `--census` asked (`nil` when the probe
@@ -161,6 +166,7 @@ enum SessionRunner {
 
         let countsAtOpen = warm.cacheCounts()
         report.censusAtOpen = warm.census()
+        report.leasesAtOpen = warm.leaseCounts()
         var staleSoFar = warm.staleServes().count
         var staleSizesSoFar = warm.staleSizes().count
         for index in 0..<options.steps {
@@ -221,6 +227,8 @@ enum SessionRunner {
             }
         }
         report.censusAtEnd = warm.census()
+        report.leasesAtEnd = warm.leaseCounts()
+        report.readingTypes = warm.readingTypes()
         report.renderCacheSideTable = warm.renderCacheSideTable()
         finish(warm, cold, at: options.steps, checks: options.checks, into: &report)
         if report.finish != nil { report.censusAfterFinish = warm.census() }
@@ -279,6 +287,10 @@ enum SessionRunner {
                     end.live(kind), end.unleased(kind)))
         }
         if lines.count == 1 { lines.append("  none armed") }
+        lines.append(
+            "  " + observationCountsLine(
+                end, leases: report.leasesAtEnd, since: report.leasesAtOpen, readingTypes: report.readingTypes,
+                per: report.steps, unit: "step"))
         if let after = report.censusAfterFinish { lines.append("  after the finish: alive " + liveByKind(after)) }
         switch report.renderCacheSideTable {
         case false?: lines.append("render cache's reference count: inline (nothing ever referenced it weakly)")

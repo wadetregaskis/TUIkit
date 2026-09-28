@@ -153,7 +153,9 @@ if rawArgs.contains("--help") || rawArgs.contains("-h") {
             SessionRunner.print(report, id: sessionID, options: options, config: config)
             return 0
         }
-        return Headless.bench(id, config: config, iterations: iterations, cols: cols, rows: rows, cold: cold)
+        return Headless.bench(
+            id, config: config, iterations: iterations, cols: cols, rows: rows, cold: cold,
+            census: rawArgs.contains("--census"))
     }
     exit(Int32(code))
 } else {

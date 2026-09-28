@@ -268,13 +268,20 @@ private func renderResolved<V: View>(_ view: V, context: RenderContext) -> Frame
 ///   the one to drop; an ancestor that did not read it keeps a buffer that
 ///   never held it. The whole-cache clear remains only where there is no cache
 ///   to scope to (a headless render with no `RenderCache` in the environment).
+/// - The scope also reads the sentinel of the lease it is armed under, once
+///   the type is known to read (``RenderCache/scopeSentinel(forReader:at:)``):
+///   the lease of the innermost computation whose result may be kept, or the
+///   frame's. When the last kept result that embeds this evaluation lets go
+///   of that lease, the sentinel is written and the scope is cancelled —
+///   without it, a registration lives until a property it read is written,
+///   so a body drawn every frame that reads a property nobody writes left one
+///   behind every frame. See ``ObservationLeases``.
 /// - The `onChange` holds the cache's ``RenderCache/Link``, not the cache. A
-///   registration lives until a property it read is written or every object
-///   it read from is deinitialized (for a property nothing writes, as long as
-///   its model lives), and a strong capture kept the cache — every buffer and
-///   size in it — alive with it, after the app that owned the cache had gone.
-///   A weak one cost the cache instead, on every retain for the rest of its
-///   life (see ``RenderCache/Link``). See
+///   registration lives until it is written, cancelled or every object it
+///   read from is deinitialized, and a strong capture kept the cache — every
+///   buffer and size in it — alive with it, after the app that owned the cache
+///   had gone. A weak one cost the cache instead, on every retain for the rest
+///   of its life (see ``RenderCache/Link``). See
 ///   ``reportObservedChange(at:to:fallback:)``.
 ///
 /// `@inline(__always)` so the render walk's own copy compiles to what it was
@@ -364,9 +371,12 @@ package func observedChange(
 /// when it was drawn with a cache that has since gone, whose link is closed.
 ///
 /// The last case is why the registration holds the link and not the cache. A
-/// registration is freed when a property it read is written or when every
-/// object it read from is deinitialized, so one armed by a body that reads a
-/// property nothing ever writes lives for as long as the model does — and
+/// registration is freed when a property it read is written, when every
+/// object it read from is deinitialized, or — under observation leases — when
+/// nothing the cache keeps depends on the evaluation that armed it. One that
+/// is never cancelled that way (the first of each reading type is unleased)
+/// and reads a property nothing ever writes lives for as long as the model
+/// does — and
 /// holding the cache strongly, it kept the whole render cache alive with it,
 /// long after the app, the `TUIContext` or the test that owned the cache had
 /// let it go. A cache that has gone has nothing left to invalidate, and

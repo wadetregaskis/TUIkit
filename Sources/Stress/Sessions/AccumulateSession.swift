@@ -5,18 +5,20 @@
 //  written costs over a long run.
 //
 //  Every body evaluated under `withObservationTracking` arms one registration
-//  on each property it read, and a registration is freed only when one of
+//  on each property it read, and Swift frees a registration only when one of
 //  those properties is written or every object it read from is
-//  deinitialized. So a body evaluated on every frame that reads a property
-//  nobody writes adds a registration every frame for as long as its model
-//  lives — here, the whole run; about 1.2 KB each, as `--census` measured this
-//  page, more for a deeper reader, since each holds its reader's identity
-//  chain — and the first write, whenever it comes, runs every one of them on
-//  the writer's thread. That is main's behaviour, for the one body it
-//  observes. Option C observes more readers (a body read while measuring, a
-//  style's body, a control's `Binding`), and each is a reader of this kind;
-//  this session is the long run their cost is measured on, reader by reader,
-//  against main's.
+//  deinitialized. Left at that, a body evaluated on every frame that reads a
+//  property nobody writes adds a registration every frame for as long as its
+//  model lives — here, the whole run; about 1.2 KB each, as `--census`
+//  measured this page, more for a deeper reader, since each holds its
+//  reader's identity chain — and the first write, whenever it comes, runs
+//  every one of them on the writer's thread. TUIkit cancels a registration
+//  once nothing the render cache keeps depends on the evaluation that armed
+//  it (`ObservationLeases`), so what is alive stays flat however long the
+//  run; `TUIKIT_OBSERVATION_RETIREMENT=never` plays it as the cache played it
+//  before, which is the baseline. Option C observes more readers (a style's
+//  body, a control's `Binding`), and each is a reader of this kind; this
+//  session is the long run their cost is measured on, reader by reader.
 //
 //  Created by Wade Tregaskis
 //  License: MIT

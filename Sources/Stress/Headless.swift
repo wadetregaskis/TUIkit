@@ -318,7 +318,8 @@ enum Headless {
         iterations: Int,
         cols: Int,
         rows: Int,
-        cold: Bool
+        cold: Bool,
+        census countsObservation: Bool = false
     ) -> Int {
         guard let scenario = Scenarios.byID(id) else {
             print("bench: unknown scenario '\(id)'. Known: \(Scenarios.all.map(\.id).joined(separator: ", "))")
@@ -357,6 +358,9 @@ enum Headless {
         // number — and it is deliberately OUTSIDE the timed region, so the
         // CPU and wall figures still measure exactly the render.
         var memory = ProcessMemory.Samples()
+        // `--census`: installed after the warm-up, so the loop is all it counts.
+        let observation = BenchObservationCounter(
+            requested: countsObservation, cold: cold, cache: warm.renderCache)
         for iteration in 0..<iterations {
             if iteration.isMultiple(of: 64) { memory.sample() }
             if cold { warm = makeContext(cols: cols, rows: rows, channels: channels) }
@@ -431,6 +435,7 @@ enum Headless {
             }
         }
         printMemoTotals(warm.renderCache, channels: channels, frames: iterations)
+        observation?.report(frames: iterations)
         // `TUIKIT_VERIFY_MEASURE_MEMO=1` re-measures every memo hit and reports
         // any the fresh measurement disagrees with — the direct check on the
         // memo's cross-budget claim, run over whichever scenario is at hand.
@@ -461,5 +466,59 @@ enum Headless {
                 + "Raise the stack (ulimit -s) or lower --scale.")
         }
         return blankFrames > 0 || trimmed > 0 ? 1 : 0
+    }
+}
+
+/// One line of what a run observed and what the observation leases did, per
+/// `unit` (a frame, a step): registrations armed, fired, cancelled and alive
+/// at the end, over every kind of reader; the lease bookkeeping —
+/// computations opened, leases made, kept results used, scopes that read a
+/// sentinel; and how many view types the cache knows to read. What
+/// `Stress --bench --census` and `--session --census` print.
+func observationCountsLine(
+    _ counts: ObservationCensus.Counts, leases: ObservationLeases.Counts, since start: ObservationLeases.Counts,
+    readingTypes: Int, per units: Int, unit: String
+) -> String {
+    let each = Double(max(1, units))
+    let kinds = ObservationCensus.Kind.allCases
+    let armed = kinds.reduce(0) { $0 + counts.armed($1) }
+    let fired = kinds.reduce(0) { $0 + counts.fired($1) }
+    let cancelled = kinds.reduce(0) { $0 + counts.cancelled($1) }
+    return String(
+        format: "observation per %@: armed %.2f, fired %.2f, cancelled %.2f (alive at the end %d); "
+            + "leases per %@: computations %.2f, made %.2f, uses %.2f, sentinel scopes %.2f; "
+            + "reading types %d",
+        unit, Double(armed) / each, Double(fired) / each, Double(cancelled) / each, counts.live, unit,
+        Double(leases.computations - start.computations) / each, Double(leases.leasesMade - start.leasesMade) / each,
+        Double(leases.uses - start.uses) / each, Double(leases.sentinelScopes - start.sentinelScopes) / each,
+        readingTypes)
+}
+
+/// What `Stress --bench --census` counts over the timed loop: the
+/// observation registrations the frames armed, fired and cancelled, and what
+/// the observation leases did to decide when each may go — counts, not
+/// times, so two builds compare on any machine.
+///
+/// `nil` unless asked for, and for a `--cold` run, whose cache is replaced
+/// every frame.
+@MainActor
+private struct BenchObservationCounter {
+    private let cache: RenderCache
+    private let census = ObservationCensus()
+    private let leasesBefore: ObservationLeases.Counts
+
+    init?(requested: Bool, cold: Bool, cache: RenderCache?) {
+        guard requested, !cold, let cache else { return nil }
+        self.cache = cache
+        leasesBefore = cache.leases.counts
+        cache.observationCensus = census
+    }
+
+    /// Prints the line, per frame of `frames`.
+    func report(frames: Int) {
+        print(
+            "  " + observationCountsLine(
+                census.snapshot, leases: cache.leases.counts, since: leasesBefore,
+                readingTypes: cache.readingTypes.count, per: frames, unit: "frame"))
     }
 }
