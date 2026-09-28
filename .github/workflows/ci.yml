@@ -4,14 +4,16 @@ name: CI
 #
 # Axes, and why each is where it is:
 #
-#   macOS   — for RELEASED Swift the toolchain comes from Xcode, so the axis is
-#             the image: `macos-15` tops out at Xcode 26.3 (Swift 6.2.x) and
-#             `macos-26` ships Xcode 26.6 (Swift 6.3.x), so pinning the Xcode
-#             MAJOR ("26") on both gives 6.2 and 6.3 coverage without hardcoding
-#             minors that GitHub rebuilds weekly. For UNRELEASED Swift the
-#             toolchain comes from swift.org instead — deliberately not from the
-#             Xcode 27 beta, whose bundled 6.4 is an older build than the
-#             current branch snapshot and so gives weaker early warning.
+#   macOS   — for RELEASED Swift the toolchain comes from Xcode where a GA
+#             image carries it, so the axis is the image: `macos-15` tops out
+#             at Xcode 26.3 (Swift 6.2.x) and `macos-26` ships Xcode 26.6
+#             (Swift 6.3.x), so pinning the Xcode MAJOR ("26") on both gives
+#             6.2 and 6.3 coverage without hardcoding minors that GitHub
+#             rebuilds weekly. 6.4 is the exception: the only Xcode that ships
+#             it, 27, is on the `xcode-27` image, which GitHub still calls a
+#             preview, so the binding 6.4 lane takes swift.org's release
+#             toolchain on `macos-26` instead. UNRELEASED Swift (trunk) comes
+#             from swift.org too.
 #
 #   Linux   — the cheapest axis to widen, because the official `swift:` images
 #             pin the toolchain exactly. No setup action is involved or wanted.
@@ -25,22 +27,27 @@ name: CI
 #             `continue-on-error`; when the console layer lands, the last of
 #             them goes and nothing staged is left. See the `windows_*` jobs.
 #
-# Swift version coverage. 6.2.4 and 6.3.3 are the shipped 6.x releases as of
-# 2026-08-04; 6.4 has no release yet, only `release/6.4.x` snapshots and the
-# Xcode 27 beta. All three are covered on all three operating systems:
+# Swift version coverage. 6.2.4, 6.3.3 and 6.4.0 are the newest release of each
+# 6.x line as of 2026-09-27 (6.4.0 shipped on 2026-09-14). All three are
+# covered, and bind, on all three operating systems; trunk is covered, and
+# advisory, on two:
 #
 #            macOS                      Linux                  Windows
 #   6.2      Xcode 26 on macos-15       swift:6.2-noble        swift:6.2-…
 #   6.3      Xcode 26 on macos-26       swift:6.3-noble        swift:6.3-…
-#   6.4      swift.org 6.4.x snapshot   nightly-6.4.x-noble    nightly-6.4.x-…
-#   main     swift.org latest snapshot  nightly-main-noble     (Linux only —
-#                                                               the Windows main
-#                                                               image is rebuilt
-#                                                               too rarely)
+#   6.4      swift.org 6.4 on macos-26  swift:6.4-noble        swift:6.4-…
+#   main     swift.org latest snapshot  nightly-main-noble     (none: the Windows
+#                                                               main image is
+#                                                               rebuilt too rarely)
 #
-# When 6.4 ships as a release, promote it: add `swift:6.4-noble` beside 6.3,
-# switch the Windows matrix entry from `nightly-6.4.x` to `6.4`, and move the
-# macOS 6.4 lane onto whichever Xcode ships it.
+# The 6.4 row was `release/6.4.x` snapshots until 6.4.0 shipped. There is no
+# `release/6.5` branch yet; when one is cut, its nightlies are the next early
+# warning: add it on macOS (`swift: "6.5"`, `development: true`), on Linux
+# beside main, and to the Windows matrix, whose nightlies are advisory by
+# construction. Check the tag spelling on Docker Hub first: 6.2 and 6.3 had
+# `nightly-6.3-…`-style tags, 6.4 had `nightly-6.4.x-…`, and that inconsistency
+# is upstream's. When the version ships, promote it the way 6.4 was: the release
+# images replace the nightlies, and they bind.
 #
 # TODO(macOS 27): there is no macOS 27 runner image yet — macOS 27 is still a
 # developer preview. (The `xcode-27` image is NOT one: it is Xcode 27 beta
@@ -177,9 +184,10 @@ jobs:
       matrix:
         include:
           # `swift` is the swift.org toolchain to install; empty means use the
-          # Xcode-provided one. `development` says whether it is a snapshot:
-          # with it, "6.4" resolves to the newest snapshot on swift.org's
-          # `swift-6_4_x-branch`, and "latest" to the newest snapshot on any
+          # Xcode-provided one. `development` says whether it is a snapshot.
+          # Without it, "6.4" is the newest 6.4.x release; with it, a version
+          # is the newest snapshot on that release branch (for 6.4, swift.org's
+          # `swift-6_4_x-branch`), and "latest" the newest snapshot on any
           # branch, which in practice is trunk (`development`) because it
           # publishes most often.
           - name: "macOS 15 · Xcode 26"
@@ -196,18 +204,18 @@ jobs:
             development: false
             smoke: full
             experimental: false
-          # Swift 6.4 from swift.org, NOT from the Xcode 27 beta: the beta
-          # bundles an older 6.4 build, so testing against it would report on a
-          # compiler that has already moved on. A recent branch snapshot is
-          # what gives early warning of upcoming-compiler breakage, which is
-          # the entire point of having a 6.4 lane before 6.4 ships.
-          - name: "macOS 26 · Swift 6.4 snapshot"
+          # Swift 6.4 is released, so this lane binds. Its toolchain is
+          # swift.org's 6.4 release rather than Xcode's because the only Xcode
+          # that ships 6.4, 27, is on an image GitHub still calls a preview
+          # (see the top of this file). Until 6.4.0 shipped this lane took the
+          # newest `release/6.4.x` snapshot and was advisory.
+          - name: "macOS 26 · Swift 6.4"
             runner: macos-26
             xcode: ""
             swift: "6.4"
-            development: true
+            development: false
             smoke: quick
-            experimental: true
+            experimental: false
           - name: "macOS 26 · Swift main snapshot"
             runner: macos-26
             xcode: ""
@@ -228,18 +236,27 @@ jobs:
       # `check-latest` is not optional here despite the action warning that it
       # "may break this action": it is the only input whose documented meaning
       # is "the newest toolchain swift.org has", which is the whole promise of
-      # a lane that tracks a nightly. Without it the action uses the swift.org
-      # data it pins for itself. That was a months-old snapshot list when this
-      # lane was written; on 2026-09-27 a lane without it synced the same
-      # swift.org commit as one with it — but that is the action's behaviour
-      # of the day, not a contract, and a pinned list would pin the "nightly"
-      # to an old toolchain and report green. Breaking loudly is the correct
-      # failure mode here.
+      # a lane that tracks a nightly — and what keeps the 6.4 lane on 6.4's
+      # newest patch release, as `swift:6.4-noble` is on Linux. Without it the
+      # action uses the swift.org data it pins for itself. That was a
+      # months-old snapshot list when this lane was written; on 2026-09-27 a
+      # lane without it synced the same swift.org commit as one with it — but
+      # that is the action's behaviour of the day, not a contract, and a pinned
+      # list would pin the "nightly" to an old toolchain and report green.
+      # Breaking loudly is the correct failure mode here.
       #
       # 1.14.1 (2026-09-25) is the first release that knows swift.org's new tag
       # spelling: from 6.4 on a first release is `swift-6.4.0-RELEASE`, where it
       # used to be `swift-6.3-RELEASE`, and 1.14.0 could not install an exact
       # `6.4.0` request. (The range `6.4` matched under either.)
+      #
+      # `prefer-oss-toolchain` because the next step selects what this step
+      # installed through the `TOOLCHAINS` it exports. For a RELEASE, the
+      # action first looks for the Xcode swift.org lists beside it; if that
+      # Xcode is on the image and bundles the same Swift, it selects the Xcode
+      # and installs nothing, so `TOOLCHAINS` is never exported. No image this
+      # lane runs on has Xcode 27 today, but GitHub adds Xcodes to images
+      # without notice.
       - name: Install Swift ${{ matrix.swift }} from swift.org
         if: matrix.swift != ''
         uses: SwiftyLab/setup-swift@v1.14.1
@@ -247,6 +264,7 @@ jobs:
           swift-version: ${{ matrix.swift }}
           development: ${{ matrix.development }}
           check-latest: true
+          prefer-oss-toolchain: true
 
       # A swift.org toolchain is not the default `swift`; it has to be
       # selected per invocation. Every later step goes through $SWIFT so the
@@ -259,6 +277,12 @@ jobs:
       - name: Resolve toolchain and isolate preferences
         run: |
           if [ -n "${{ matrix.swift }}" ]; then
+            # Empty, the line below would read `xcrun --toolchain swift`, and
+            # every later step would fail somewhere far from the cause.
+            if [ -z "${TOOLCHAINS:-}" ]; then
+              echo "::error::setup-swift installed no toolchain (TOOLCHAINS is unset)"
+              exit 1
+            fi
             echo "SWIFT=xcrun --toolchain ${TOOLCHAINS} swift" >> "$GITHUB_ENV"
           else
             echo "SWIFT=swift" >> "$GITHUB_ENV"
@@ -324,14 +348,13 @@ jobs:
             image: "swift:6.3-noble"
             smoke: quick
             experimental: false
-          # Released-branch nightlies spell the version WITHOUT `.x` for 6.2/6.3
-          # but WITH it for 6.4 (`nightly-6.4.x`). That inconsistency is real and
-          # upstream; do not "tidy" these tags.
-          - name: "Linux · Swift 6.4 nightly"
+          # Was `swiftlang/swift:nightly-6.4.x-noble`, advisory, until 6.4.0
+          # shipped.
+          - name: "Linux · Swift 6.4 · x86_64"
             runner: ubuntu-24.04
-            image: "swiftlang/swift:nightly-6.4.x-noble"
+            image: "swift:6.4-noble"
             smoke: quick
-            experimental: true
+            experimental: false
           - name: "Linux · Swift main nightly"
             runner: ubuntu-24.04
             image: "swiftlang/swift:nightly-main-noble"
@@ -396,11 +419,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # `nightly-6.4.x` rather than `nightly-main`: both Windows images
-        # exist, but the main one is rebuilt far less often (it was four weeks
-        # stale when this lane was written), so it would test an old snapshot
-        # while reporting as a nightly. Linux covers `nightly-main` daily.
-        swift: ["6.2", "6.3", "nightly-6.4.x"]
+        # Released toolchains only, for now. The nightly that was here,
+        # `nightly-6.4.x`, became `6.4` when 6.4.0 shipped; the release branch
+        # it followed now only collects 6.4 patch releases, which the release
+        # image tracks. Trunk is no substitute on Windows: its image,
+        # `nightly-main-windowsservercore-ltsc2022`, had last been rebuilt on
+        # 2026-07-09 when checked on 2026-09-27 (it was four weeks stale when
+        # this lane was written), so it would test an old snapshot while
+        # reporting as a nightly. Linux and macOS cover trunk. Add the next
+        # release branch's nightly here once one exists — the
+        # `continue-on-error` above makes any `nightly-…` entry advisory.
+        swift: ["6.2", "6.3", "6.4"]
     steps:
       # The runner defaults to core.autocrlf=true. SwiftLint on Windows requires
       # LF, and CRLF churn in Swift sources helps nobody — check out verbatim.
@@ -545,6 +574,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # 6.3 and not 6.4, deliberately for now. These lanes are here for the OS
+      # (Server 2025, and Windows 11 on arm64), and 6.4 already binds on
+      # Windows in the container lane. What a move to 6.4 would add is a
+      # dependency on setup-swift's 6.4.0 support, which arrived in 1.14.1
+      # (2026-09-25) and had no record on any runner when this was written;
+      # raise this line once the macOS 6.4 lane, which uses the same action,
+      # has one.
       - name: Install Swift
         uses: SwiftyLab/setup-swift@v1.14.1
         with:
@@ -618,6 +654,12 @@ jobs:
   # 6.3 rather than 6.2: on 6.2.4 the compiler asserts on `TupleView`'s
   # pack-expansion conformance and `TUIkitView` cannot be built for wasm at all
   # (the same assertion that blocks the Linux static-SDK check).
+  #
+  # And 6.3.3 rather than 6.4.0, for now: 6.4.0 shipped with a matching SDK,
+  # but 6.3.3 is the only version the port has been measured with (see
+  # Documentation/WebAssembly.md), and a binding lane moves to a pair somebody
+  # has built. Moving is every 6.3.3 below plus swift.org's published
+  # checksum for the 6.4.0 bundle.
   wasm:
     name: "WebAssembly · wasm32-unknown-wasip1"
     needs: lint

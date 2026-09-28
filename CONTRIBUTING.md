@@ -15,24 +15,31 @@ TUIkit is a SwiftUI-like framework for building Terminal User Interfaces in pure
 Every lane runs `swift build`, `swift test`, and both smoke tests
 (`Stress --selfcheck` everywhere; the PTY walk on macOS and Linux).
 
-Swift 6.2, 6.3, 6.4 and trunk are each covered on every operating system:
+The three released Swift versions, 6.2, 6.3 and 6.4, are each covered on every
+operating system, and trunk on macOS and Linux:
 
 | Swift | macOS | Linux | Windows |
 |-------|-------|-------|---------|
 | 6.2 | Xcode 26 on `macos-15` | `swift:6.2-noble` | `swift:6.2-…` |
 | 6.3 | Xcode 26 on `macos-26` | `swift:6.3-noble` | `swift:6.3-…` |
-| 6.4 | swift.org `6.4.x` snapshot | `nightly-6.4.x-noble` | `nightly-6.4.x-…` |
+| 6.4 | swift.org 6.4 release on `macos-26` | `swift:6.4-noble` | `swift:6.4-…` |
 | main | swift.org latest snapshot | `nightly-main-noble` | — |
 
-Released Swift comes from Xcode on macOS; unreleased Swift comes from
-swift.org. Deliberately **not** from the Xcode 27 beta, even though it bundles
-6.4 — the beta's 6.4 is an older build than the current branch snapshot, so it
-gives weaker early warning of upcoming-compiler breakage, which is the whole
-reason to run a 6.4 lane before 6.4 ships.
+Released Swift comes from Xcode on macOS wherever a generally available runner
+image carries the Xcode that ships it. For 6.4 none does yet — Xcode 27 is only
+on GitHub's `xcode-27` image, which is still a preview — so the 6.4 lane takes
+swift.org's release toolchain on `macos-26`. Trunk comes from swift.org too.
+Windows has no trunk lane because its trunk image is rebuilt too rarely to be
+worth reporting as a nightly (on 2026-09-27 it was eleven weeks old).
+
+Until 6.4.0 shipped (2026-09-14) its row was `release/6.4.x` snapshots and
+nightlies, advisory; the release images replaced them, and they block. The
+next release branch's nightlies take that place when it is cut.
 
 WebAssembly is built by its own lane, on a pinned 6.3.3 container plus the
 matching Swift SDK — pinned because a Swift SDK loads only under the toolchain
-version it was built for.
+version it was built for, and still 6.3.3 because that is the only version the
+port has been measured with (see [`Documentation/WebAssembly.md`](Documentation/WebAssembly.md)).
 
 Linux additionally runs Swift 6.3 on arm64, and lint runs on Linux only — it
 gates everything else, so a style slip fails in a minute rather than after
