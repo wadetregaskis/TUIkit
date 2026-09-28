@@ -11,6 +11,9 @@
 //  the stack's end, and a minimal-movement seek's choice of edge — which, as
 //  a near seek's walk does, reads the rows on screen from the anchor, and so
 //  from the anchor at the frame's offset, not where the last frame left it.
+//  And the anchor the seek leaves is its target at that place, at the offset
+//  it chose, near or far, so the walk to the offset after it is never taken
+//  for a scrollbar jump.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -246,5 +249,121 @@ struct AnchoredSeekNearTopTests {
         let settled = pair.frame().lazy
         #expect(seek.first == "row \(target)", "\(seek)")
         #expect(seek == settled, "the frame after: \(settled)")
+    }
+
+    @Test(
+        "A minimal-movement seek to a near row more than four screens of lines away lands where the column puts it",
+        arguments: [true, false])
+    func nearMinimalSeekFarInLines(up: Bool) {
+        // Row 0 one line and every other row two, 300 rows. Glued to the end
+        // (rows 296 to 299), `scrollTo(278)` is 18 rows up; from the top (rows
+        // 0 to 4), `scrollTo(20)` is 20 rows down. Each is near enough to be
+        // walked to from the rows on screen (`nilAnchorSeekOffset`), exactly,
+        // and the column puts it on the edge it is past: row 278 on the top
+        // line, row 20 on the bottom one. Before, the moves of 36 and 33
+        // lines were more than four screens, and the anchor walk after the
+        // seek took them for a scrollbar jump and placed the rows by the
+        // running pitch, two lines, where row 0's one line puts every row a
+        // line higher: row 278 was drawn a line low, under row 277's last,
+        // and row 20 a line high, its second line below the screen.
+        let target = up ? 278 : 20
+        let pair = TallHeadPair {
+            TallHeadPage(box: $0, header: false, flat: $1, tall: 1..<300, lines: 2, glued: up)
+        }
+        for _ in 0..<3 { pair.frame() }
+        pair.apply { $0.proxy?.scrollTo(target) }
+        let seek = pair.frame()
+        let settled = pair.frame()
+        let edge = up ? seek.flat.first : seek.flat.dropLast().last
+        #expect(edge == "row \(target)", "precondition: the column puts the row on its edge: \(seek.flat)")
+        #expect(seek.lazy == seek.flat, "\(seek.lazy) vs \(seek.flat)")
+        #expect(settled.lazy == settled.flat, "the frame after: \(settled.lazy) vs \(settled.flat)")
+    }
+
+    @Test("A minimal-movement seek to row 0, from rows a jump placed by the running pitch, shows it from its first line")
+    func nearMinimalSeekToRowZeroAfterAJump() {
+        // Rows 0-6 of ten lines and the rest one, glued to the end of 300 as
+        // above, then scrolled to line 10: a jump, placed at the running pitch
+        // of one, so rows 10 to 17 are drawn where the column shows row 1.
+        // Row 0 is near them, and walked to from row 10 by the rows' exact
+        // pitches its top is 63 lines above the stack's. `scrollTo(0)` moves
+        // to the stack's top, which the seek takes for row 0's whatever the
+        // walk says, as the column does. Before, the anchor walk after the
+        // seek moved up the ten lines from row 10 to the offset, and drew row
+        // 6 from its fourth line; pinned at the walk's place, row 0 would be
+        // drawn from its tenth.
+        var count = 250
+        let pair = TallHeadPair {
+            TallHeadPage(box: $0, header: false, flat: $1, count: count, tall: 0..<7, lines: 10, glued: true)
+        }
+        pair.frame()
+        pair.frame()
+        count = 300
+        for _ in 0..<3 { pair.frame() }
+        pair.apply { $0.position.scrollTo(y: 10) }
+        let before = pair.frame().lazy
+        #expect(before.first == "row 10", "precondition: the jump shows rows from 10: \(before)")
+        pair.apply { $0.proxy?.scrollTo(0) }
+        let seek = pair.frame()
+        let settled = pair.frame()
+        #expect(seek.flat.first == "row 0", "precondition: the column shows row 0 from the top: \(seek.flat)")
+        #expect(seek.lazy == seek.flat, "\(seek.lazy) vs \(seek.flat)")
+        #expect(settled.lazy == settled.flat, "the frame after: \(settled.lazy) vs \(settled.flat)")
+    }
+
+    @Test("A minimal-movement seek to a near row, on the frame a list of rows taller than row 0 grows onto the anchored window, is on screen")
+    func nearMinimalSeekOnTheFirstAnchoredFrame() {
+        // The same rows, glued to the end at 250 (the exact walk), grown to 300
+        // in the frame that runs `scrollTo(280)`. That frame's anchor is walked
+        // to the old tail's offset first, by the running pitch — row 0's one
+        // line, since the window has measured nothing yet — so to row 299,
+        // and row 280 is near it: 39 lines up. Before, the walk after the seek
+        // took that for a jump, and the screen showed rows 226 to 229, and
+        // held them.
+        //
+        // The column shows rows 246 to 249 when the seek runs, and puts row
+        // 280, below them, on the bottom line. Walked to from row 299 it is
+        // above the screen, and goes on the top line: the first anchored
+        // frame's estimate, not this seek's (see the known remaining issues of
+        // the commit that walks the anchor before a seek).
+        var count = 250
+        let pair = TallHeadPair {
+            TallHeadPage(box: $0, header: false, flat: $1, count: count, tall: 1..<300, lines: 2, glued: true)
+        }
+        pair.frame()
+        pair.frame()
+        count = 300
+        pair.apply { $0.proxy?.scrollTo(280) }
+        let seek = pair.frame()
+        let settled = pair.frame()
+        #expect(seek.flat.contains("row 280"), "precondition: the column shows the row: \(seek.flat)")
+        #expect(seek.lazy.contains("row 280"), "\(seek.lazy)")
+        #expect(settled.lazy == seek.lazy, "the frame after: \(settled.lazy)")
+    }
+
+    @Test(
+        "A seek that shows the end of a row more than five screens tall shows it as the column does",
+        arguments: [(150, UnitPoint?.some(.bottom)), (20, nil)])
+    func seekToTheEndOfATallRow(target: Int, anchor: UnitPoint?) {
+        // One row of sixty lines among 300 one-line rows, the view at the top.
+        // `scrollTo(150, anchor: .bottom)` is a far seek; `scrollTo(20)`, a row
+        // below the screen, a near one that puts it on the bottom edge. Each
+        // makes the target the anchor at its top, and moves the offset 52 lines
+        // down it, to its last eight. Before, the anchor walk after the seek
+        // took those 52 lines for a scrollbar jump, and placed the rows by the
+        // running pitch: the screen showed rows 6 to 13, or row 20's first
+        // lines under rows 18 and 19.
+        let pair = TallHeadPair {
+            TallHeadPage(box: $0, header: false, flat: $1, tall: target..<(target + 1), lines: 60)
+        }
+        for _ in 0..<3 { pair.frame() }
+        pair.apply { $0.proxy?.scrollTo(target, anchor: anchor) }
+        let seek = pair.frame()
+        let settled = pair.frame()
+        #expect(
+            seek.flat == Array(repeating: "  of \(target)", count: 8),
+            "precondition: the column shows the row's last lines: \(seek.flat)")
+        #expect(seek.lazy == seek.flat, "\(seek.lazy) vs \(seek.flat)")
+        #expect(settled.lazy == settled.flat, "the frame after: \(settled.lazy) vs \(settled.flat)")
     }
 }

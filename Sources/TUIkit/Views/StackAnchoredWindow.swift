@@ -485,9 +485,15 @@ extension _VStackCore {
     /// where the anchor walk puts it, estimates notwithstanding — and near the
     /// top, where the walk can be overruled, its y is exact (`seekTargetY`),
     /// and so the clamp and a minimal-movement seek's edge are read from it.
+    ///
+    /// `anchorFollowsOffset` is whether the anchor walk to the offset follows
+    /// the seek (`advanceAnchor`) — every frame but one whose designated row
+    /// owns the anchor, which a near seek leaves alone and a far one pins at
+    /// the target's top, as they always have (`anchorSeekTarget`).
     private func resolveAnchoredSeek(
         frame: AnchoredWindowFrame, state: StackWindowState,
-        window: inout ScrollContentWindow, children: ChildViewCollection
+        window: inout ScrollContentWindow, children: ChildViewCollection,
+        anchorFollowsOffset: Bool
     ) -> Int? {
         guard let seek = window.seek else { return nil }
         window.seek = nil
@@ -499,12 +505,24 @@ extension _VStackCore {
         // the walked offset — two coordinate spaces that drift apart — and
         // teleported the view (and the scrollbar) for a plainly on-screen row.
         if seek.anchor == nil,
-            let nearOffset = nilAnchorSeekOffset(
+            let near = nilAnchorSeekOffset(
                 target: ordinal, frame: frame, state: state,
                 window: window, seek: seek, count: children.count)
         {
-            window.offset = nearOffset
-            return nearOffset
+            // A move pins the anchor to the target, as a far seek does, so the
+            // walk to the offset after the seek (`advanceAnchor`) starts from
+            // the row this placed exactly. Started from the anchor the target
+            // was measured from, the move — up to twenty rows, of any height —
+            // could be more than four screens, which that walk takes for a
+            // scrollbar jump and places by the running pitch: row 278 of rows
+            // of two lines, from the end, was drawn a line low, and on the
+            // frame the list grew onto this path, rows 226 to 229 were.
+            if anchorFollowsOffset, near.offset != window.offset {
+                anchorSeekTarget(
+                    ordinal, top: near.targetTop, offset: near.offset, state: state, children: children)
+            }
+            window.offset = near.offset
+            return near.offset
         }
         let estimate = state.estimatedPitch(spacing: spacing)
         let targetY = seekTargetY(ordinal: ordinal, estimate: estimate, frame: frame, window: window)
@@ -535,12 +553,34 @@ extension _VStackCore {
             realising: request, targetY: targetY, rowHeight: rowHeight,
             stackHeight: max(children.count * estimate, targetY + (children.count - ordinal) * estimate)
                 - spacing)
-        state.anchorOrdinal = ordinal
-        state.anchorKey = children.key(at: ordinal)
-        state.anchorOffsetWithin = 0
-        state.lastDerivedOffset = targetY
+        // Under a designated row the hold follows, not the walk
+        // (`clampDesignatedHold`), and the target stands at its top as before.
+        anchorSeekTarget(
+            ordinal, top: targetY, offset: anchorFollowsOffset ? newOffset : targetY,
+            state: state, children: children)
         window.offset = newOffset
         return newOffset
+    }
+
+    /// Makes a seek's target the anchor: its top at `top`, and `offset` the
+    /// offset the seek moved to. The anchor walk that follows (`advanceAnchor`)
+    /// moves from there to the offset, so the lines of the target the offset
+    /// puts above the viewport's top — the end of a row taller than the screen,
+    /// which a `.bottom` or `.center` seek shows — are hidden here, and the
+    /// walk only moves up from the target's top, at most a screen.
+    ///
+    /// Left at the target's top, the walk moved down those lines, and past four
+    /// screens took them for a scrollbar jump and placed the rows by the running
+    /// pitch (`advanceAnchor`): a `.bottom` seek to the end of a sixty-line row
+    /// showed one-line rows past it.
+    private func anchorSeekTarget(
+        _ ordinal: Int, top: Int, offset: Int, state: StackWindowState, children: ChildViewCollection
+    ) {
+        let within = max(0, offset - top)
+        state.anchorOrdinal = ordinal
+        state.anchorKey = children.key(at: ordinal)
+        state.anchorOffsetWithin = within
+        state.lastDerivedOffset = top + within
     }
 
     /// Where a seek takes its target row's top to be: at the running pitch
@@ -627,7 +667,8 @@ extension _VStackCore {
                 linesBelow: window.linesBelow)
         }
         let resolvedSeek = resolveAnchoredSeek(
-            frame: frame, state: state, window: &window, children: children)
+            frame: frame, state: state, window: &window, children: children,
+            anchorFollowsOffset: designatedKey == nil)
 
         var heldOffset: Int?
         if designatedKey == nil {
@@ -895,10 +936,13 @@ extension _VStackCore {
     /// moves nothing and a nearby one moves just enough. Far targets return
     /// `nil` — minimality is meaningless hundreds of rows away, and the
     /// estimate seek handles them.
+    ///
+    /// Returns the offset, and the target's top in the same lines, which the
+    /// seek pins the anchor at (`anchorSeekTarget`).
     private func nilAnchorSeekOffset(
         target: Int, frame: AnchoredWindowFrame, state: StackWindowState,
         window: ScrollContentWindow, seek: ScrollToRequest, count: Int
-    ) -> Int? {
+    ) -> (offset: Int, targetTop: Int)? {
         let anchor = state.anchorOrdinal
         guard abs(target - anchor) <= window.viewportHeight * 2 + 4 else { return nil }
         var y = -state.anchorOffsetWithin
@@ -929,22 +973,25 @@ extension _VStackCore {
             || walked + lastHeight + window.linesBelow > window.viewportHeight
         let bottomShown = (seek.bottomInset > 0 && contentBelow) ? 1 : 0
 
+        // The first row's top is the stack's, 0, whatever the walk says:
+        // walked from an anchor placed by an estimate, rows near the top can
+        // sit a line or two off it. Under a section's header that line was the
+        // header's — the seek scrolled to the first row and left the header
+        // hidden, where the same seek in a column shows it. The anchor is
+        // pinned there too: at the walk's place, 63 lines above the stack's
+        // top after a jump near rows of ten lines, row 0 was drawn from its
+        // tenth line.
+        let top = target == 0 ? 0 : window.offset + y
         if y >= topShown, y + rowHeight <= window.viewportHeight - bottomShown {
-            return window.offset  // fully visible: strict no-op
+            return (window.offset, top)  // fully visible: strict no-op
         }
         if y < topShown {
-            // The first row's top is the stack's, 0, whatever the walk says:
-            // walked from an anchor placed by an estimate, rows near the top
-            // can sit a line or two off it. Under a section's header that line
-            // was the header's — the seek scrolled to the first row and left
-            // the header hidden, where the same seek in a column shows it.
-            let destination = target == 0 ? 0 : window.offset + y
-            let topPad = (seek.topInset > 0 && destination + above > 0) ? 1 : 0
-            return max(-above, destination - topPad)
+            let topPad = (seek.topInset > 0 && top + above > 0) ? 1 : 0
+            return (max(-above, top - topPad), top)
         }
         let bottomPad =
             (seek.bottomInset > 0 && (target < count - 1 || window.linesBelow > 0)) ? 1 : 0
-        return max(-above, window.offset + y + rowHeight - window.viewportHeight + bottomPad)
+        return (max(-above, window.offset + y + rowHeight - window.viewportHeight + bottomPad), top)
     }
 
     /// Memo hit, else one key scan (never builds a row view). Shared by the

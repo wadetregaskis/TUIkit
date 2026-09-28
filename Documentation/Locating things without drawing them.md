@@ -785,7 +785,13 @@ pitch. The anchor it reads, as a near seek's walk does, is the one at this
 frame's offset, walked there before the seek: left where the last frame drew
 it, it was row 0 on the frame a stack grows onto the anchored window, or rows
 behind a jump made with the seek, and a row above the screen went on the
-bottom line (`AnchoredSeekNearTopTests`). Handed an offset a screen or more
+bottom line. Every seek then leaves its target as the anchor, at its place,
+with the lines of it above the new offset hidden: the walk to the offset after
+the seek takes a move of more than four screens for a scrollbar jump and places
+the rows by the running pitch, and measured from anywhere else — the anchor a
+near seek walked from, up to twenty rows of any height away, or the top of a
+row taller than the screen whose end a `.bottom` seek shows — the move could be
+one (`AnchoredSeekNearTopTests`). Handed an offset a screen or more
 above its first row — the viewport inside a header at least as tall as it —
 every path draws row 0 as the margin row below the viewport, so its controls
 join the focus ring and the lines it drew are named for the scroll view to
