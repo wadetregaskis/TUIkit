@@ -131,10 +131,23 @@ public final class StateStorage: @unchecked Sendable {
     private var retainedSubtreeRoots: [ViewIdentity] = []
 
     /// The render cache that state changes should invalidate — the cache of the
-    /// `TUIContext` this storage belongs to. Wired by the context at creation and
-    /// stamped onto each ``StateBox`` at hydration, so a state change clears only
-    /// its own context's cache (no process-wide singleton → no cross-test bleed).
-    public weak var renderCache: RenderCache?
+    /// `TUIContext` this storage belongs to. Wired by the context at creation;
+    /// its link is stamped onto each ``StateBox`` at hydration, so a state
+    /// change clears only its own context's cache (no process-wide singleton →
+    /// no cross-test bleed).
+    ///
+    /// Kept as the cache's `RenderCache.Link`, not as a reference to the
+    /// cache: the storage does not own the cache, and a weak reference would
+    /// put every retain and release of the cache, for the rest of its life,
+    /// through the runtime's slow path. Reads `nil` once the cache has gone.
+    /// Main actor only, as the link's `cache` is.
+    public var renderCache: RenderCache? {
+        get { renderCacheLink?.cache }
+        set { renderCacheLink = newValue?.link }
+    }
+
+    /// The link of ``renderCache``, which every box is given as its sink.
+    private var renderCacheLink: RenderCache.Link?
 
     /// The last-rendered branch of each `ConditionalView`, keyed by the
     /// conditional's own identity (`true` ⇒ the `.trueContent` branch was last
@@ -194,12 +207,12 @@ extension StateStorage {
     ) -> StateBox<Value> {
         if let existing = values[key] as? StateBox<Value> {
             existing.identity = key.identity
-            existing.invalidationSink = renderCache
+            existing.invalidationSink = renderCacheLink
             return existing
         }
         let fresh = StateBox(defaultValue())
         fresh.identity = key.identity
-        fresh.invalidationSink = renderCache
+        fresh.invalidationSink = renderCacheLink
         values[key] = fresh
         return fresh
     }
@@ -429,13 +442,18 @@ public final class StateBox<Value>: @unchecked Sendable {
 
     /// The sink that turns a value change into a (deferred, thread-safe) cache
     /// invalidation plus a re-render request — the box's owning context's
-    /// ``RenderCache`` (wired during hydration from ``StateStorage``). Routing
-    /// through the per-context sink keeps each context (the app's, and every
-    /// test's) invalidating only its own cache, and — because the sink defers
-    /// the mutation to the main-actor frame boundary — a `@State` written from a
-    /// background `Task` never races the single-threaded cache. `nil` before the
-    /// box is first hydrated, in which case nothing has been cached for it yet.
-    weak var invalidationSink: (any RenderInvalidationSink)?
+    /// cache's ``RenderCache/Link`` (wired during hydration from
+    /// ``StateStorage``). Routing through the per-context sink keeps each
+    /// context (the app's, and every test's) invalidating only its own cache,
+    /// and — because the sink defers the mutation to the main-actor frame
+    /// boundary — a `@State` written from a background `Task` never races the
+    /// single-threaded cache. `nil` before the box is first hydrated, in which
+    /// case nothing has been cached for it yet.
+    ///
+    /// Strong: the link holds nothing that holds the box, and it is stamped
+    /// at every hydration, where a weak store — which this was — made the
+    /// cache's reference count a side table's from the first frame on.
+    var invalidationSink: (any RenderInvalidationSink)?
 
     /// The current value.
     public var value: Value {

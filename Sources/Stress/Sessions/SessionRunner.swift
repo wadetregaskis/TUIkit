@@ -121,6 +121,10 @@ enum SessionRunner {
         var censusAtOpen: ObservationCensus.Counts?
         var censusAtEnd: ObservationCensus.Counts?
         var censusAfterFinish: ObservationCensus.Counts?
+        /// Whether the render cache's reference count had moved to a side
+        /// table by the end — printed when `--census` asked (`nil` when the probe
+        /// cannot read this runtime).
+        var renderCacheSideTable: Bool?
     }
 
     /// The sizes a resizing run cycles through.
@@ -217,6 +221,7 @@ enum SessionRunner {
             }
         }
         report.censusAtEnd = warm.census()
+        report.renderCacheSideTable = warm.renderCacheSideTable()
         finish(warm, cold, at: options.steps, checks: options.checks, into: &report)
         if report.finish != nil { report.censusAfterFinish = warm.census() }
         if options.show { report.lastScreen = warm.screen().map(\.stripped) }
@@ -272,6 +277,11 @@ enum SessionRunner {
         }
         if lines.count == 1 { lines.append("  none armed") }
         if let after = report.censusAfterFinish { lines.append("  after the finish: alive " + liveByKind(after)) }
+        switch report.renderCacheSideTable {
+        case false?: lines.append("render cache's reference count: inline (nothing ever referenced it weakly)")
+        case true?: lines.append("render cache's reference count: in a side table (something referenced it weakly)")
+        case nil: break
+        }
         return lines
     }
 

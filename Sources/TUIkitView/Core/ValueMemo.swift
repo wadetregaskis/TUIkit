@@ -164,7 +164,7 @@ func renderValueMemoized<Key: Equatable, Row>(
     // publish; those are its synchronous callers — fires before we store, and
     // storing afterwards would resurrect the pre-clear buffer and serve it until
     // the key next changes. NOT a `@State` write: since `44660d87` those are
-    // queued (`pendingInvalidations`) and drained at the next `beginRenderPass`,
+    // queued (on the cache's `link`) and drained at the next `beginRenderPass`,
     // so this counter does not move for them and the store goes ahead — which is
     // right, because the drain clears the entry before it can be served. That
     // rests on the drain dropping the entries at, above AND below each queued

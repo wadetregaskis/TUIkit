@@ -113,15 +113,17 @@ public final class FocusManager: @unchecked Sendable {
     private var focusIdentities: [String: (identity: ViewIdentity, generation: UInt64, drawnBelow: Bool)] = [:]
 
     /// The cache holding the buffers that draw those controls, so a focus move
-    /// can drop the ones at either end of it. Weak, like `StateStorage`'s
-    /// reference to the same object: the cache is not owned here.
+    /// can drop the ones at either end of it — through its link, since the
+    /// cache is not owned here, and a weak reference would put every retain and
+    /// release of the cache through the runtime's slow path (see
+    /// `RenderCache.Link`).
     ///
     /// Recorded by each registration rather than wired at construction, because
     /// a manager meets a cache only through the contexts that render into it —
     /// which is also what keeps the throwaway managers right: a dimmed
     /// backdrop's manager and the focus-reach probe's scratch one each end up
     /// pointed at the cache their own render used.
-    private weak var renderCache: RenderCache?
+    private var renderCacheLink: RenderCache.Link?
 
     /// The last focused element ID per section, so returning to a section
     /// (e.g. dismissing a modal whose overlay activated its own section)
@@ -484,7 +486,7 @@ extension FocusManager {
     func noteFocusIdentity(
         _ identity: ViewIdentity, for focusID: String, cachedIn cache: RenderCache?, drawnBelow: Bool = true
     ) {
-        renderCache = cache
+        renderCacheLink = cache?.link
         focusIdentities[focusID] = (identity: identity, generation: focusRenderGeneration, drawnBelow: drawnBelow)
     }
 
@@ -517,7 +519,7 @@ extension FocusManager {
     /// whose focus shows only in what it draws itself.
     private func invalidateCachedRender(of focusID: String?) {
         guard let focusID, let known = focusIdentities[focusID] else { return }
-        renderCache?.clearAffected(by: known.identity, includingDescendants: known.drawnBelow)
+        renderCacheLink?.cache?.clearAffected(by: known.identity, includingDescendants: known.drawnBelow)
     }
 
     /// Unregisters a focusable element from all sections.

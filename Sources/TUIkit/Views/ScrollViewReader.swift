@@ -107,7 +107,10 @@ final class ScrollToRegistry: @unchecked Sendable {
     private struct Entry {
         weak var handler: ScrollViewHandler?
         let identity: ViewIdentity
-        weak var renderCache: RenderCache?
+        /// The link of the cache the scroll view rendered with: the queue a
+        /// `@State` write reports to. Not the cache, and not weakly — see
+        /// `RenderCache.Link`.
+        let renderCacheLink: RenderCache.Link?
     }
 
     /// Live scroll views, keyed by identity path so a re-render refreshes
@@ -119,7 +122,7 @@ final class ScrollToRegistry: @unchecked Sendable {
     /// Registers (or refreshes) a scroll view for this frame.
     func register(handler: ScrollViewHandler, identity: ViewIdentity, renderCache: RenderCache?) {
         entries[identity.path] = Entry(
-            handler: handler, identity: identity, renderCache: renderCache)
+            handler: handler, identity: identity, renderCacheLink: renderCache?.link)
     }
 
     /// Parks the request on every live registered scroll view — each
@@ -139,7 +142,7 @@ final class ScrollToRegistry: @unchecked Sendable {
                 continue
             }
             handler.pendingScrollTo = ScrollToRequest(key: key, anchor: anchor)
-            entry.renderCache?.invalidateRender(for: entry.identity)
+            entry.renderCacheLink?.invalidateRender(for: entry.identity)
         }
     }
 }

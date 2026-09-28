@@ -99,16 +99,19 @@ extension HelpModifier: Renderable {
         // event can arrive, because events are dispatched between frames.
         let idBox = HandlerIDBox()
         // Where the arrival is reported, and for which view: see `.entered`.
-        // Weakly, since a stored buffer's journal keeps this closure and the
-        // cache keeps the buffer.
-        let invalidation = context.renderCache
-        let identity = context.identity
+        // Through `HandlerDrawing`, the report a control makes of what it
+        // draws of itself, which reaches the cache through the cache's own
+        // `Link`: a strong reference would be a cycle (a stored buffer's
+        // journal keeps this closure, and the cache keeps the buffer), and a
+        // weak one puts every retain and release of the cache through the
+        // runtime's slow path.
+        let drawing = HandlerDrawing(context)
         // An OBSERVER, as `.onHover` is. This region goes on after the
         // content's, so as an ordinary region it took the `.entered` /
         // `.exited` the control it explains needs for its own hover face —
         // `Button("Save") {}.help("…")` never lit up under the pointer. See
         // `MouseEventDispatcher.registerHoverObserver(in:_:)`.
-        let handlerID = dispatcher.registerHoverObserver(in: context) { [weak invalidation, weak dispatcher] event in
+        let handlerID = dispatcher.registerHoverObserver(in: context) { [weak dispatcher] event in
             switch event.phase {
             case .entered:
                 // The event's own arrival time, not this frame's clock: the
@@ -118,9 +121,9 @@ extension HelpModifier: Renderable {
                 // monotonic clock, which frames are stamped on, in an app; the
                 // caller's in a `HeadlessApp`, which stamps its own frames.
                 // Read off the machine's clock there, two instances fed one
-                // script put the tooltip in different frames. Weakly, as
-                // `invalidation` is, and because the dispatcher keeps this
-                // closure in its own table: it is alive whenever it calls it.
+                // script put the tooltip in different frames. Weakly, because
+                // the dispatcher keeps this closure in its own table: it is
+                // alive whenever it calls it.
                 let arrival = dispatcher.map { Int64(bitPattern: $0.nowNanos()) } ?? FrameClock.nowNanos
                 tooltips.hovering(
                     captured, handlerID: idBox.id, nowNanos: arrival,
@@ -141,7 +144,7 @@ extension HelpModifier: Renderable {
                 // frames. Nothing is stored while the tooltip is pending (the
                 // wake is a side effect) or up (a popover is an overlay), so
                 // its leaving needs no report.
-                invalidation?.clearAffected(by: identity, keepingSizes: true, includingDescendants: false)
+                drawing.changed()
                 return true
             case .exited:
                 tooltips.leaving(captured)

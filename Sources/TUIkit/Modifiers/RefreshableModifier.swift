@@ -52,9 +52,11 @@ public struct RefreshAction: Equatable, Sendable {
         /// rendering it, and the key it compares does not change when a run
         /// starts. Without this the memo kept serving the idle picture, so the
         /// spinner never drew, and a buffer stored mid-run kept the spinner
-        /// after the run ended. Weak, like a `StateBox`'s sink: the cache owns
-        /// the state storage this lives in, not the other way round.
-        private weak var invalidationSink: (any RenderInvalidationSink)?
+        /// after the run ended. The cache's link, held strongly as a
+        /// `StateBox`'s sink is: it holds nothing that holds this, and a weak
+        /// reference to the cache would put every retain and release of it
+        /// through the runtime's slow path (see `RenderCache.Link`).
+        private var invalidationSink: (any RenderInvalidationSink)?
         private var identity: ViewIdentity?
 
         init() {}
@@ -236,7 +238,7 @@ public struct RefreshableModifier<Content: View>: View {
             identity: context.identity, propertyIndex: RefreshableStateIndex.runState)
         let box: StateBox<RefreshAction.RunState> = storage.storage(
             for: key, default: RefreshAction.RunState())
-        box.value.bind(to: context.renderCache, identity: context.identity)
+        box.value.bind(to: context.renderCache?.link, identity: context.identity)
         return RefreshAction(action, state: box.value)
     }
 }

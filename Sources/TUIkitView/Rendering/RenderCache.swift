@@ -443,18 +443,13 @@ public final class RenderCache: @unchecked Sendable {
     /// Bumped once per pass, for pruning ``appliedEnvironment``.
     private(set) var frameCounter: UInt64 = 0
 
-    /// Invalidations enqueued by ``invalidateRender(for:)`` — a `@State` write —
-    /// since the last frame, drained on the main actor at ``beginRenderPass()``.
-    private struct PendingInvalidations: Sendable {
-        /// `true` once a whole-cache clear is requested; supersedes `identities`.
-        var clearAll = false
-        /// Subtrees whose cached buffers must be dropped (unless `clearAll`).
-        var identities: Set<ViewIdentity> = []
-    }
-
-    /// Guards ``PendingInvalidations`` so an off-main `@State` write can enqueue
-    /// without racing the (otherwise single-threaded) `entries`/`sizeEntries`.
-    private let pendingInvalidations = Lock(initialState: PendingInvalidations())
+    /// The way back to this cache for whatever keeps one past a render — a
+    /// `@State` box, an observation registration, a control's handler — in
+    /// place of a weak reference to it, which would put every retain and
+    /// release of the cache through the runtime's slow path. It also holds the
+    /// queue of invalidations ``invalidateRender(for:)`` makes from any thread,
+    /// drained on the main actor at ``beginRenderPass()``. See ``Link``.
+    package let link = Link()
 
     /// Cumulative cache performance statistics.
     public private(set) var stats = Stats()
@@ -506,6 +501,9 @@ public final class RenderCache: @unchecked Sendable {
     /// asked for it. `nil` otherwise, which is the whole of its cost.
     public var bodyMutationDiagnostic: BodyMutationDiagnostic? =
         BodyMutationDiagnostic.isEnabled ? BodyMutationDiagnostic() : nil
+    {
+        didSet { link.setDiagnostic(bodyMutationDiagnostic) }
+    }
 
     /// Stats snapshot taken at the start of each render pass (for per-frame deltas).
     private var statsAtFrameStart = Stats()
@@ -540,7 +538,17 @@ public final class RenderCache: @unchecked Sendable {
     }()
 
     /// Creates an empty render cache.
-    public init() {}
+    public init() {
+        link.attach(self)
+        link.setDiagnostic(bodyMutationDiagnostic)
+    }
+
+    deinit {
+        // First, so that nothing reading the link can find a cache that is
+        // going: a holder that outlives the cache reads `nil` from here on, and
+        // a write reports to nothing.
+        link.detach()
+    }
 
     /// The number of cached entries (for testing/debugging).
     public var count: Int { entries.count }
@@ -1209,12 +1217,7 @@ extension RenderCache {
     /// last frame. Runs on the main actor (from ``beginRenderPass()``), where
     /// mutating `entries`/`sizeEntries` is safe.
     private func drainPendingInvalidations() {
-        let pending = pendingInvalidations.withLock { state -> PendingInvalidations in
-            let snapshot = state
-            state.clearAll = false
-            state.identities.removeAll(keepingCapacity: true)
-            return snapshot
-        }
+        let pending = link.drain()
         if pending.clearAll {
             clearAll()
         } else if pending.identities.count == 1, let writer = pending.identities.first {
@@ -1481,32 +1484,20 @@ extension RenderCache {
 extension RenderCache: RenderInvalidationSink {
     /// Records a `@State`-driven invalidation and requests a re-render.
     ///
-    /// This is the seam ``StateBox`` calls on every value change. It only
-    /// *enqueues* the work behind `pendingInvalidations`' lock — the actual
-    /// `entries`/`sizeEntries` mutation happens later, on the main actor, in
+    /// The seam a `@State` write reaches. It only *enqueues* the work, on the
+    /// cache's `link` behind its lock — the actual `entries`/`sizeEntries`
+    /// mutation happens later, on the main actor, in
     /// `drainPendingInvalidations()` at frame start. That indirection is what
     /// makes a `@State` written from a background `Task` race-free: the cache is
     /// otherwise single-threaded, so it must never be mutated from the writer's
     /// thread. The re-render request goes through the retained `AppState`
-    /// singleton (already thread-safe).
+    /// singleton (already thread-safe). A box holds the link, not the cache,
+    /// and reports to it directly — see `RenderCache.Link`.
     ///
     /// - Parameter identity: the subtree whose cached buffers are now stale, or
     ///   `nil` to drop the whole cache.
     public func invalidateRender(for identity: ViewIdentity?) {
-        // Opt-in, and free when off: one optional test. See
-        // `BodyMutationDiagnostic` for why a write during the walk is worth
-        // naming — this is the single funnel every `@State` write reaches, so
-        // it is the only place that needs to ask.
-        bodyMutationDiagnostic?.note(identity)
-        pendingInvalidations.withLock { state in
-            if let identity {
-                if !state.clearAll { state.identities.insert(identity) }
-            } else {
-                state.clearAll = true
-                state.identities.removeAll(keepingCapacity: true)
-            }
-        }
-        AppState.shared.setNeedsRender()
+        link.invalidateRender(for: identity)
     }
 }
 

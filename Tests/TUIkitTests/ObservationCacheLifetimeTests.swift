@@ -64,7 +64,7 @@ struct ObservationCacheLifetimeTests {
         let identity = ViewIdentity(rootType: Model.self)
         cache.store(identity: identity, view: 0, buffer: FrameBuffer(text: "x"), contextWidth: 1, contextHeight: 1)
         var fellBack = false
-        reportObservedChange(at: identity, to: cache, hadCache: true) { fellBack = true }
+        reportObservedChange(at: identity, to: cache.link) { fellBack = true }
         cache.beginRenderPass()
         #expect(cache.isEmpty, "the entry at the reader's identity was dropped")
         #expect(!fellBack, "a live cache takes the change itself")
@@ -72,15 +72,23 @@ struct ObservationCacheLifetimeTests {
 
     @Test("A change drawn with a cache that has gone does nothing")
     func deadCacheIsANoOp() {
+        var link: RenderCache.Link?
+        do {
+            let cache = RenderCache()
+            link = cache.link
+            #expect(link?.cache === cache)
+        }
+        #expect(link?.cache == nil, "the cache's deinit detached its link")
         var fellBack = false
-        reportObservedChange(at: ViewIdentity(rootType: Model.self), to: nil, hadCache: true) { fellBack = true }
+        reportObservedChange(at: ViewIdentity(rootType: Model.self), to: link) { fellBack = true }
         #expect(!fellBack, "a cache that has gone must not clear another app's")
+        #expect(link?.drain().identities.isEmpty == true, "and nothing was queued on its closed link")
     }
 
     @Test("A change drawn with no cache at all still clears everything")
     func noCacheFallsBack() {
         var fellBack = false
-        reportObservedChange(at: ViewIdentity(rootType: Model.self), to: nil, hadCache: false) { fellBack = true }
+        reportObservedChange(at: ViewIdentity(rootType: Model.self), to: nil) { fellBack = true }
         #expect(fellBack, "a render with no cache to scope to falls back to the whole-cache clear")
     }
 }

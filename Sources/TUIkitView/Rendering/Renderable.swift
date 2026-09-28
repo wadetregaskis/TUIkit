@@ -268,12 +268,14 @@ private func renderResolved<V: View>(_ view: V, context: RenderContext) -> Frame
 ///   the one to drop; an ancestor that did not read it keeps a buffer that
 ///   never held it. The whole-cache clear remains only where there is no cache
 ///   to scope to (a headless render with no `RenderCache` in the environment).
-/// - The `onChange` holds the cache WEAKLY. A registration lives until a
-///   property it read is written or every object it read from is
-///   deinitialized (for a property nothing writes, as long as its model
-///   lives), and a strong capture kept the cache — every buffer and size in
-///   it — alive with it, after the app that owned the cache had gone. See
-///   ``reportObservedChange(at:to:hadCache:fallback:)``.
+/// - The `onChange` holds the cache's ``RenderCache/Link``, not the cache. A
+///   registration lives until a property it read is written or every object
+///   it read from is deinitialized (for a property nothing writes, as long as
+///   its model lives), and a strong capture kept the cache — every buffer and
+///   size in it — alive with it, after the app that owned the cache had gone.
+///   A weak one cost the cache instead, on every retain for the rest of its
+///   life (see ``RenderCache/Link``). See
+///   ``reportObservedChange(at:to:fallback:)``.
 ///
 /// `@inline(__always)` so the render walk's own copy compiles to what it was
 /// before this was a function: it runs once per composite per frame, and it
@@ -303,8 +305,8 @@ package func evaluateCompositeBody<V: View>(of view: V, context: RenderContext) 
 /// asking a view of the app's which rows its body holds) is counted as
 /// measured, whichever site evaluated it.
 ///
-/// The closure holds the cache weakly — see
-/// ``reportObservedChange(at:to:hadCache:fallback:)`` — and, when a census is
+/// The closure holds the cache's link — see
+/// ``reportObservedChange(at:to:fallback:)`` — and, when a census is
 /// installed, its ``ObservationCensus/Registration`` strongly: the closure is
 /// freed exactly when the registration is, so the token counts it as fired
 /// when the closure runs and as dropped when every object the scope read from
@@ -315,41 +317,44 @@ package func evaluateCompositeBody<V: View>(of view: V, context: RenderContext) 
 @inline(__always)
 package func observedChange(of context: RenderContext, kind: ObservationCensus.Kind) -> @Sendable () -> Void {
     let registration = context.renderCache?.observationCensus?.arm(kind)
-    return { [weak cache = context.renderCache, hadCache = context.renderCache != nil, identity = context.identity] in
+    return { [link = context.renderCache?.link, identity = context.identity] in
         registration?.fire()
-        reportObservedChange(at: identity, to: cache, hadCache: hadCache)
+        reportObservedChange(at: identity, to: link)
     }
 }
 
 /// Where an observed body's change goes: to the cache the body was drawn
-/// with, as an invalidation at the body's identity; to the whole-cache
-/// fallback when it was drawn with no cache; and nowhere when it was drawn
-/// with a cache that has since gone.
+/// with, as an invalidation at the body's identity, through the cache's link;
+/// to the whole-cache fallback when it was drawn with no cache; and nowhere
+/// when it was drawn with a cache that has since gone, whose link is closed.
 ///
-/// The last case is why the registration holds the cache weakly. A
+/// The last case is why the registration holds the link and not the cache. A
 /// registration is freed when a property it read is written or when every
 /// object it read from is deinitialized, so one armed by a body that reads a
 /// property nothing ever writes lives for as long as the model does — and
-/// held strongly, it kept the whole render cache alive with it, long after
-/// the app, the `TUIContext` or the test that owned the cache had let it go.
-/// A cache that has gone has nothing left to invalidate, and whatever
-/// replaced it arms registrations of its own the first time it draws, so the
-/// change is dropped.
+/// holding the cache strongly, it kept the whole render cache alive with it,
+/// long after the app, the `TUIContext` or the test that owned the cache had
+/// let it go. A cache that has gone has nothing left to invalidate, and
+/// whatever replaced it arms registrations of its own the first time it
+/// draws, so the change is dropped. The link is a few words, and a weak
+/// reference to the cache would have cost the cache every retain it makes.
+///
+/// Runs on the writer's thread, which is why it goes through the link's
+/// queue and never reads the cache.
 ///
 /// - Parameters:
 ///   - identity: The identity whose body read the property.
-///   - cache: The cache the body was drawn with, if it is still alive.
-///   - hadCache: Whether there was a cache when the body was drawn, which
-///     tells a cache that has gone from a render that never had one.
+///   - link: The link of the cache the body was drawn with; `nil` when it was
+///     drawn with no cache.
 ///   - fallback: What a change does to a render with no cache: clears
 ///     everything and asks for a frame. A parameter so a test can see it run.
 package func reportObservedChange(
-    at identity: ViewIdentity, to cache: RenderCache?, hadCache: Bool,
+    at identity: ViewIdentity, to link: RenderCache.Link?,
     fallback: () -> Void = { AppState.shared.setNeedsRenderWithCacheClear() }
 ) {
-    if let cache {
-        cache.invalidateRender(for: identity)
-    } else if !hadCache {
+    if let link {
+        link.invalidateRender(for: identity)
+    } else {
         fallback()
     }
 }

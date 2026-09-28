@@ -42,21 +42,29 @@ import TUIkitView
 /// driving). The one report made DURING a render — a `List` re-aiming its drop
 /// gap after drawing (``ItemListHandler/drawing``) — relies on the same
 /// immediacy: a memo still rendering around the list sees the clear and
-/// declines to store. Held weakly, since a stored buffer's journal keeps the
-/// closures that hold this, and the cache keeps the buffer.
+/// declines to store.
+///
+/// The cache is reached through its ``RenderCache/Link``, not a reference of
+/// its own. Not a strong one, since a stored buffer's journal keeps the
+/// closures that hold this, and the cache keeps the buffer. And not a weak one:
+/// a `List` or `Table` stamps its handler with this on every render, and the
+/// first weak reference to the cache puts every retain and release of it, for
+/// the rest of its life, through the runtime's slow path — 20,111 a frame on
+/// the `app-shapes` sidebar, where nothing else referenced it weakly
+/// (counted 2026-09-27).
 struct HandlerDrawing {
-    private weak var cache: RenderCache?
+    private let link: RenderCache.Link?
     private let identity: ViewIdentity
 
     /// The pictures of the control `context` is rendering.
     init(_ context: RenderContext) {
-        cache = context.renderCache
+        link = context.renderCache?.link
         identity = context.identity
     }
 
     /// Drops the control's own cached buffers and those containing it.
     func changed() {
-        cache?.clearAffected(by: identity, keepingSizes: true, includingDescendants: false)
+        link?.cache?.clearAffected(by: identity, keepingSizes: true, includingDescendants: false)
     }
 
     /// Runs `body`, and reports a change when `state` reads differently after

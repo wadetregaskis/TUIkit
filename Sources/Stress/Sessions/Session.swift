@@ -136,6 +136,11 @@ final class DrivenSession {
     /// it: what `--census` counts.
     let installCensus: () -> Void
     let census: () -> ObservationCensus.Counts?
+    /// Whether the app's render cache's reference count has moved to a side
+    /// table — what the first weak reference to it does, for good, putting
+    /// every retain and release of it on the runtime's slow path. `nil` where
+    /// the probe cannot read this runtime's layout.
+    let renderCacheSideTable: () -> Bool?
     /// What `TUIKIT_VERIFY_RENDER_MEMO` found: each served buffer that a fresh
     /// render of the same subtree disagreed with. Empty unless it is set.
     let staleServes: () -> [String]
@@ -180,6 +185,7 @@ final class DrivenSession {
         finish = { session.finish() }
         installCensus = { app.renderCache.observationCensus = ObservationCensus() }
         census = { app.renderCache.observationCensus?.snapshot }
+        renderCacheSideTable = { ReferenceCountProbe.usesSideTable(app.renderCache) }
         staleServes = { app.renderCache.renderMemoMismatches }
         staleSizes = { app.renderCache.measureMemoMismatches }
         cacheCounts = { (app.renderCache.stats, app.renderCache.rowWork) }

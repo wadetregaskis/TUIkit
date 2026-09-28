@@ -246,7 +246,10 @@ final class DragAndDropSession: @unchecked Sendable {
     weak var dispatcher: MouseEventDispatcher?
 
     /// Where a change of what ``isDragSource(_:)`` answers is reported: the
-    /// app's render cache, wired by `TUIContext`.
+    /// app's render cache's link, wired by `TUIContext` — held strongly, as a
+    /// `@State` box holds it, since a weak reference to the cache would put
+    /// every retain and release of it through the runtime's slow path (see
+    /// `RenderCache.Link`).
     ///
     /// A view drawn as gone while it is carried reads that answer as it
     /// renders, and it is session state no memo keys on and no `@State` write
@@ -256,7 +259,7 @@ final class DragAndDropSession: @unchecked Sendable {
     /// the card was home. Every change of the view drawn as gone now drops
     /// what the cache holds for it, and above it, as a `@State` write there
     /// would: ``source`` and ``returnFlight`` report their own changes.
-    weak var renderInvalidation: (any RenderInvalidationSink)?
+    var renderInvalidation: (any RenderInvalidationSink)?
 
     /// Reports a change of the view drawn as gone — see ``renderInvalidation``.
     private func drawnAsGoneMoved(from old: ViewIdentity?, to new: ViewIdentity?) {
