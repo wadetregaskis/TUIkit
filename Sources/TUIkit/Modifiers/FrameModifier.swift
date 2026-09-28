@@ -25,35 +25,121 @@ public enum FrameDimension: Equatable, Sendable {
 /// This view handles min/max constraints and renders content with
 /// the appropriate available space.
 public struct FlexibleFrameView<Content: View>: View {
-    /// The content view to constrain.
-    let content: Content
-
-    /// The minimum width in characters, or nil for no minimum.
-    ///
-    /// The six dimensions are `var` so an animation can substitute them — see
-    /// the `Animatable` conformance below.
-    var minWidth: Int?
-
-    /// The ideal width in characters, or nil to use intrinsic size.
-    var idealWidth: Int?
-
-    /// The maximum width constraint, or nil for no maximum.
-    var maxWidth: FrameDimension?
-
-    /// The minimum height in lines, or nil for no minimum.
-    var minHeight: Int?
-
-    /// The ideal height in lines, or nil to use intrinsic size.
-    var idealHeight: Int?
-
-    /// The maximum height constraint, or nil for no maximum.
-    var maxHeight: FrameDimension?
+    // The six constraints are stored one word each — `FrameWord` — rather than
+    // as `Int?` / `FrameDimension?`, and declared before the content. An
+    // optional word is nine bytes at eight-byte alignment, so each left seven
+    // bytes of padding behind it, 41 in `.frame(width:)` over a `Text`, and the
+    // per-pass memos key a view by its bytes: padding is whatever the memory
+    // held before, so two equal frames could miss each other. The words, then
+    // the alignment (48 bytes, word-aligned too), then the content LAST, so
+    // no field follows it whatever its size, leaves no gap
+    // (`FrameLayoutPaddingTests`), and the wrapper over a `Text` is 200 →
+    // 151 bytes. The optional-typed properties below
+    // are the API, and `var` so an animation can substitute them — see the
+    // `Animatable` conformance.
+    private var minWidthWord: Int
+    private var idealWidthWord: Int
+    private var maxWidthWord: Int
+    private var minHeightWord: Int
+    private var idealHeightWord: Int
+    private var maxHeightWord: Int
 
     /// The alignment of the content within the frame.
     let alignment: Alignment
 
+    /// The content view to constrain.
+    let content: Content
+
+    init(
+        content: Content, minWidth: Int? = nil, idealWidth: Int? = nil, maxWidth: FrameDimension? = nil,
+        minHeight: Int? = nil, idealHeight: Int? = nil, maxHeight: FrameDimension? = nil,
+        alignment: Alignment
+    ) {
+        self.minWidthWord = FrameWord.pack(minWidth)
+        self.idealWidthWord = FrameWord.pack(idealWidth)
+        self.maxWidthWord = FrameWord.pack(maxWidth)
+        self.minHeightWord = FrameWord.pack(minHeight)
+        self.idealHeightWord = FrameWord.pack(idealHeight)
+        self.maxHeightWord = FrameWord.pack(maxHeight)
+        self.alignment = alignment
+        self.content = content
+    }
+
+    /// The minimum width in characters, or nil for no minimum.
+    var minWidth: Int? {
+        get { FrameWord.unpack(minWidthWord) }
+        set { minWidthWord = FrameWord.pack(newValue) }
+    }
+
+    /// The ideal width in characters, or nil to use intrinsic size.
+    var idealWidth: Int? {
+        get { FrameWord.unpack(idealWidthWord) }
+        set { idealWidthWord = FrameWord.pack(newValue) }
+    }
+
+    /// The maximum width constraint, or nil for no maximum.
+    var maxWidth: FrameDimension? {
+        get { FrameWord.unpackDimension(maxWidthWord) }
+        set { maxWidthWord = FrameWord.pack(newValue) }
+    }
+
+    /// The minimum height in lines, or nil for no minimum.
+    var minHeight: Int? {
+        get { FrameWord.unpack(minHeightWord) }
+        set { minHeightWord = FrameWord.pack(newValue) }
+    }
+
+    /// The ideal height in lines, or nil to use intrinsic size.
+    var idealHeight: Int? {
+        get { FrameWord.unpack(idealHeightWord) }
+        set { idealHeightWord = FrameWord.pack(newValue) }
+    }
+
+    /// The maximum height constraint, or nil for no maximum.
+    var maxHeight: FrameDimension? {
+        get { FrameWord.unpackDimension(maxHeightWord) }
+        set { maxHeightWord = FrameWord.pack(newValue) }
+    }
+
     public var body: Never {
         fatalError("FlexibleFrameView renders via Renderable")
+    }
+}
+
+/// A frame constraint in one word: `Int.min` is "none", `Int.min + 1` is
+/// `.infinity`, and anything else is the size itself.
+///
+/// A size at or below `Int.min + 1` is stored as `Int.min + 2`. Every use
+/// floors a constraint at zero or takes the larger of it and a size, so a
+/// size that far below zero means what zero does, and moving it by two
+/// changes nothing drawn.
+private enum FrameWord {
+    static let none = Int.min
+    static let infinity = Int.min + 1
+
+    static func pack(_ size: Int?) -> Int {
+        guard let size else { return none }
+        return max(size, Int.min + 2)
+    }
+
+    static func pack(_ dimension: FrameDimension?) -> Int {
+        switch dimension {
+        case nil: none
+        case .infinity: infinity
+        case .fixed(let size): max(size, Int.min + 2)
+        }
+    }
+
+    static func unpack(_ word: Int) -> Int? {
+        word == none ? nil : word
+    }
+
+    static func unpackDimension(_ word: Int) -> FrameDimension? {
+        switch word {
+        case none: nil
+        case infinity: .infinity
+        default: .fixed(word)
+        }
     }
 }
 
@@ -548,8 +634,14 @@ extension FlexibleFrameView: Animatable {
                 Self.pinned(minHeight, idealHeight, maxHeight))
         }
         set {
-            Self.repin(&minWidth, &idealWidth, &maxWidth, to: newValue.first)
-            Self.repin(&minHeight, &idealHeight, &maxHeight, to: newValue.second)
+            // Through locals: the six are computed over one-word storage, and
+            // three `inout` accesses to `self` at once overlap.
+            var (minW, idealW, maxW) = (minWidth, idealWidth, maxWidth)
+            var (minH, idealH, maxH) = (minHeight, idealHeight, maxHeight)
+            Self.repin(&minW, &idealW, &maxW, to: newValue.first)
+            Self.repin(&minH, &idealH, &maxH, to: newValue.second)
+            (minWidth, idealWidth, maxWidth) = (minW, idealW, maxW)
+            (minHeight, idealHeight, maxHeight) = (minH, idealH, maxH)
         }
     }
 
