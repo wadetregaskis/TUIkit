@@ -63,8 +63,13 @@ struct TerminalColorReport: Equatable, Sendable {
 /// `Terminal.fencedExchange(request:timeout:sawFence:)`, reads to
 /// ``sawStatusFence(_:)``, hands back what ``isReply(_:)`` and
 /// ``isStatusFence(_:)`` do not claim, and publishes
-/// ``colorsToPublish(_:environment:)`` of ``parse(_:)``. Nothing asks again
-/// later yet, so ``slotsRequest`` is not sent.
+/// ``colorsToPublish(_:environment:)`` of ``parse(_:)``.
+///
+/// After that, `TerminalColorRequester` asks again without waiting for the
+/// answer: ``slotsRequest`` once the first frame is out under tmux, whose
+/// startup request left the slots out, and ``nativeRequest`` when the screen
+/// is thrown away, the window takes the focus back or the terminal reports
+/// its theme.
 ///
 /// An answer that arrives after that exchange has closed is not lost: the input
 /// parser keeps it (`Terminal.noteVolunteeredColorReply`) instead of dropping it
@@ -88,7 +93,8 @@ enum TerminalColorQuery {
     // MARK: Requests
 
     /// Foreground, background and the sixteen slots, then the fence: the
-    /// startup request for a terminal that is not tmux. 170 bytes.
+    /// startup request for a terminal that is not tmux, and, on any host,
+    /// what `TerminalColorRequester` asks again. 170 bytes.
     ///
     /// Every slot is its own query. That is the spelling every measured host
     /// answered; the multi-pair spelling was measured only under tmux.
