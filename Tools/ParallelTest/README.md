@@ -98,6 +98,19 @@ when the suite has grown a lot, but it is not required for correctness: the
 groups are always derived at runtime from `--list-tests`, and a test the cache
 has never seen is given the median weight and runs anyway.
 
+## One run at a time
+
+A run takes a machine-wide lock (`/tmp/tuikit-parallel-test.lock`, or
+`$TUIKIT_PARALLEL_TEST_LOCK`) before it builds, so a second run — from another
+worktree, or an agent — waits for the first and says whose run it is waiting
+for. One run already fills half the cores with test processes; on the 16 GiB
+machine this is used on, two at once, with their builds, push each other into
+memory compression and swap, so each is slower and the pair is slower than the
+same two in turn. It is a `flock`, which the kernel drops when its holder
+exits however it exits, so a crashed run cannot leave the next one waiting.
+`--plan-only` runs nothing and takes no lock. There is no lock on Windows,
+which has no `flock`.
+
 ## The reconciliation gate
 
 Speed is worthless if a process quietly runs nothing, so every run is gated on:
@@ -332,11 +345,11 @@ keeps running plain `swift test`.
 python3 Tools/ParallelTest/test_parallel_test.py
 ```
 
-36 tests covering the parts that can be tested without running the suite: ID
+40 tests covering the parts that can be tested without running the suite: ID
 escaping and pattern anchoring, the partition proof rejecting a gap or an
 overlap, bin packing, both weight paths, all eight shapes of the summary line
-in both their singular and plural wordings, the malformed-xunit recovery, and
-the event-stream duration join.
+in both their singular and plural wordings, the malformed-xunit recovery, the
+event-stream duration join, and the run lock making a second run wait.
 
 Two of those are a negative control on the summary parser and are the reason
 to run it after touching `SUMMARY_RE`: a log with no run summary in it — empty,

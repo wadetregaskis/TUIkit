@@ -361,6 +361,42 @@ class TestEventStream(unittest.TestCase):
             os.unlink(path)
 
 
+class TestMachineLock(unittest.TestCase):
+    # flock belongs to an open file, not to a process, so two opens in this
+    # one process contend exactly as two runs would.
+    def test_a_second_run_waits_for_the_first(self):
+        import fcntl
+        import io
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "lock")
+            first = pt.machine_lock(path, out=io.StringIO())
+            with open(path, "a+") as other:
+                with self.assertRaises(BlockingIOError):
+                    fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with open(path) as fh:
+                self.assertIn("pid %d" % os.getpid(), fh.read())
+            first.close()
+            second = pt.machine_lock(path, out=io.StringIO())
+            self.assertIsNotNone(second)
+            second.close()
+
+    def test_a_waiting_run_names_the_holder(self):
+        import io
+        import threading
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "lock")
+            first = pt.machine_lock(path, out=io.StringIO())
+            said = io.StringIO()
+            waiter = threading.Thread(target=lambda: pt.machine_lock(path, out=said).close())
+            waiter.start()
+            waiter.join(0.5)
+            self.assertTrue(waiter.is_alive(), "the second run did not wait")
+            first.close()
+            waiter.join(5)
+            self.assertFalse(waiter.is_alive())
+            self.assertIn("waiting for pid %d" % os.getpid(), said.getvalue())
+
+
 class TestWeights(unittest.TestCase):
     def test_unknown_tests_get_the_median(self):
         weights = {"M.A/a()": 1.0, "M.A/b()": 3.0, "M.A/c()": 5.0}

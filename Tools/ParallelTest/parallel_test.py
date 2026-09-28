@@ -87,6 +87,16 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 WORK = os.path.join(REPO, ".build", "parallel-test")
 WEIGHTS = os.path.join(WORK, "weights.json")
 
+# One run at a time on a machine, whichever checkout or worktree it comes from.
+# A run already fills half the cores with test processes, and on a 16 GiB
+# machine two of them (plus their builds) push each other into memory
+# compression and swap: each gets slower, and together they are slower than
+# the same two in turn. So a second run waits for the first. Deliberately in
+# /tmp rather than $TMPDIR, which can differ per sandbox or agent, and a flock
+# rather than a pid file: the kernel drops it when its holder exits, however
+# that happens, so a crashed run never leaves the next one waiting.
+LOCK_PATH = os.environ.get("TUIKIT_PARALLEL_TEST_LOCK", "/tmp/tuikit-parallel-test.lock")
+
 # swift-testing's final line. Everything after "seconds" is one clause built
 # from a three-way switch on (any error, any warning, any known issue), and it
 # is captured WHOLE rather than matched shape by shape. An earlier version
@@ -540,6 +550,32 @@ def fill_weights(ids, weights):
 
 # --------------------------------------------------------------------- report
 
+def machine_lock(path=LOCK_PATH, out=sys.stdout):
+    """Takes the machine-wide run lock (`LOCK_PATH`), waiting for it if another
+    run holds it, and returns the open file that holds it — keep it alive
+    until the run ends. `None` where there is no `flock` (Windows)."""
+    try:
+        import fcntl
+    except ImportError:
+        return None
+    fh = open(path, "a+")
+    try:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        fh.seek(0)
+        holder = fh.read().strip() or "another run"
+        print("parallel-test: waiting for %s (one run at a time on this machine)"
+              % holder, file=out, flush=True)
+        waited = time.time()
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        print("parallel-test: waited %.0fs" % (time.time() - waited), file=out, flush=True)
+    fh.seek(0)
+    fh.truncate()
+    fh.write("pid %d in %s" % (os.getpid(), REPO))
+    fh.flush()
+    return fh
+
+
 def plural(n, word):
     return "%d %s%s" % (n, word, "" if n == 1 else "s")
 
@@ -562,6 +598,8 @@ def main():
     ap.add_argument("--json", default=None, help="write the full result as JSON")
     args = ap.parse_args()
 
+    # Before the build, which is half of what two runs at once would fight over.
+    lock = None if args.plan_only else machine_lock()  # noqa: F841 — held until exit
     started = time.time()
     cores = os.cpu_count() or 4
     jobs = args.jobs or max(1, min(6, cores // 2))
