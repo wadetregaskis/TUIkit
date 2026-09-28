@@ -12,8 +12,9 @@ name: CI
 #             rebuilds weekly. 6.4 is the exception: the only Xcode that ships
 #             it, 27, is on the `xcode-27` image, which GitHub still calls a
 #             preview, so the binding 6.4 lane takes swift.org's release
-#             toolchain on `macos-26` instead. UNRELEASED Swift (trunk) comes
-#             from swift.org too.
+#             toolchain on `macos-26` instead, and Xcode 27 runs in an
+#             advisory macOS 27 lane (see the TODO below). UNRELEASED Swift
+#             (trunk) comes from swift.org too.
 #
 #   Linux   — the cheapest axis to widen, because the official `swift:` images
 #             pin the toolchain exactly. No setup action is involved or wanted.
@@ -49,13 +50,17 @@ name: CI
 # is upstream's. When the version ships, promote it the way 6.4 was: the release
 # images replace the nightlies, and they bind.
 #
-# TODO(macOS 27): there is no macOS 27 runner image yet — macOS 27 is still a
-# developer preview. (The `xcode-27` image is NOT one: it is Xcode 27 beta
-# running on *macOS 26.5*, so it buys a Swift version, not an OS version — and
-# an older 6.4 than the lane above.) GitHub moved to Xcode-versioned macOS
-# images on 2026-07-16, so watch actions/runner-images for a macOS 27 image,
-# however it ends up labelled, and add it as a required lane mirroring the
-# macos-15/macos-26 entries once it is GA.
+# TODO(macOS 27): make the "macOS 27 · Xcode 27" lane required once its image
+# is GA. macOS 27 has shipped, and GitHub's `xcode-27` image now runs it (image
+# 20260921: macOS 27.0, Darwin 27.0.0, Xcode 27.0 by default, 27.1 and a 27.2
+# beta beside it). On 2026-08-04 it was Xcode 27 beta on macOS 26.5, which
+# bought a Swift version and not an OS version, so it was not used then. But
+# actions/runner-images still lists it as "Xcode 27 (preview)", and its
+# announcement (runner-images#14404) warns of queueing while capacity is
+# balanced — so the lane is advisory: it reports, it cannot block. When the
+# preview label goes, or a GA label for macOS 27 appears (`macos-27` would
+# match macos-15/macos-26), point the lane at it and set
+# `experimental: false`, mirroring the macos-15/macos-26 entries.
 
 on:
   push:
@@ -84,7 +89,7 @@ jobs:
   # ── Lint ───────────────────────────────────────────────────────────────────
   # One platform is enough: SwiftLint's output is platform-independent. Runs
   # first and gates the rest, so a style slip fails in ~1 minute instead of
-  # after seventeen builds.
+  # after eighteen builds.
   lint:
     name: Lint
     runs-on: ubuntu-24.04
@@ -223,6 +228,16 @@ jobs:
             development: true
             smoke: quick
             experimental: true
+          # macOS 27 with Xcode 27's own toolchain (Swift 6.4). Advisory only
+          # because GitHub still calls the image a preview — see
+          # TODO(macOS 27) at the top of this file.
+          - name: "macOS 27 · Xcode 27"
+            runner: xcode-27
+            xcode: "27"
+            swift: ""
+            development: false
+            smoke: quick
+            experimental: true
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -268,7 +283,7 @@ jobs:
 
       # A swift.org toolchain is not the default `swift`; it has to be
       # selected per invocation. Every later step goes through $SWIFT so the
-      # build/test/smoke steps stay identical across all four cells.
+      # build/test/smoke steps stay identical across every cell.
       #
       # TUIKIT_CONFIG_DIR keeps the apps off the runner's real preferences
       # (AppStorage honours it on every platform). It is set here rather than

@@ -1,16 +1,19 @@
 # Runner labels that actionlint does not know about yet.
 #
 # actionlint ships a hardcoded list of GitHub-hosted runner labels and warns on
-# anything outside it. These four are real and current (verified against
-# actions/runner-images' Available Images table, 2026-08-04) but postdate the
-# linter's table, so without this file `actionlint` reports four false
-# positives on .github/workflows/ci.yml.
+# anything outside it. These are real and current (verified against
+# actions/runner-images' Available Images table — macos-26 and windows-11-arm
+# on 2026-08-04, xcode-27 on 2026-09-27) but postdate the linter's table, so
+# without this file `actionlint` reports false positives on
+# .github/workflows/ci.yml.
 #
 #   macos-26        GA, arm64 — also what `macos-latest` now resolves to
 #   windows-11-arm  GA, arm64 Windows 11 client
+#   xcode-27        preview, arm64 — macOS 27 with Xcode 27
 #
 # Remove an entry once actionlint's own list catches up.
 self-hosted-runner:
   labels:
     - macos-26
     - windows-11-arm
+    - xcode-27

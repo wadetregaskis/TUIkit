@@ -43,16 +43,18 @@ port has been measured with (see [`Documentation/WebAssembly.md`](Documentation/
 
 Linux additionally runs Swift 6.3 on arm64, and lint runs on Linux only — it
 gates everything else, so a style slip fails in a minute rather than after
-seventeen builds.
+eighteen builds.
 
 Nightly-toolchain lanes are **advisory** (`continue-on-error`): visible, but
 unable to block a merge, because they break for reasons that have nothing to do
 with this package. Everything on a released toolchain — including Windows —
-blocks.
+blocks, with one exception: the macOS 27 lane.
 
-There is no macOS 27 runner image yet — macOS 27 is still a developer preview.
-When one appears it should be added as a required lane alongside `macos-15` and
-`macos-26`; see the `TODO(macOS 27)` at the top of the workflow.
+macOS 27 runs on GitHub's `xcode-27` image (macOS 27.0 with Xcode 27, and so
+Xcode's own Swift 6.4), which GitHub still labels a preview. Until that label
+goes, the lane is advisory like a nightly; when it does, it becomes a required
+lane alongside `macos-15` and `macos-26`. See the `TODO(macOS 27)` at the top
+of the workflow.
 
 #### The `CI` gate job
 
@@ -271,8 +273,8 @@ swift-testing reports.
 1. Branch from `main`
 2. Fill in the PR template completely
 3. The `CI` gate check must be green — it covers macOS, Linux and, on
-   released toolchains, Windows; only the nightly-toolchain lanes are
-   advisory (see "What CI covers" above)
+   released toolchains, Windows; only the nightly-toolchain lanes and the
+   macOS 27 lane (a preview image) are advisory (see "What CI covers" above)
 4. No new SwiftLint warnings
 5. Follow the architecture and API rules below
 
