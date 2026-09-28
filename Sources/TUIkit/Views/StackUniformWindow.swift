@@ -415,13 +415,16 @@ extension _VStackCore {
         let count = children.count
         let totalHeight = count * pitch - spacing
 
-        let (seeked, resolvedSeek) = resolvingUniformSeek(
-            in: window, children: children, state: state,
-            pitch: pitch, extent: extent, totalHeight: totalHeight)
+        let proposal = ProposedSize(width: width, height: nil)
+        guard
+            let seeking = resolvingUniformSeek(
+                in: window, children: children, state: state, pitch: pitch, extent: extent,
+                totalHeight: totalHeight, proposal: proposal, context: childContext)
+        else { return nil }
         // A designated row overrides the offset: the position follows the ROW.
         // Exact here — a uniform row's absolute y is arithmetic.
         var (window, resolvedAnchor) = holdingDesignatedRow(
-            in: seeked, children: children, state: state,
+            in: seeking.window, children: children, state: state,
             rowY: { $0 * pitch }, rowHeight: extent,
             totalHeight: totalHeight, context: context)
         // The offset can lie past the content THIS hypothesis describes: the
@@ -472,7 +475,6 @@ extension _VStackCore {
 
         // Build + verify each candidate. A disagreeing height falsifies the
         // hypothesis for good; the caller re-walks exactly, this same frame.
-        let proposal = ProposedSize(width: width, height: nil)
         guard
             let rows = verifiedUniformRows(
                 inline, children: children, extent: extent,
@@ -522,7 +524,7 @@ extension _VStackCore {
         // The anchor correction wins over the seek: when both happen on one
         // frame the seek chose a row and the designation then held it, so the
         // corrected offset is the one actually rendered.
-        if let resolved = resolvedAnchor ?? resolvedSeek {
+        if let resolved = resolvedAnchor ?? seeking.resolved {
             window.reply?.seekResolvedOffset = resolved
         }
         return result
@@ -739,15 +741,32 @@ extension _VStackCore {
     /// there is no request or the key is absent. The reply is written only
     /// when the caller completes: a falsified hypothesis falls through, and
     /// the next path re-resolves for itself.
+    ///
+    /// `nil` when the target refutes the hypothesis. The seek prices it at
+    /// the extent, and the band verifies only the rows it draws — which, for
+    /// a custom anchor whose y is outside 0...1, need not include the target.
+    /// Unverified, a target of sixty lines among rows of one was taken for
+    /// one: `y: 1.5` put the offset eleven lines above it, where the row's
+    /// real height names the eighteenth row past its end, and no row drawn
+    /// there could refute the hypothesis. One row more, on a seek's frame.
     private func resolvingUniformSeek(
         in window: ScrollContentWindow, children: ChildViewCollection,
-        state: StackWindowState, pitch: Int, extent: Int, totalHeight: Int
-    ) -> (window: ScrollContentWindow, resolved: Int?) {
+        state: StackWindowState, pitch: Int, extent: Int, totalHeight: Int,
+        proposal: ProposedSize, context: RenderContext
+    ) -> (window: ScrollContentWindow, resolved: Int?)? {
         var window = window
         guard let seek = window.seek else { return (window, nil) }
         window.seek = nil
         guard let ordinal = resolveOrdinal(forKey: seek.key, children: children, state: state)
         else { return (window, nil) }
+        guard
+            verifiedUniformRows(
+                [ordinal], children: children, extent: extent,
+                state: state, proposal: proposal, context: context) != nil
+        else {
+            refuteHypothesis(state, window: window)
+            return nil
+        }
         let newOffset = window.offset(
             realising: seek, targetY: ordinal * pitch, rowHeight: extent,
             stackHeight: totalHeight)
