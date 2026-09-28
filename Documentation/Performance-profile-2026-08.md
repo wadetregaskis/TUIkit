@@ -4336,6 +4336,9 @@ pointer to a small C struct the runtime fills in, not a non-`@frozen` stdlib
 struct, and the stdlib declares them the same way. The one layout depended on
 is that C struct's, unchanged since 5.2 and padded against a runtime that
 appends to it. All of the entry points are in the SDK's `libswiftCore.tbd`.
+Since no local gate builds with Xcode's toolchain, the SwiftLint rule
+`stdlib_spi_import` now rejects `@_spi(…) import Swift`, so a third attempt
+fails the lint gate in seconds rather than CI's Xcode lanes after a push.
 
 ### What that costs now
 

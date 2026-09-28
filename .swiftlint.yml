@@ -321,6 +321,29 @@ custom_rules:
       - string
     severity: error
 
+  # The standard library's SPI (`_forEachField`, `_forEachFieldWithKeyPath`,
+  # `_EachFieldOptions`, `_MetadataKind`, …) is declared only in its PRIVATE
+  # module interface. swift.org toolchains ship that — every local gate here,
+  # Linux, WASM — and Xcode's SDKs do not, so an SPI import builds everywhere
+  # this repository is checked and fails in Xcode, where most apps are built.
+  # It has shipped twice: Performance-profile §58 (EnvironmentProperty,
+  # 2026-09-14) and its addendum (TypeWalk, 2026-09-28), each found only when a
+  # push reached CI's Xcode lanes. `RuntimeFields` is the route to field
+  # metadata that builds in Xcode.
+  stdlib_spi_import:
+    name: "Standard library SPI import"
+    message: >-
+      Xcode's SDKs ship Swift's public interface only, so an @_spi import of
+      Swift fails to build in Xcode while every swift.org toolchain accepts it.
+      For field metadata use RuntimeFields.
+    regex: '@_spi\(\w+\)\s+import\s+Swift\b'
+    match_kinds:
+      - attribute.builtin
+      - attribute.id
+      - keyword
+      - identifier
+    severity: error
+
   # Every built-in view draws with the palette's roles, so a theme restyles all
   # of them; the ThemingGuide article's "What built-in controls draw with" lists
   # which role each control uses and the few colours that stay literal. This
