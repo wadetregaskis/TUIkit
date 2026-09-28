@@ -250,13 +250,35 @@ struct TypeWalkTests {
         #expect(RuntimeFields.Kind(of: Int.Type.self) == .metatype)
     }
 
-    /// A runtime before Swift 6.4 describes a noncopyable field as `()`; the
-    /// 6.4 runtime (Linux 6.4 and trunk, and macOS 27) reports its own type,
-    /// `Mutex<Int>`. Either is fine, because inside a class — the only place a
-    /// copyable value can hold one — the verdict does not depend on it; what
-    /// is pinned is that it is one of the two, so a third answer is noticed.
-    @Test("The runtime describes a noncopyable field as (), or from Swift 6.4 as its own type")
-    func spiDescribesNoncopyableAsVoidOrItself() {
+    /// Whether this process's runtime reports a noncopyable field as its own
+    /// type, as Swift 6.4's does, rather than as `()`, as 6.2's and 6.3's do.
+    ///
+    /// A property of the RUNTIME, which is not always the compiler's: on
+    /// Apple platforms it is the OS's, and the macOS 26 lane answered `()`
+    /// under the 6.4 compiler. So there it is the OS version — macOS 27 is the
+    /// first with 6.4's runtime, an assumption the macOS 27 lane checks — and
+    /// everywhere else, where the runtime ships with the toolchain, the
+    /// compiler's version. Observed 2026-09-28: `()` on Linux 6.2 and 6.3,
+    /// macOS 15 and macOS 26; `Mutex<Int>` on Linux 6.4 and trunk.
+    private static var runtimeReportsNoncopyableFieldTypes: Bool {
+        #if canImport(Darwin)
+            if #available(macOS 27, iOS 27, watchOS 27, tvOS 27, visionOS 27, *) { return true }
+            return false
+        #elseif compiler(>=6.4)
+            return true
+        #else
+            return false
+        #endif
+    }
+
+    /// Before Swift 6.4 the runtime describes a noncopyable field as `()`;
+    /// 6.4's reports its own type, `Mutex<Int>`. Each runtime is held to its
+    /// own answer (``runtimeReportsNoncopyableFieldTypes``), so a runtime that
+    /// regressed to `()` fails here. The walk's verdict is the same under both:
+    /// inside a class — the only place a copyable value can hold a
+    /// noncopyable field — only a source reader counts.
+    @Test("The runtime describes a noncopyable field as () before Swift 6.4, and as its own type from 6.4")
+    func spiDescribesNoncopyableFields() {
         #if canImport(Synchronization)
             if #available(macOS 15.0, iOS 18.0, watchOS 11.0, tvOS 18.0, visionOS 2.0, *) {
                 final class Guarded { let lock = Mutex(0) }
@@ -266,8 +288,11 @@ struct TypeWalkTests {
                     return true
                 }
                 #expect(types.count == 1, "\(types)")
-                #expect(
-                    types.first.map { $0 == Void.self || "\($0)".hasPrefix("Mutex<") } == true, "\(types)")
+                if Self.runtimeReportsNoncopyableFieldTypes {
+                    #expect(types.first.map { "\($0)" } == "Mutex<Int>", "\(types)")
+                } else {
+                    #expect(types.first == Void.self, "\(types)")
+                }
                 #expect(verdict(Guarded.self) == .init(refusal: nil, holdsFunctions: false), "inside a class, a leaf")
             }
         #endif
