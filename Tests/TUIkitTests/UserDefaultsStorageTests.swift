@@ -56,6 +56,16 @@ struct UserDefaultsStorageTests {
             storage.removeValue(forKey: key)
             storage.synchronize()
             UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+            #if canImport(Darwin)
+            // Removing the domain empties it, but the preferences daemon leaves
+            // the suite's file behind — empty, and one per test run: an old
+            // development machine had collected 2,031 of them. Measured: once
+            // the removal is flushed, deleting the file is final.
+            CFPreferencesAppSynchronize(suite as CFString)
+            try? FileManager.default.removeItem(
+                at: FileManager.default.homeDirectoryForCurrentUser
+                    .appendingPathComponent("Library/Preferences/\(suite).plist"))
+            #endif
         }
         body(storage, key)
     }
