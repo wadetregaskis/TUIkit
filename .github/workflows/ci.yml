@@ -708,10 +708,24 @@ jobs:
       # that contains it. The SDK is named by bundle id rather than by triple
       # because the bundle also installs an embedded-Swift SDK under the same
       # triple, and SwiftPM picks between them arbitrarily.
-      - name: Build every module for WebAssembly
-        run: |
-          swift build --swift-sdk swift-6.3.3-RELEASE_wasm --static-swift-stdlib \
-            --target TUIkitCore --target TUIkitStyling --target TUIkitView --target TUIkitImage
+      #
+      # One `--target` per step, as the Windows lanes do it. `swift build` keeps
+      # only the LAST `--target` it is given, so the single step this used to be
+      # (`--target TUIkitCore --target TUIkitStyling --target TUIkitView
+      # --target TUIkitImage`) built TUIkitImage and what it depends on
+      # (TUIkitStyling, CSTBImage) and nothing else: "Build of target:
+      # 'TUIkitImage' complete!". TUIkitCore and TUIkitView were compiled only
+      # by the Example step below, which is the step that reported a 64-bit
+      # literal in TUIkitView — so the ratchet this lane promises for the four
+      # modules held for two of them.
+      - name: "Build TUIkitCore for WebAssembly"
+        run: swift build --swift-sdk swift-6.3.3-RELEASE_wasm --static-swift-stdlib --target TUIkitCore
+      - name: "Build TUIkitStyling for WebAssembly"
+        run: swift build --swift-sdk swift-6.3.3-RELEASE_wasm --static-swift-stdlib --target TUIkitStyling
+      - name: "Build TUIkitView for WebAssembly"
+        run: swift build --swift-sdk swift-6.3.3-RELEASE_wasm --static-swift-stdlib --target TUIkitView
+      - name: "Build TUIkitImage for WebAssembly"
+        run: swift build --swift-sdk swift-6.3.3-RELEASE_wasm --static-swift-stdlib --target TUIkitImage
 
       - name: Build the umbrella and the Example app
         run: |
