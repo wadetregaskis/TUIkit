@@ -81,6 +81,7 @@ import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
+from collections import defaultdict
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WORK = os.path.join(REPO, ".build", "parallel-test")
@@ -505,11 +506,36 @@ def save_weights(weights, source):
 
 
 def fill_weights(ids, weights):
-    """Unknown tests get the median, so a newly added suite is scheduled
-    sanely without anyone re-calibrating first."""
+    """Unknown tests get the work their suite has lost, or the median.
+
+    A test the cache has never measured is usually one of two things: a test
+    added to a new suite, which is as likely as any to be quick, so the median
+    serves; or one of several tests a slow test was SPLIT into, which is the
+    fix "Where the limit is" recommends. The median treated those pieces as
+    near-free, so the partition dealt all of them to one process — ten pieces
+    of a 48 s test made one group 67 s long, the very tail the split was meant
+    to remove. So where a suite's recorded weights include tests that no
+    longer exist, the work they recorded is shared among the suite's unknown
+    tests, never below the median; the next --calibrate replaces the guess."""
     known = [weights[t] for t in ids if t in weights]
     median = sorted(known)[len(known) // 2] if known else 1.0
-    return {t: weights.get(t, median) for t in ids}, len(ids) - len(known)
+    current = set(ids)
+    lost = defaultdict(float)
+    for t, w in weights.items():
+        if t not in current:
+            lost[suite_of(t)] += w
+    unknown_in = defaultdict(int)
+    for t in ids:
+        if t not in weights:
+            unknown_in[suite_of(t)] += 1
+    filled = {}
+    for t in ids:
+        if t in weights:
+            filled[t] = weights[t]
+        else:
+            s = suite_of(t)
+            filled[t] = max(median, lost[s] / unknown_in[s])
+    return filled, len(ids) - len(known)
 
 
 # --------------------------------------------------------------------- report

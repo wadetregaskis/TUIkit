@@ -374,6 +374,24 @@ class TestWeights(unittest.TestCase):
         self.assertEqual(unweighted, 2)
         self.assertEqual(set(filled.values()), {1.0})
 
+    def test_the_pieces_of_a_split_test_share_its_recorded_work(self):
+        # One 40 s test split into four: the cache knows only the old name.
+        weights = {"M.Slow/all(_:)": 40.0, "M.A/a()": 1.0, "M.A/b()": 1.0}
+        ids = ["M.A/a()", "M.A/b()"] + ["M.Slow/piece%d()" % i for i in range(4)]
+        filled, unweighted = pt.fill_weights(ids, weights)
+        self.assertEqual(unweighted, 4)
+        self.assertEqual([filled["M.Slow/piece%d()" % i] for i in range(4)], [10.0] * 4)
+        # And the partition deals them out instead of stacking them.
+        items, _, _ = pt.build_items(ids, filled, 4)
+        bins, _ = pt.lpt(items, 4)
+        per_bin = [sum(1 for kind, key in b if kind == "test" and key.startswith("M.Slow/")) for b in bins]
+        self.assertEqual(sorted(per_bin), [1, 1, 1, 1])
+
+    def test_lost_work_never_prices_a_piece_below_the_median(self):
+        weights = {"M.A/a()": 2.0, "M.A/b()": 2.0, "M.A/c()": 2.0, "M.S/old()": 0.5}
+        filled, _ = pt.fill_weights(["M.A/a()", "M.A/b()", "M.A/c()", "M.S/n1()", "M.S/n2()"], weights)
+        self.assertEqual(filled["M.S/n1()"], 2.0)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
