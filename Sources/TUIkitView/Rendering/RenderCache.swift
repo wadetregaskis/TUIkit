@@ -699,8 +699,17 @@ extension RenderCache {
     /// ``scopedEntry(for:effectScope:)``. A mix of the structural hash, under
     /// the bargain the plain key already strikes: a false hit needs this word
     /// to equal another identity's hash AND the view values to compare equal.
+    ///
+    /// The step is Knuth's MMIX LCG, taken in `UInt64` and truncated back, not
+    /// in `Int`: TUIkit also builds for `wasm32-unknown-wasip1`, where `Int` is
+    /// 32 bits and neither constant is a literal it can hold, so the `Int`
+    /// spelling this had first did not compile there. On a 64-bit target the
+    /// two spellings are the same bits (wrapping arithmetic is sign-blind), so
+    /// no key moves; on a 32-bit one the low word is kept, which depends only
+    /// on the low words of the operands and is still a mix.
     private static func backdropKey(_ hash: Int) -> Int {
-        hash &* 0x5851_F42D_4C95_7F2D &+ 0x1405_7B7E_F767_814F
+        Int(truncatingIfNeeded:
+            UInt64(truncatingIfNeeded: hash) &* 0x5851_F42D_4C95_7F2D &+ 0x1405_7B7E_F767_814F)
     }
 
     /// Stores a rendered buffer for a view identity.
