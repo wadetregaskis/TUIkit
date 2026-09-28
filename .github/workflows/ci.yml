@@ -193,8 +193,9 @@ jobs:
           # Without it, "6.4" is the newest 6.4.x release; with it, a version
           # is the newest snapshot on that release branch (for 6.4, swift.org's
           # `swift-6_4_x-branch`), and "latest" the newest snapshot on any
-          # branch, which in practice is trunk (`development`) because it
-          # publishes most often.
+          # branch, ranked by date. That is NOT reliably trunk: on 2026-09-28
+          # the newest macOS snapshot was a `release/6.4.x` one, so the "main
+          # snapshot" lane tests whichever branch published last.
           - name: "macOS 15 · Xcode 26"
             runner: macos-15
             xcode: "26"
@@ -280,6 +281,11 @@ jobs:
           development: ${{ matrix.development }}
           check-latest: true
           prefer-oss-toolchain: true
+          # 1.14.1's cache moves an unversioned (trunk) snapshot out of the
+          # directory it then installs from, on a cache miss — a spurious red
+          # on the advisory snapshot lane. Snapshots are not cached; releases
+          # still are.
+          cache-snapshot: ${{ !matrix.development }}
 
       # A swift.org toolchain is not the default `swift`; it has to be
       # selected per invocation. Every later step goes through $SWIFT so the
