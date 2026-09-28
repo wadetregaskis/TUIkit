@@ -111,7 +111,10 @@ a moment when someone is touching that file anyway.
 
 ## Part 2 — every optional rule not enabled (109)
 
-As of 0.63.2. The four opt-in rules 0.63.3 added are reviewed in Part 3.
+As of 0.63.2, once Part 1 had enabled `fatal_error_message`: the 108 rules
+below, plus `discouraged_none_name` in Part 1. (Until 2026-09-28 the lists
+below held 107: `private_subject` was in none of them.) The four opt-in rules
+0.63.3 added are reviewed in Part 3.
 
 ### `file_header` — enabled, and it was never doing anything
 
@@ -148,7 +151,7 @@ ratchets: they cost nothing today and stop the drift tomorrow.
 | `direct_return` | 2 | `let x = …; return x` → `return …`. Genuinely clearer, but two sites is thin justification for a standing rule. Your call — **called: enabled** in `b08531db` (2026-08-25), the two sites fixed. `.swiftlint.yml:50`. |
 | `multiline_parameters_brackets` | 3 | Cosmetic, and swift-format already owns wrapping. Marginal. |
 
-### Decline — conflicts with a project rule or another tool (7)
+### Decline — conflicts with a project rule or another tool (9)
 
 | Rule | Sites | Verdict |
 |---|---|---|
@@ -161,7 +164,7 @@ ratchets: they cost nothing today and stop the drift tomorrow.
 | `no_grouping_extension` | 423 | The codebase deliberately groups conformances into extensions — the pattern the `_*Core` architecture is built on. |
 | `no_extension_access_modifier` | 2 | Looks trivial and is not: it would move `public` off `extension View` onto each of ~10 static witnesses in the hottest, most carefully-commented declaration block in the framework. (Worth noting swift-format's equivalent rule is enabled yet these survive, so the two tools already disagree here.) |
 
-### Decline — wrong for this codebase (13)
+### Decline — wrong for this codebase (17)
 
 | Rule | Sites | Verdict |
 |---|---|---|
@@ -188,7 +191,7 @@ ratchets: they cost nothing today and stop the drift tomorrow.
 Each is defensible in the abstract; none changes correctness, and all would
 produce a large diff across code that currently reads fine.
 
-### Borderline — defensible either way (6)
+### Borderline — defensible either way (8)
 
 | Rule | Sites | Note |
 |---|---|---|
@@ -201,17 +204,46 @@ produce a large diff across code that currently reads fine.
 | `unused_parameter` | 194 | Many are protocol-witness signatures that must keep the parameter. |
 | `incompatible_concurrency_annotation` | 79 | Suggests `@preconcurrency`; worth a look **specifically** because this is a Swift 6 concurrency codebase, but each hit needs judgement, not a sweep. |
 
-### Not applicable — the framework/tooling isn't used (41 of the zero-violation set)
+### Not applicable — the framework/tooling isn't used (30)
 
-All measured zero because the codebase never uses the thing they police, so
-enabling them guards nothing:
+Measured zero because the codebase never uses the thing they police, so
+enabling them guards nothing. (Until 2026-09-28 this list named 46 rules under
+a heading of 41 and called them all zero; 17 were not — see the next section.)
 
 - **XCTest** (`balanced_xctest_lifecycle`, `empty_xctest_method`, `single_test_class`, `test_case_accessibility`, `final_test_case`, `xct_specific_matcher`) — 0 files import XCTest; all 521 test files use swift-testing.
 - **Quick / Nimble** (`quick_discouraged_call`, `quick_discouraged_focused_test`, `quick_discouraged_pending_test`, `prefer_nimble`, `nimble_operator`) — not used.
-- **Interface Builder / UIKit** (`private_action`, `private_outlet`, `strong_iboutlet`, `prohibited_interface_builder`, `ibinspectable_in_extension`, `override_in_extension`, `overridden_super_call`, `prohibited_super_call`, `required_deinit`) — no IB, few classes.
-- **SwiftUI accessibility & assets** (`accessibility_label_for_image`, `accessibility_trait_for_button`, `prefer_asset_symbols`, `object_literal`, `discouraged_object_literal`) — a terminal has no asset catalog or VoiceOver.
+- **Interface Builder / UIKit** (`private_action`, `private_outlet`, `strong_iboutlet`, `prohibited_interface_builder`, `ibinspectable_in_extension`, `override_in_extension`, `overridden_super_call`, `prohibited_super_call`) — no IB, few classes.
+- **SwiftUI assets** (`prefer_asset_symbols`, `object_literal`, `discouraged_object_literal`) — a terminal has no asset catalog.
 - **Foundation localization** (`nslocalizedstring_key`, `nslocalizedstring_require_bundle`) — the project ships its own `LocalizedStringKey`.
-- **Misc inapplicable**: `discarded_notification_center_observer`, `discouraged_assert`, `expiring_todo`, `file_name_no_space`, `raw_value_for_camel_cased_codable_enum`, `required_enum_case`, `legacy_objc_type`, `prefixed_toplevel_constant`, `explicit_enum_raw_value`, `literal_expression_end_indentation`, `multiline_literal_brackets`, `no_empty_block`, `extension_access_modifier`, `shorthand_argument`, `async_without_await`, `unneeded_throws_rethrows`, `vertical_parameter_alignment_on_call`, `vertical_whitespace_opening_braces`, `file_name`.
+- **Combine** (`private_subject`) — nothing imports Combine.
+- **Misc inapplicable**: `discarded_notification_center_observer`, `discouraged_assert`, `expiring_todo`, `file_name_no_space`, `required_enum_case`.
+
+### Listed as zero, but not (17) — corrected 2026-09-28
+
+The measurement behind every other count in this review, rerun with 0.63.2
+over the tree at `cefdc8fa`, finds these 17 non-zero; 15 of them already were
+on the day, so the list was wrong when it was written, not overtaken. None is
+enabled. Each has its count then and today (0.65.1, 1,736 files) and a
+verdict:
+
+| Rule | 2026-08-25 | 2026-09-28 | Verdict |
+|---|---|---|---|
+| `vertical_whitespace_opening_braces` | 700 | 1,174 | swift-format owns vertical whitespace. |
+| `vertical_parameter_alignment_on_call` | 10 | 22 | swift-format owns alignment. |
+| `multiline_literal_brackets` | 12 | 14 | swift-format owns wrapping. |
+| `literal_expression_end_indentation` | 0 | 1 | swift-format owns indentation. |
+| `extension_access_modifier` | 504 | 578 | The mirror image of `no_extension_access_modifier` (declined above), and it contradicts swift-format's `NoAccessLevelOnExtensionDeclaration`, which `.swift-format` enables. |
+| `no_empty_block` | 611 | 1,102 | Empty blocks here are no-op closures (`Button("OK") {}`, `set: { _ in }`) and SwiftUI-parity `public init() {}`. Its new `allow_compact_empty_blocks` still leaves 120, all `{ _ in }` shapes (Part 3). |
+| `required_deinit` | 307 | 541 | An empty `deinit` in every class says nothing. |
+| `explicit_enum_raw_value` | 155 | 446 | A `String` enum's implicit raw value is its case name; `case top = "top"` only restates it. |
+| `prefixed_toplevel_constant` | 21 | 53 | A `k` prefix is the C and Objective-C convention the Swift API guidelines drop. |
+| `file_name` | 200 | 280 | Files here are named for the feature they hold (`DialogPreferredWidth.swift`: an environment key and the `View` modifier that sets it; `MediumGuaranteedModifiers.swift`: a group of `View` modifiers), not for one type. |
+| `legacy_objc_type` | 12 | 16 | `NSString`'s path API (`appendingPathComponent`, `pathExtension`), which `String` lacks, in the localization code, its tests and the Example's file browser, plus two `NSLocale.preferredLanguages`. Low value. |
+| `unneeded_throws_rethrows` | 10 | 22 | All in Tests: 20 test functions declared `throws` that do not throw, and two `init(from:) throws` `Decodable` witnesses in fixtures. No production signature carries a needless `throws`. Low value. |
+| `async_without_await` | 3 | 4 | The wasip1 `SignalManager.install(wake:)` no-op keeps the real one's `async` signature; two test helpers are the `.task { await … }` bodies under test; one test is `async` with nothing to await. |
+| `shorthand_argument` | 1 | 6 | Style: `$0` or `$1` a few lines into a closure. |
+| `raw_value_for_camel_cased_codable_enum` | 0 | 7 | All in `TerminalQuirks` (`SkinTones`, `Keycaps`): public `Codable` enums whose wire spelling is the case name by design. The rule assumes a snake_case format; raw values equal to the case names would only restate them. |
+| `accessibility_label_for_image` / `accessibility_trait_for_button` | 2 / 1 | 3 / 2 | SwiftUI accessibility rules matching TUIkit's own `Image` and `.onTapGesture`. A terminal has no VoiceOver, so they stay off. |
 
 ### Analyzer rules — a different workflow (5)
 
