@@ -56,13 +56,15 @@ enum SwitchIndicatorGlyphs {
 
 /// Internal view that handles the actual rendering of Toggle.
 struct _ToggleCore<Label: View>: View, Renderable, Layoutable {
-    let isOn: Binding<Bool>
-    let label: Label
+    // In `Toggle`'s order, for its reason: no padding over a `Text` label.
     let focusID: String?
-    let isDisabled: Bool
 
     /// The controls this toggle governs — see ``Toggle/toggleContent(_:)``.
     let content: (@MainActor () -> AnyView)?
+
+    let label: Label
+    let isDisabled: Bool
+    let isOn: Binding<Bool>
 
     var body: Never {
         fatalError("_ToggleCore renders via Renderable")

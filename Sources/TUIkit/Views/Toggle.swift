@@ -297,30 +297,38 @@ extension View {
 /// governs on the page). An INLINE menu is unaffected — its rows really are page
 /// focus stops, so a toggle in one is the ordinary control.
 public struct Toggle<Label: View>: View {
-    /// The binding to the toggle's boolean state.
-    let isOn: Binding<Bool>
-
-    /// The label view.
-    let label: Label
+    // Declared so a toggle titled with a string has no padding: the per-pass
+    // memos key a view by its raw bytes, and padding is whatever the memory
+    // held before. The two word-sized fields, then the label, then the flag —
+    // which fills the byte a `Text` label ends one short of — and the 106-byte
+    // binding last: none over a `Text` (208 → 194 bytes;
+    // `ControlLayoutPaddingTests`). Another label's size can still leave a
+    // gap before the binding.
 
     /// The unique focus identifier.
     var focusID: String?
-
-    /// Whether the toggle is disabled.
-    var isDisabled: Bool
 
     /// Builds the controls this toggle governs, drawn under it — `nil` for a
     /// toggle that governs nothing but its own value. See
     /// ``Toggle/toggleContent(_:)``.
     var content: (@MainActor () -> AnyView)?
 
+    /// The label view.
+    let label: Label
+
+    /// Whether the toggle is disabled.
+    var isDisabled: Bool
+
+    /// The binding to the toggle's boolean state.
+    let isOn: Binding<Bool>
+
     public var body: some View {
         _ToggleCore(
-            isOn: isOn,
-            label: label,
             focusID: focusID,
+            content: content,
+            label: label,
             isDisabled: isDisabled,
-            content: content
+            isOn: isOn
         )
     }
 }
