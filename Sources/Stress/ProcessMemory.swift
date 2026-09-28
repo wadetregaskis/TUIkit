@@ -43,8 +43,20 @@ enum ProcessMemory {
     /// would quote in a commit message, so it is converted here and once.
     static func peakResidentBytes() -> UInt64? {
         #if canImport(Darwin) || canImport(Glibc) || canImport(Musl)
+        // Glibc declares the `who` constants as an enum, `__rusage_who`, and
+        // `getrusage` as taking `__rusage_who_t`, which outside GNU C is a
+        // plain `int`; Swift sees two types and will not pass one as the other.
+        // Darwin and musl spell `RUSAGE_SELF` as an `int` macro, so for them it
+        // is already the parameter's type. `__rusage_who_t(_:)` compiles under
+        // either Glibc spelling of that typedef: an imported C enum has an
+        // unlabelled raw-value initialiser too.
+        #if canImport(Glibc)
+        let who = __rusage_who_t(RUSAGE_SELF.rawValue)
+        #else
+        let who = RUSAGE_SELF
+        #endif
         var usage = rusage()
-        guard getrusage(RUSAGE_SELF, &usage) == 0, usage.ru_maxrss > 0 else { return nil }
+        guard getrusage(who, &usage) == 0, usage.ru_maxrss > 0 else { return nil }
         let raw = UInt64(usage.ru_maxrss)
         #if canImport(Darwin)
         return raw
@@ -98,7 +110,11 @@ enum ProcessMemory {
         else { return nil }
         let fields = text.split(separator: " ")
         guard fields.count > 1, let resident = UInt64(fields[1]) else { return nil }
-        return resident &* UInt64(sysconf(_SC_PAGESIZE))
+        // `Int32(_:)` because Glibc declares the `_SC_*` names in an anonymous
+        // enum, which Swift imports as `Int`, while `sysconf` takes an `int`;
+        // musl's are `int` macros. `StackGuard.stackGuardGapBytes` spells it
+        // the same way.
+        return resident &* UInt64(sysconf(Int32(_SC_PAGESIZE)))
         #else
         return nil
         #endif
