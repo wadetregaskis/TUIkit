@@ -269,4 +269,25 @@ struct ReplayedRunFieldTests {
         #expect(found.compared >= 200, "only \(found.compared) rows were replayed")
         for mismatch in found.mismatches { Issue.record("\(ground): \(mismatch)") }
     }
+
+    /// Each ground's test. As one parameterised test, the grounds came from
+    /// `Ground.allCases`, so a new case was walked as soon as it was written; as
+    /// a test per ground, a case added without a test is never walked, and
+    /// nothing fails to say so. This switch has no `default`, so such a case does
+    /// not compile until it names its test here. It is never called: the
+    /// exhaustiveness check is all it is for.
+    private static func test(for ground: Ground) -> (Self) -> () -> Void {
+        switch ground {
+        case .page: Self.onThePage
+        case .tabSurface: Self.onATabSurface
+        case .colour: Self.onAColour
+        case .invertedColour: Self.onAnInvertedColour
+        case .ramp: Self.onARamp
+        case .terminalPage: Self.onTheTerminalPage
+        case .colourOnTerminalPage: Self.onAColourOnTheTerminalPage
+        case .composedOnTerminalPage: Self.composedOnTheTerminalPage
+        case .dimmed: Self.dimmed
+        case .backdrop: Self.behindASheet
+        }
+    }
 }
