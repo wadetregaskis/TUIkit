@@ -75,6 +75,7 @@ opt_in_rules:
   - prefer_zero_over_explicit_init
   - private_swiftui_state
   - reduce_into
+  - redundant_final
   - redundant_nil_coalescing
   - redundant_type_annotation
   - return_value_from_void_function
@@ -110,9 +111,52 @@ opt_in_rules:
 # the first declaration, so requiring the licence to be last reports 222 files
 # whose description sits after it. `\r?\n` rather than `\n` because the
 # Windows port is in progress and a CRLF working tree would otherwise fail
-# every file with a message that explains nothing.
+# every file with a message that explains nothing. (SwiftLint's own Windows
+# build, new in 0.64, requires `\n` line endings in every file it lints, so a
+# Windows lint lane would need an LF checkout whatever this pattern accepts.)
 file_header:
   required_pattern: '\A//  🖥️ TUIkit — Terminal UI Kit for Swift\r?\n//  SWIFTLINT_CURRENT_FILENAME\r?\n//\r?\n(?:(?!//  License:)//[^\n]*\r?\n)*?//  Created by (?![^\n]* on \d)[^\n]+\r?\n//  License: MIT$'
+
+# `invisible_character`, a default rule since SwiftLint 0.63.3, rejects a raw
+# zero-width space (U+200B), zero-width non-joiner (U+200C) or U+FEFF inside a
+# string literal. This project's literals are full of terminal-width cases, and
+# a character that draws nothing is invisible in an editor and in a diff, so
+# the rest of the characters that draw nothing are added: in a literal they
+# must be spelled as `\u{…}` escapes, which a reviewer can see — as the width
+# corpus (`bidi_lrm`, `bidi_rlm`) and `ScalarWidthFastPathTests` (U+202D,
+# U+202C) already spell them.
+#   - the bidi controls behind "Trojan Source" (CVE-2021-42574): the
+#     embeddings and overrides U+202A–202E and the isolates U+2066–2069;
+#   - the direction marks U+200E, U+200F and U+061C;
+#   - the word joiner and invisible operators U+2060–2064, and the soft hyphen
+#     U+00AD.
+# Deliberately NOT added: U+200D ZERO WIDTH JOINER and the tag characters
+# U+E0020–E007F, which occur raw 98 and 6 times outside comments today, as the
+# content of emoji-sequence and subdivision-flag literals (they read as the
+# glyph they build), and the variation selectors, which change how a character
+# looks.
+# Every added code point measured 0 raw occurrences in Sources + Tests. The
+# rule looks at string literals only; comments are not covered.
+invisible_character:
+  additional_code_points:
+    - "00AD"
+    - "061C"
+    - "200E"
+    - "200F"
+    - "202A"
+    - "202B"
+    - "202C"
+    - "202D"
+    - "202E"
+    - "2060"
+    - "2061"
+    - "2062"
+    - "2063"
+    - "2064"
+    - "2066"
+    - "2067"
+    - "2068"
+    - "2069"
 
 line_length:
   warning: 160

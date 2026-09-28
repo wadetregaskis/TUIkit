@@ -1,7 +1,15 @@
 # SwiftLint: what we enforce, and every optional rule we don't
 
-**CI pins SwiftLint 0.65.1 since 2026-09-28.** The optional rules that 0.64 and 0.65 added
-have not been reviewed here yet; a follow-up adds them to the tables below.
+**CI pins SwiftLint 0.65.1 since 2026-09-28, and Part 3 (before the summary)
+reviews what changed since the 0.63.2 pin.** Six rules are new — all of them
+from 0.63.3; 0.64.x and 0.65.x added none — and one of them is now enabled.
+Part 3 also covers every changed default or behaviour of an existing rule.
+Both lists come from diffing `swiftlint rules` and `swiftlint rules
+--default-config` between the two binaries, not only from the changelog.
+
+Parts 1 and 2 are the original review. Their counts are as of 2026-08-25
+(1,094 files); most have grown with the tree (1,736 files on 2026-09-28),
+but the verdicts turn on the *shape* of the sites, not the totals.
 
 **Reviewed 2026-08-25 against SwiftLint 0.63.2** (then the CI-pinned version), by
 rolling each existing exception back one at a time and by measuring every
@@ -102,6 +110,8 @@ still suppressed, so it buys consistency rather than a smaller file. Left for
 a moment when someone is touching that file anyway.
 
 ## Part 2 — every optional rule not enabled (109)
+
+As of 0.63.2. The four opt-in rules 0.63.3 added are reviewed in Part 3.
 
 ### `file_header` — enabled, and it was never doing anything
 
@@ -212,6 +222,58 @@ having**: dead code and stale imports are real findings a linter can't
 otherwise see. They belong in a periodic manual sweep rather than the CI gate,
 because the build-log requirement makes them slow and fragile.
 
+## Part 3 — SwiftLint 0.63.3 to 0.65.1, reviewed 2026-09-28
+
+**Method.** The original review's measurement, repeated with both binaries:
+every opt-in rule on, `disabled_rules` dropped, the project's rule
+configuration kept, over `Sources` + `Tests`. Run by 0.63.2 over the tree as it
+stood at `cefdc8fa` (the original review), it reproduces every count in Part
+2's tables — `contrasted_opening_brace` 30,235, `no_magic_numbers` 21,107,
+`explicit_acl` 9,411 and the rest — so the numbers below are measured the same
+way. Run by both binaries over today's tree (1,736 files), the per-rule counts
+differ only for the new rules, for the five existing rules the second table
+shows moving, and for `superfluous_disable_command`, which 0.63.2 raises on the
+two disables that name a rule it does not know.
+
+### New rules (6)
+
+| Rule | Kind | Sites | Verdict |
+|---|---|---|---|
+| `redundant_final` | opt-in, autocorrects | 0 | **Enabled.** `final` on a member of a `final class`, or on an actor or its members, says nothing. This project already finalises its classes and enforces `non_overridable_class_declaration`, so a `final func` inside a `final class` is the drift left to stop. Perturbed before enabling: `final` added to `Lock.withLock` (a member of `final class Lock`) is reported, and under the previous config it is not. |
+| `invisible_character` | default | 0 | Already enforced, now **configured**. By default it rejects only U+200B, U+200C and U+FEFF inside a string literal; `additional_code_points` adds the other characters that draw nothing: the bidi controls behind "Trojan Source" (U+202A–202E, U+2066–2069), the direction marks (U+200E, U+200F, U+061C), the word joiner and invisible operators (U+2060–2064) and the soft hyphen (U+00AD), each at 0 raw occurrences today. In a literal they must now be `\u{…}` escapes, which a reviewer can see. U+200D and the tag characters stay allowed: they are the content of emoji-sequence and flag literals (98 and 6 raw occurrences outside comments). Perturbed: each of the 18, raw in a `TerminalWidthCorpus` literal, is reported and a raw U+200D is not; the previous config reports only the default three. |
+| `legacy_swiftui_aspect_ratio` | default, autocorrects | 2, suppressed | Its only sites are the definitions of `scaledToFit()` and `scaledToFill()`, which *are* the spelling it recommends, and the 0.65.1 pin disabled it on those two lines. The disables matter beyond the lint: on a copy of `Image.swift` without them, `swiftlint --fix` rewrites each body into a call to itself. The comment at each site now says so. |
+| `variable_shadowing` | opt-in | 245 | **Decline.** Its commonest shapes here are deliberate. Re-binding a parameter to its checked form, so the unchecked value can no longer be reached: `let innerWidth = max(0, innerWidth)` (the negative-size clamp), `let context = context.publishingContainerAxis(.horizontal)`, `guard let other = other as? Self`. And snapshotting a stored property before a closure captures it: `let destination = self.destination`. Renaming either kind makes the stale value reachable again, which is the mistake the shadowing prevents. The default `ignore_parameters: true` still reports a local that re-binds a parameter; turning it off adds the parameters themselves (476). |
+| `discouraged_default_parameter` | opt-in | 331 | **Decline.** 309 internal and 22 package functions; public ones are not flagged by default. Default arguments are this codebase's test seam: production callers take the environment-reading default (`isITerm2: Bool = TerminalHost.isITerm2`, `date: Date = FrameClock.nowDate`, `depth: ColorDepth = ColorDepth.current`, `locale: Locale = .current`) and a test passes a fixed value. The internal cores also carry the defaults of the public SwiftUI-parity API they back. Without defaults, each becomes an overload or a value spelled out at every call site. |
+| `legacy_uigraphics_function` | opt-in | 0 | Not applicable: it polices UIKit's `UIGraphicsBeginImageContext`, and nothing here imports UIKit. |
+
+### Changed defaults and behaviour of existing rules
+
+| Rule | Here | What changed | On this tree |
+|---|---|---|---|
+| `prefer_self_in_static_references` | enabled, autocorrected | 0.63.3 applies it inside extensions too. 0.64.0 stops it rewriting a cast's type operand to `Self` in a class — `x is Self` is not `x is A` in a non-final class, so the old rewrite changed behaviour — and in protocol compositions, existentials and generic constraints. | The 44 extension sites were fixed with the pin (`15d6ae3e`). For the cast fix, the question was whether an earlier autocorrect had already done the damage: all seven `as? Self` casts in the tree are in protocol extensions or a struct, none in a class. |
+| `force_unwrapping` | declined | New `ignored_literal_argument_functions` (0.63.3) exempts `URL(string:)`, `NSURL(string:)`, `UIImage(named:)`, `NSImage(named:)` and `Data(hexString:)` called with literal arguments. Since 0.64.0 a configured list replaces those defaults instead of adding to them. | 732 → 702. Verdict unchanged: the rest are the render-time invariants Part 2 describes. |
+| `identifier_name` | default | `--default-config` now prints `additional_operators: []` where 0.63.2 printed the operator characters. | Display only: an operator declaration passes under both versions, and the rule's result over the tree is the same. |
+| `unowned_variable_capture` | enabled | New `allow_explicit_unsafe_unowned` (0.65.1), off by default. | Nothing to decide: the tree has no `unowned(unsafe)` capture. |
+| `line_length` | enabled, `ignores_urls: true` | 0.65.1 stops treating a member access whose name is a top-level domain (`.app`, `.dev`) as a URL. | Clean at 160 under 0.65.1, so no long line was hiding behind that misfire. |
+| `no_empty_block` | not enabled | New `allow_compact_empty_blocks` (0.65.1). | 1,102 sites, still 120 with the option on: the remainder is `{ _ in }`, the no-op closure that takes arguments (`set: { _ in }`, `.onChange(of:) { _, _ in }`). |
+| `unused_parameter` | not enabled | New `allow_underscore_prefixed_names` (0.63.3). | 291 either way: none of the unused parameters is spelled `_name`. |
+| `pattern_matching_keywords` | not enabled | Extended beyond `switch` cases (0.63.3). | 196 → 234. |
+| `indentation_width` | not enabled | Continuation lines of a multi-line condition are skipped unless `include_multiline_conditions` is set (0.63.3). | 217 → 206. |
+| `multiline_call_arguments` | not enabled | Enum-case patterns are no longer reported (0.63.3). | 2,340 → 2,357, the net of every change to the rule; not investigated further, since wrapping is swift-format's job here. |
+| `unneeded_throws_rethrows` | not enabled | A `try` in the arguments of a call that also has a trailing closure now counts (0.63.3). | 23 → 22. |
+| `opening_brace` | disabled | `allow_multiline_func` removed (0.65.1). | Not configured here, so nothing to migrate. |
+| SwiftLint itself | — | Runs on Windows from 0.64.0, but requires `\n` line endings in every file it lints. | Noted beside `file_header`'s `\r?\n` in `.swiftlint.yml`: a Windows lint lane would need an LF checkout regardless. |
+
+Also changed, and clean here with nothing to configure: `modifier_order`
+recognises `isolated`; `statement_position` checks the space before a
+`guard`'s `else`; `optional_data_string_conversion` renamed
+`allow_implicit_init` to `include_implicit_init` (not set here);
+`implicit_optional_initialization` gained `ignore_attributes`;
+`closure_end_indentation` and `closure_spacing` correct CRLF files and
+trivia-only closures properly. The analyzer rule `unused_import` now
+understands access-level modifiers on imports, which matters only to the
+manual sweep.
+
 ## Summary
 
 Three exceptions retired, one latent bug fixed (the bare `fatalError()`), and
@@ -224,5 +286,11 @@ same day (`direct_return` and `private_swiftui_state`, `b08531db`), and the rest
 decline for reasons
 that are now written down rather than rediscovered.
 
-The linter now enforces 54 opt-in rules on top of the defaults, at 0
-violations across 1,094 files.
+The 2026-09-28 review of SwiftLint 0.63.3 to 0.65.1 (Part 3) enabled
+`redundant_final` at zero violations, gave the default `invisible_character`
+the rest of the characters that draw nothing, and declined `variable_shadowing`
+and `discouraged_default_parameter` for the idioms they would take away. No
+changed default of an existing rule needs a configuration change.
+
+The linter now enforces 55 opt-in rules on top of the defaults, at 0
+violations across 1,736 files (SwiftLint 0.65.1).

@@ -705,7 +705,9 @@ extension View {
     public func scaledToFit() -> some View {
         // This IS the modern spelling SwiftLint's rule points callers to; it is
         // defined in terms of the general modifier, so the rule's advice does
-        // not apply to its own definition.
+        // not apply to its own definition. The rule autocorrects, too: without
+        // this line `swiftlint --fix` rewrites the body into a call to
+        // `scaledToFit()` itself — endless recursion.
         // swiftlint:disable:next legacy_swiftui_aspect_ratio
         aspectRatio(contentMode: .fit)
     }
@@ -719,7 +721,9 @@ extension View {
     public func scaledToFill() -> some View {
         // This IS the modern spelling SwiftLint's rule points callers to; it is
         // defined in terms of the general modifier, so the rule's advice does
-        // not apply to its own definition.
+        // not apply to its own definition. The rule autocorrects, too: without
+        // this line `swiftlint --fix` rewrites the body into a call to
+        // `scaledToFill()` itself — endless recursion.
         // swiftlint:disable:next legacy_swiftui_aspect_ratio
         aspectRatio(contentMode: .fill)
     }
