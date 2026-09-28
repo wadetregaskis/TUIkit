@@ -221,13 +221,23 @@ jobs:
           xcode-version: ${{ matrix.xcode }}
 
       # `check-latest` is not optional here despite the action warning that it
-      # "may break this action": without it the action installs the snapshot
-      # list it was released with (v1.14.0 is from April 2026), so a lane meant
-      # to track a nightly would quietly pin to a months-old toolchain and
-      # report green. Breaking loudly is the correct failure mode here.
+      # "may break this action": it is the only input whose documented meaning
+      # is "the newest toolchain swift.org has", which is the whole promise of
+      # a lane that tracks a nightly. Without it the action uses the swift.org
+      # data it pins for itself. That was a months-old snapshot list when this
+      # lane was written; on 2026-09-27 a lane without it synced the same
+      # swift.org commit as one with it — but that is the action's behaviour
+      # of the day, not a contract, and a pinned list would pin the "nightly"
+      # to an old toolchain and report green. Breaking loudly is the correct
+      # failure mode here.
+      #
+      # 1.14.1 (2026-09-25) is the first release that knows swift.org's new tag
+      # spelling: from 6.4 on a first release is `swift-6.4.0-RELEASE`, where it
+      # used to be `swift-6.3-RELEASE`, and 1.14.0 could not install an exact
+      # `6.4.0` request. (The range `6.4` matched under either.)
       - name: Install Swift ${{ matrix.snapshot }} snapshot
         if: matrix.snapshot != ''
-        uses: SwiftyLab/setup-swift@v1.14.0
+        uses: SwiftyLab/setup-swift@v1.14.1
         with:
           swift-version: ${{ matrix.snapshot }}
           development: true
@@ -531,7 +541,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Install Swift
-        uses: SwiftyLab/setup-swift@v1.14.0
+        uses: SwiftyLab/setup-swift@v1.14.1
         with:
           swift-version: "6.3"
 
