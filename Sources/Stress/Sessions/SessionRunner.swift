@@ -261,8 +261,9 @@ enum SessionRunner {
     }
 
     /// The census's lines for the report: per kind of reader, what the steps
-    /// armed (and per step), what fired, what was dropped with the objects it
-    /// read, and what is alive at the end.
+    /// armed (and per step), what fired, what a retiring lease cancelled, what
+    /// was dropped with the objects it read, and what is alive at the end;
+    /// and how many were armed with no lease to cancel them.
     private static func censusLines(_ report: Report) -> [String] {
         guard let open = report.censusAtOpen, let end = report.censusAtEnd else { return [] }
         let steps = Double(max(1, report.steps))
@@ -271,9 +272,11 @@ enum SessionRunner {
             let armed = end.armed(kind) - open.armed(kind)
             lines.append(
                 String(
-                    format: "  %@ armed %d (%.2f/step), fired %d, dropped %d, alive at the end %d",
+                    format: "  %@ armed %d (%.2f/step), fired %d, cancelled %d, dropped %d, alive at the end %d"
+                        + " (unleased %d)",
                     kind.description, armed, Double(armed) / steps, end.fired(kind) - open.fired(kind),
-                    end.dropped(kind) - open.dropped(kind), end.live(kind)))
+                    end.cancelled(kind) - open.cancelled(kind), end.dropped(kind) - open.dropped(kind),
+                    end.live(kind), end.unleased(kind)))
         }
         if lines.count == 1 { lines.append("  none armed") }
         if let after = report.censusAfterFinish { lines.append("  after the finish: alive " + liveByKind(after)) }
