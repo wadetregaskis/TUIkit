@@ -226,21 +226,45 @@ struct ReplayedRunFieldTests {
         ReplayOracle.compare(make, stops: 23, ticks: 8, size: (80, 64), reportOncePerRow: true)
     }
 
-    @Test("Every replayed tick of every run shows what a render at that instant draws", arguments: Ground.allCases)
-    func everyTickMatchesARender(ground: Ground) {
-        let found =
-            switch ground {
-            case .page: walk { OnThePageApp() }
-            case .tabSurface: walk { InATabApp() }
-            case .colour: walk { OnAColourApp() }
-            case .invertedColour: walk { InvertedColourApp() }
-            case .ramp: walk { OnARampApp() }
-            case .terminalPage: walk { OnTheTerminalPageApp() }
-            case .colourOnTerminalPage: walk { ColourOnTheTerminalPageApp() }
-            case .composedOnTerminalPage: walk { ComposedOnTheTerminalPageApp() }
-            case .dimmed: walk { DimmedApp() }
-            case .backdrop: walk { BehindASheetApp() }
-            }
+    // One test per ground, not one test with the grounds as arguments. Each walk
+    // is several seconds of main-actor work, and a parameterised test's cases
+    // all run in one process, so as a single test this suite was 48 s of the
+    // parallel runner's wall on its own (Tools/ParallelTest/README.md): the
+    // runner distributes tests, not a test's arguments. As ten tests the walks
+    // spread across its processes.
+
+    @Test("Every replayed tick matches a render, on the page")
+    func onThePage() { check(.page, walk { OnThePageApp() }) }
+
+    @Test("Every replayed tick matches a render, on a tab's surface")
+    func onATabSurface() { check(.tabSurface, walk { InATabApp() }) }
+
+    @Test("Every replayed tick matches a render, on a colour of the app's own")
+    func onAColour() { check(.colour, walk { OnAColourApp() }) }
+
+    @Test("Every replayed tick matches a render, on that colour inverted")
+    func onAnInvertedColour() { check(.invertedColour, walk { InvertedColourApp() }) }
+
+    @Test("Every replayed tick matches a render, on a ramp")
+    func onARamp() { check(.ramp, walk { OnARampApp() }) }
+
+    @Test("Every replayed tick matches a render, on the terminal's own page")
+    func onTheTerminalPage() { check(.terminalPage, walk { OnTheTerminalPageApp() }) }
+
+    @Test("Every replayed tick matches a render, on a colour on the terminal's page")
+    func onAColourOnTheTerminalPage() { check(.colourOnTerminalPage, walk { ColourOnTheTerminalPageApp() }) }
+
+    @Test("Every replayed tick matches a render, composited over a colour on the terminal's page")
+    func composedOnTheTerminalPage() { check(.composedOnTerminalPage, walk { ComposedOnTheTerminalPageApp() }) }
+
+    @Test("Every replayed tick matches a render, dimmed")
+    func dimmed() { check(.dimmed, walk { DimmedApp() }) }
+
+    @Test("Every replayed tick matches a render, behind a sheet")
+    func behindASheet() { check(.backdrop, walk { BehindASheetApp() }) }
+
+    /// Every replayed tick of every run shows what a render at that instant draws.
+    private func check(_ ground: Ground, _ found: ReplayOracle.Findings) {
         // Enough that the walk reached the catalogue, not just its first stop.
         #expect(found.compared >= 200, "only \(found.compared) rows were replayed")
         for mismatch in found.mismatches { Issue.record("\(ground): \(mismatch)") }

@@ -222,6 +222,19 @@ those four covered — same pixels, same palettes, same lengths, same assertions
 — and the suite went from 7,573 tests to 7,585. It enumerates 7,591 today; the
 extra six are `561f7f0b`'s new conversion suite, not these splits'.
 
+**2026-09-28: the floor had crept back to 47.5 s.** One test,
+`ReplayedRunFieldTests/everyTickMatchesARender(ground:)`, walked a catalogue of
+controls through the run loop on ten grounds in one function, and had grown
+into 23% of the suite's 204.5 s of serial work; every `-j 12` run waited for
+it alone (55.8 s calibrated, 76 s from a cold cache). It is ten functions now,
+one per ground, and a `-j 12` run on a calibrated cache finishes in **32.2 s**.
+A split like that used to cost one bad run first: tests the cache has never
+measured were priced at the median — near-free — so all ten pieces went to one
+process (67 s). An unmeasured test is now priced at its suite's share of the
+work the cache recorded for tests that no longer exist, never below the
+median, so the pieces of a split are dealt out from the first run
+(`fill_weights`). A new test in a new suite still gets the median.
+
 Treat the totals in this section as ±4 s. Three calibrations of this tree read
 86.8 s, 99.8 s and 104.9 s, and most of that movement is not the splits: five
 commits landed between the first two, and between the second and third — where
