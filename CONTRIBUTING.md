@@ -23,13 +23,14 @@ operating system, and trunk on macOS and Linux:
 | 6.2 | Xcode 26 on `macos-15` | `swift:6.2-noble` | `swift:6.2-…` |
 | 6.3 | Xcode 26 on `macos-26` | `swift:6.3-noble` | `swift:6.3-…` |
 | 6.4 | swift.org 6.4 release on `macos-26` | `swift:6.4-noble` | `swift:6.4-…` |
-| main | swift.org latest snapshot | `nightly-main-noble` | — |
+| main | swift.org trunk snapshot | `nightly-main-noble` | — |
 
 Released Swift comes from Xcode on macOS wherever a generally available runner
 image carries the Xcode that ships it. For 6.4 none does yet — Xcode 27 is only
 on GitHub's `xcode-27` image, which is still a preview — so the 6.4 lane takes
-swift.org's release toolchain on `macos-26`. Trunk comes from swift.org too.
-Windows has no trunk lane because its trunk image is rebuilt too rarely to be
+swift.org's release toolchain on `macos-26`. Trunk comes from swift.org too:
+the newest snapshot of `main`, never a release branch's, and the lane checks
+the snapshot it installed says so. Windows has no trunk lane because its trunk image is rebuilt too rarely to be
 worth reporting as a nightly (on 2026-09-27 it was eleven weeks old).
 
 Until 6.4.0 shipped (2026-09-14) its row was `release/6.4.x` snapshots and

@@ -37,7 +37,7 @@ name: CI
 #   6.2      Xcode 26 on macos-15       swift:6.2-noble        swift:6.2-…
 #   6.3      Xcode 26 on macos-26       swift:6.3-noble        swift:6.3-…
 #   6.4      swift.org 6.4 on macos-26  swift:6.4-noble        swift:6.4-…
-#   main     swift.org latest snapshot  nightly-main-noble     (none: the Windows
+#   main     swift.org trunk snapshot   nightly-main-noble     (none: the Windows
 #                                                               main image is
 #                                                               rebuilt too rarely)
 #
@@ -192,10 +192,8 @@ jobs:
           # Xcode-provided one. `development` says whether it is a snapshot.
           # Without it, "6.4" is the newest 6.4.x release; with it, a version
           # is the newest snapshot on that release branch (for 6.4, swift.org's
-          # `swift-6_4_x-branch`), and "latest" the newest snapshot on any
-          # branch, ranked by date. That is NOT reliably trunk: on 2026-09-28
-          # the newest macOS snapshot was a `release/6.4.x` one, so the "main
-          # snapshot" lane tests whichever branch published last.
+          # `swift-6_4_x-branch`). `trunk` marks the lane that must be on main's
+          # snapshots (checked after the install).
           - name: "macOS 15 · Xcode 26"
             runner: macos-15
             xcode: "26"
@@ -222,11 +220,22 @@ jobs:
             development: false
             smoke: quick
             experimental: false
+          # Trunk only. "latest" (with `development`) was the newest snapshot
+          # on ANY branch, ranked by date, and on 2026-09-28 that was
+          # `swift-6.4.x-DEVELOPMENT-SNAPSHOT-2026-09-26-a`, not trunk's
+          # 2026-09-21 — so the lane tested whichever branch published last.
+          # setup-swift 1.14.1 takes a snapshot name without its date as a
+          # pattern over snapshot tags, and picks the newest match; only
+          # trunk's tags start `swift-DEVELOPMENT-SNAPSHOT-`, a release
+          # branch's being `swift-6.4.x-DEVELOPMENT-SNAPSHOT-…`. That is the
+          # action's code rather than its documented contract, so the step
+          # after the install checks the tag it got.
           - name: "macOS 26 · Swift main snapshot"
             runner: macos-26
             xcode: ""
-            swift: "latest"
+            swift: "swift-DEVELOPMENT-SNAPSHOT"
             development: true
+            trunk: true
             smoke: quick
             experimental: true
           # macOS 27 with Xcode 27's own toolchain (Swift 6.4). Advisory only
@@ -274,6 +283,7 @@ jobs:
       # lane runs on has Xcode 27 today, but GitHub adds Xcodes to images
       # without notice.
       - name: Install Swift ${{ matrix.swift }} from swift.org
+        id: setup-swift
         if: matrix.swift != ''
         uses: SwiftyLab/setup-swift@v1.14.1
         with:
@@ -286,6 +296,19 @@ jobs:
           # on the advisory snapshot lane. Snapshots are not cached; releases
           # still are.
           cache-snapshot: ${{ !matrix.development }}
+
+      # Fails the trunk lane if the pattern above ever matches something else,
+      # rather than letting it report a release branch's result as trunk's.
+      - name: Check the snapshot is trunk's
+        if: matrix.trunk
+        env:
+          TOOLCHAIN: ${{ steps.setup-swift.outputs.toolchain }}
+        run: |
+          tag="$(python3 -c 'import json, os; print(json.loads(os.environ["TOOLCHAIN"] or "{}").get("dir", ""))')"
+          case "$tag" in
+            swift-DEVELOPMENT-SNAPSHOT-*) echo "Trunk snapshot: $tag" ;;
+            *) echo "::error::Expected a trunk snapshot (swift-DEVELOPMENT-SNAPSHOT-…), got '$tag'"; exit 1 ;;
+          esac
 
       # A swift.org toolchain is not the default `swift`; it has to be
       # selected per invocation. Every later step goes through $SWIFT so the
