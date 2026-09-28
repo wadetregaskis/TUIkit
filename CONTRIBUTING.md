@@ -22,15 +22,13 @@ operating system, and trunk on macOS and Linux:
 |-------|-------|-------|---------|
 | 6.2 | Xcode 26 on `macos-15` | `swift:6.2-noble` | `swift:6.2-…` |
 | 6.3 | Xcode 26 on `macos-26` | `swift:6.3-noble` | `swift:6.3-…` |
-| 6.4 | swift.org 6.4 release on `macos-26` | `swift:6.4-noble` | `swift:6.4-…` |
+| 6.4 | Xcode 27 on `xcode-27` (macOS 27); swift.org 6.4 release on `macos-26` | `swift:6.4-noble` | `swift:6.4-…` |
 | main | swift.org trunk snapshot | `nightly-main-noble` | — |
 
-Released Swift comes from Xcode on macOS wherever a generally available runner
-image carries the Xcode that ships it. For 6.4 none does yet — Xcode 27 is only
-on GitHub's `xcode-27` image, which is still a preview — so the 6.4 lane takes
-swift.org's release toolchain on `macos-26`. Trunk comes from swift.org too:
-the newest snapshot of `main`, never a release branch's, and the lane checks
-the snapshot it installed says so. Windows has no trunk lane because its trunk image is rebuilt too rarely to be
+Released Swift comes from Xcode on macOS. 6.4 also runs from swift.org's
+release toolchain on `macos-26`, where no Xcode carries it. Trunk comes from
+swift.org too: the newest snapshot of `main`, never a release branch's, and
+the lane checks the snapshot it installed says so. Windows has no trunk lane because its trunk image is rebuilt too rarely to be
 worth reporting as a nightly (on 2026-09-27 it was eleven weeks old).
 
 Until 6.4.0 shipped (2026-09-14) its row was `release/6.4.x` snapshots and
@@ -49,13 +47,14 @@ eighteen builds.
 Nightly-toolchain lanes are **advisory** (`continue-on-error`): visible, but
 unable to block a merge, because they break for reasons that have nothing to do
 with this package. Everything on a released toolchain — including Windows —
-blocks, with one exception: the macOS 27 lane.
+blocks.
 
 macOS 27 runs on GitHub's `xcode-27` image (macOS 27.0 with Xcode 27, and so
-Xcode's own Swift 6.4), which GitHub still labels a preview. Until that label
-goes, the lane is advisory like a nightly; when it does, it becomes a required
-lane alongside `macos-15` and `macos-26`. See the `TODO(macOS 27)` at the top
-of the workflow.
+Xcode's own Swift 6.4), and is required alongside `macos-15` and `macos-26`.
+GitHub still labels that image a preview and warns it may queue; a queued
+macOS 27 lane holds the `CI` check pending until it runs. When a `macos-27`
+label appears, the lane moves to it (see the macOS 27 note at the top of the
+workflow).
 
 #### The `CI` gate job
 
@@ -274,8 +273,8 @@ swift-testing reports.
 1. Branch from `main`
 2. Fill in the PR template completely
 3. The `CI` gate check must be green — it covers macOS, Linux and, on
-   released toolchains, Windows; only the nightly-toolchain lanes and the
-   macOS 27 lane (a preview image) are advisory (see "What CI covers" above)
+   released toolchains, Windows; only the nightly-toolchain lanes are
+   advisory (see "What CI covers" above)
 4. No new SwiftLint warnings
 5. Follow the architecture and API rules below
 
