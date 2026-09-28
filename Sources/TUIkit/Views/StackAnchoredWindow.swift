@@ -519,7 +519,8 @@ extension _VStackCore {
             // frame the list grew onto this path, rows 226 to 229 were.
             if anchorFollowsOffset, near.offset != window.offset {
                 anchorSeekTarget(
-                    ordinal, top: near.targetTop, offset: near.offset, state: state, children: children)
+                    ordinal, top: near.targetTop, offset: near.offset, frame: frame,
+                    state: state, children: children)
             }
             window.offset = near.offset
             return near.offset
@@ -556,7 +557,7 @@ extension _VStackCore {
         // Under a designated row the hold follows, not the walk
         // (`clampDesignatedHold`), and the target stands at its top as before.
         anchorSeekTarget(
-            ordinal, top: targetY, offset: anchorFollowsOffset ? newOffset : targetY,
+            ordinal, top: targetY, offset: anchorFollowsOffset ? newOffset : targetY, frame: frame,
             state: state, children: children)
         window.offset = newOffset
         return newOffset
@@ -573,10 +574,27 @@ extension _VStackCore {
     /// screens took them for a scrollbar jump and placed the rows by the running
     /// pitch (`advanceAnchor`): a `.bottom` seek to the end of a sixty-line row
     /// showed one-line rows past it.
+    ///
+    /// An offset past the target's end — a custom anchor whose y is below 0, or
+    /// above 1 on a row taller than the screen (`windowOffset` does not clamp
+    /// it) — names rows after it, which the target's lines cannot hide: its
+    /// pitch clamped them away and the target was drawn on line 0. The anchor
+    /// is then the row after it, so the walk covers only the lines past the
+    /// target, by `advanceAnchor`'s own rule: exactly within four screens, by
+    /// estimate beyond, as any jump that far is.
     private func anchorSeekTarget(
-        _ ordinal: Int, top: Int, offset: Int, state: StackWindowState, children: ChildViewCollection
+        _ ordinal: Int, top: Int, offset: Int, frame: AnchoredWindowFrame,
+        state: StackWindowState, children: ChildViewCollection
     ) {
         let within = max(0, offset - top)
+        let pitch = frame.pitch(of: ordinal)
+        if within >= pitch, ordinal < children.count - 1 {
+            state.anchorOrdinal = ordinal + 1
+            state.anchorKey = children.key(at: ordinal + 1)
+            state.anchorOffsetWithin = 0
+            state.lastDerivedOffset = top + pitch
+            return
+        }
         state.anchorOrdinal = ordinal
         state.anchorKey = children.key(at: ordinal)
         state.anchorOffsetWithin = within

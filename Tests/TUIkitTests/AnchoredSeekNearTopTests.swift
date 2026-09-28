@@ -366,4 +366,26 @@ struct AnchoredSeekNearTopTests {
         #expect(seek.lazy == seek.flat, "\(seek.lazy) vs \(seek.flat)")
         #expect(settled.lazy == settled.flat, "the frame after: \(settled.lazy) vs \(settled.flat)")
     }
+
+    @Test(
+        "A seek whose anchor lies outside the row shows the rows its offset names, as the column does",
+        arguments: [(0..<3, 5, -0.5, 154), (0..<3, 5, 1.5, 139)])
+    func seekAnchoredOutsideTheRow(tall: Range<Int>, lines: Int, y: Double, firstRow: Int) {
+        // `UnitPoint(x:y:)` is public and the offset does not clamp its y, so a
+        // seek can name lines past its target's end: y -0.5 on row 150 of one
+        // line is four lines below its top. The seek hid those lines in the
+        // target, whose pitch then clamped them away: the screen showed the
+        // target on line 0, rows 150 to 157. Above the target's top (y 1.5)
+        // the walk up from it was already right.
+        let pair = TallHeadPair {
+            TallHeadPage(box: $0, header: false, flat: $1, tall: tall, lines: lines)
+        }
+        for _ in 0..<3 { pair.frame() }
+        pair.apply { $0.proxy?.scrollTo(150, anchor: UnitPoint(x: 0.5, y: y)) }
+        let seek = pair.frame()
+        let settled = pair.frame()
+        #expect(seek.flat.first == "row \(firstRow)", "precondition: \(seek.flat)")
+        #expect(seek.lazy == seek.flat, "\(seek.lazy) vs \(seek.flat)")
+        #expect(settled.lazy == settled.flat, "the frame after: \(settled.lazy) vs \(settled.flat)")
+    }
 }
