@@ -75,13 +75,18 @@ struct ObservableInvalidationScopeTests {
             _MemoizedRow(element: 1, content: Reader(model: model))
             _MemoizedRow(element: 2, content: Sibling())
         }
+        // Two frames before the warm one, not one: the first is where the
+        // cache learns that `Reader` reads, and a type learned to read clears
+        // the cache once at the next pass, so that nothing kept was measured
+        // with its reads untracked (`RenderCache.noteReads(_:)`).
+        _ = Self.frame(view, tui: tui)
         _ = Self.frame(view, tui: tui)
         Renders.reset()
         let warm = Self.frame(view, tui: tui)
         #expect(warm.lines.first?.stripped.contains("count 0") == true)
         #expect(
             Renders.count == [verifierRenders(hits: 1), verifierRenders(hits: 1)],
-            "both rows are memoised by the second frame: \(Renders.count)")
+            "both rows are memoised by the third frame: \(Renders.count)")
         let before = tui.renderCache.stats
 
         model.count = 7

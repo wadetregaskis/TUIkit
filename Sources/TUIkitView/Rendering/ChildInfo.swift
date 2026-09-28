@@ -4,6 +4,7 @@
 //  Created by LAYERED.work
 //  License: MIT
 
+import Observation
 import TUIkitCore
 
 // MARK: - Child Info
@@ -792,6 +793,18 @@ private func measureResolved<V: View>(
 /// a different size than it rendered. Hydration still keys off `context` (the
 /// parent), exactly as render does; only the recursion descends with the child
 /// identity.
+///
+/// The body is observed, at the view's own identity as a render observes it,
+/// when its type is known to read an `@Observable`
+/// (``RenderCache/readingTypes``). Unobserved, a result kept from this measure
+/// — a hugging `List`'s width, a `ViewThatFits`'s choice drawn into an
+/// `.equatable()` view's buffer, a size in the cross-frame table — went on
+/// being served after a write to something only the measure read, and was
+/// right only while some draw of the same reader happened to watch the same
+/// reads. A type not known to read is measured as it always was: the
+/// tracking's thread-local swap stays off the measure path of every body that
+/// never reads, which is almost all of them, and a type that reads only while
+/// measured and is never drawn is never learned.
 @inline(never)
 @MainActor
 private func measureCompositeBody<V: View>(
@@ -808,7 +821,12 @@ private func measureCompositeBody<V: View>(
     resolveEnvironmentProperties(of: view, in: context.environment)
     bindStateProperties(
         of: view, identity: context.identity, storage: context.stateStorage!)
-    return measureChild(view.body, proposal: proposal, context: childContext)
+    guard let cache = context.renderCache, cache.readingTypes.contains(V.self) else {
+        return measureChild(view.body, proposal: proposal, context: childContext)
+    }
+    let body = withObservationTracking(
+        { view.body }, onChange: observedChange(of: context, kind: .bodyMeasure, reader: V.self))
+    return measureChild(body, proposal: proposal, context: childContext)
 }
 
 /// Measures a fixed-size view by rendering it ONCE in measuring mode and

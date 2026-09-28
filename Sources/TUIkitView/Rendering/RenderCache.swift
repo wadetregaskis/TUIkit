@@ -49,8 +49,11 @@ import TUIkitStyling
 /// The whole cache is dropped only by: a palette / appearance / locale /
 /// toggle-glyph change, a change to the width claim the memoized sizes were
 /// measured under (checked once per ``beginRenderPass()``), an explicit `nil`
-/// invalidation, or the `setNeedsRenderWithCacheClear` fallback that a render
-/// with no `RenderCache` in its context still takes.
+/// invalidation, the `setNeedsRenderWithCacheClear` fallback that a render
+/// with no `RenderCache` in its context still takes, or — once per view type —
+/// the first time a body of a type is seen to read an `@Observable`, after
+/// which that type's bodies are observed when measured too (see
+/// `noteReads(_:)`).
 ///
 /// Two consequences worth knowing before relying on this:
 ///
@@ -191,9 +194,10 @@ public final class RenderCache: @unchecked Sendable {
     /// For a caller that has been told an answer may have moved and has to find
     /// out. A value memo compares only the value it was keyed on, and a view
     /// that reads anything else — a `ForEach` row reading data its element does
-    /// not carry, or an `@Observable` read while it was measured but not drawn,
-    /// which nothing tracks — goes on being served its old answer until
-    /// something clears it. Forgetting it first is the only way to ask it
+    /// not carry, or an `@Observable` read while it was measured but not drawn
+    /// by a type never seen to read while drawn, which nothing tracks (see
+    /// ``readingTypes``) — goes on being served its old answer until something
+    /// clears it. Forgetting it first is the only way to ask it
     /// again: a bumped ``RenderContext/measureGeneration`` is not one, because
     /// what is measured under the bump is stored under the bump, and the next
     /// bump of the same generation is served it. Nor is a lookup that misses on
@@ -515,6 +519,16 @@ public final class RenderCache: @unchecked Sendable {
     /// What the cache keeps to re-check a row after a parent's write rather
     /// than drop it — see ``RevalidationState``.
     package let revalidation = RevalidationState()
+
+    /// The view types whose bodies have armed an observation registration
+    /// under this cache — whose bodies are therefore observed when measured
+    /// too. See ``ReadingTypes`` and ``noteReads(_:)``.
+    package let readingTypes = ReadingTypes()
+
+    /// Whether a type learned to read since the last pass asks for the whole
+    /// cache to be dropped at the next — see ``noteReads(_:)``. Main actor
+    /// only: set from the walk, read by ``beginRenderPass()``.
+    private var clearsForNewReadingType = false
 
     /// Counts the observation registrations bodies drawn with this cache arm,
     /// fire and drop, by kind of reader, when a harness or a test installs one;
@@ -1186,10 +1200,11 @@ extension RenderCache {
         let widthMoved = measuredUnderWidthGeneration != TerminalWidthTraits.generation
         let coloursMoved = renderedUnderTerminalColorsGeneration != TerminalColors.generation
         let now = RenderedUnder.now
-        if widthMoved || coloursMoved || now != renderedUnder {
+        if widthMoved || coloursMoved || now != renderedUnder || clearsForNewReadingType {
             measuredUnderWidthGeneration = TerminalWidthTraits.generation
             renderedUnderTerminalColorsGeneration = TerminalColors.generation
             renderedUnder = now
+            clearsForNewReadingType = false
             clearAll()
         }
 
@@ -1211,6 +1226,26 @@ extension RenderCache {
         childViewScratch.endOfPass(&childViewEntries)
         measureHits = 0
         measureMisses = 0
+    }
+
+    /// Records that a body of `reader` armed an observation registration under
+    /// this cache — called where the scope's `onChange` is evaluated, which is
+    /// only when it read something.
+    ///
+    /// A type seen to read for the first time asks for the whole cache to be
+    /// dropped at the next pass. From here on its bodies are observed when
+    /// measured (`measureCompositeBody`); a result the cache kept from a
+    /// measure made before — the hug of a `List` whose rows are of this type,
+    /// the picture of an `.equatable()` view whose `ViewThatFits` measured one
+    /// — was taken with those reads untracked, and dropping it once is how
+    /// every kept result from then on is one they were observed for. At the
+    /// next pass, not now: the walk that learned it is still drawing, and a
+    /// memo around it would store what it drew over the clear. One cold frame
+    /// per reading type per cache: the first time an app draws a view of that
+    /// type that reads.
+    @inline(__always)
+    package func noteReads(_ reader: Any.Type) {
+        if readingTypes.learn(reader) { clearsForNewReadingType = true }
     }
 
     /// Applies the invalidations enqueued by ``invalidateRender(for:)`` since the

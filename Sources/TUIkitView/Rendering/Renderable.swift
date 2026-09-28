@@ -288,7 +288,8 @@ package func evaluateCompositeBody<V: View>(of view: V, context: RenderContext) 
         of: view, identity: context.identity, storage: context.stateStorage!)
     let body = withObservationTracking(
         { view.body },
-        onChange: observedChange(of: context, kind: context.isMeasuring ? .bodyMeasure : .bodyRender))
+        onChange: observedChange(
+            of: context, kind: context.isMeasuring ? .bodyMeasure : .bodyRender, reader: V.self))
     context.stateStorage!.markActive(context.identity)
     return body
 }
@@ -305,6 +306,13 @@ package func evaluateCompositeBody<V: View>(of view: V, context: RenderContext) 
 /// asking a view of the app's which rows its body holds) is counted as
 /// measured, whichever site evaluated it.
 ///
+/// Arming is also how the cache learns that `reader`'s bodies read: the first
+/// scope a type arms makes it known (``RenderCache/readingTypes``), and from
+/// then on a body of that type evaluated to measure is observed too
+/// (`measureCompositeBody`). A result kept from a measure made before that —
+/// a hugging `List`'s width, a size in the cross-frame table — was measured
+/// untracked, so learning a type clears the cache once, at the next pass.
+///
 /// The closure holds the cache's link — see
 /// ``reportObservedChange(at:to:fallback:)`` — and, when a census is
 /// installed, its ``ObservationCensus/Registration`` strongly: the closure is
@@ -315,9 +323,13 @@ package func evaluateCompositeBody<V: View>(of view: V, context: RenderContext) 
 /// cache has gone still counts. With no census it is `nil`: one pointer, as
 /// the census reference it replaces was.
 @inline(__always)
-package func observedChange(of context: RenderContext, kind: ObservationCensus.Kind) -> @Sendable () -> Void {
-    let registration = context.renderCache?.observationCensus?.arm(kind)
-    return { [link = context.renderCache?.link, identity = context.identity] in
+package func observedChange(
+    of context: RenderContext, kind: ObservationCensus.Kind, reader: Any.Type
+) -> @Sendable () -> Void {
+    let cache = context.renderCache
+    cache?.noteReads(reader)
+    let registration = cache?.observationCensus?.arm(kind)
+    return { [link = cache?.link, identity = context.identity] in
         registration?.fire()
         reportObservedChange(at: identity, to: link)
     }

@@ -460,9 +460,10 @@ extension _VStackCore {
     /// The row is MEASURED, not remembered: its own memoized sizes are
     /// forgotten first (``RenderCache/forgetSizes(of:measureGeneration:)``).
     /// That memo compares only the row's element, and survives any clear that
-    /// is not about the row — a row measured but never drawn reads its
-    /// `@Observable`s untracked, so a write to one clears the rows that WERE
-    /// drawn and not this one. Served from it, the challenge would certify the
+    /// is not about the row — a row measured but never drawn, of a type no
+    /// drawn body has shown to read, reads its `@Observable`s untracked
+    /// (`RenderCache.readingTypes`), so a write to one clears the rows that
+    /// WERE drawn and not this one. Served from it, the challenge would certify the
     /// width it exists to catch; and the sizes it holds under other proposals
     /// are wrong the same way, which the walk that follows a fall must not be
     /// served. A memo deeper INSIDE the row — an `.equatable()` view whose
@@ -475,10 +476,12 @@ extension _VStackCore {
     /// (`RenderCache.retainSubtree(_:)`), and a frame that serves the stack
     /// that way does not measure it. `ContentWidthFreshChallengeTests` fails
     /// the day that stops being true. What is left sits upstream of every
-    /// memo: a row measured but never drawn reads its `@Observable`s
-    /// untracked, so a change to one moves nothing — no clear, so no
-    /// challenge — and the extent learns it when the row is drawn, or when the
-    /// next write challenges the record.
+    /// memo: a row measured but never drawn, of a type never seen to read
+    /// while drawn, reads its `@Observable`s untracked, so a change to one
+    /// moves nothing — no clear, so no challenge — and the extent learns it
+    /// when the row is drawn, or when the next write challenges the record. A
+    /// row of a type known to read is observed as it is measured, and its
+    /// write clears as a drawn row's does.
     ///
     /// A measure that read something that moves on its own — an animation in
     /// flight — still answers, but does not mark the record checked, so the next
