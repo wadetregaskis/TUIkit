@@ -35,6 +35,11 @@ Until 6.4.0 shipped (2026-09-14) its row was `release/6.4.x` snapshots and
 nightlies, advisory; the release images replaced them, and they block. The
 next release branch's nightlies take that place when it is cut.
 
+Every released lane takes the newest patch of its line — an Xcode major, a
+`swift:6.x` image tag, swift.org's newest 6.4.x — so a patch toolchain arrives
+without a workflow edit. It can also break the build without a TUIkit change;
+that is accepted, as the price of never testing a stale toolchain.
+
 WebAssembly is built by its own lane, on a pinned 6.3.3 container plus the
 matching Swift SDK — pinned because a Swift SDK loads only under the toolchain
 version it was built for, and still 6.3.3 because that is the only version the
