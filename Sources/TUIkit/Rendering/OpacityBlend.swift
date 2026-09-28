@@ -808,7 +808,7 @@ extension Color {
         // while there is none, as `foregroundCodes` spells it.
         case .terminalBackground:
             guard let paper = rgbComponents else { return .named(Int(ANSIColor.defaultForegroundCode)) }
-            return Color.rgb(paper.red, paper.green, paper.blue).sgrForeground(depth: depth)
+            return Self.rgb(paper.red, paper.green, paper.blue).sgrForeground(depth: depth)
         case .semantic:
             fatalError(
                 "Semantic color must be resolved before rendering. Call Color.resolve(with:) first."
@@ -837,7 +837,7 @@ extension Color {
         // while there is none, as `backgroundCodes` spells it.
         case .terminalForeground:
             guard let ink = rgbComponents else { return .named(Int(ANSIColor.defaultBackgroundCode)) }
-            return Color.rgb(ink.red, ink.green, ink.blue).sgrBackground(depth: depth)
+            return Self.rgb(ink.red, ink.green, ink.blue).sgrBackground(depth: depth)
         case .semantic:
             fatalError(
                 "Semantic color must be resolved before rendering. Call Color.resolve(with:) first."

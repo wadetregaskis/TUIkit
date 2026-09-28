@@ -99,7 +99,7 @@ extension Color {
         var ramp: [Color] = []
         var seen: [Color] = []
         for step in 0...max(1, samples) {
-            let candidate = Color.lerp(dim, bright, phase: Double(step) / Double(max(1, samples)))
+            let candidate = Self.lerp(dim, bright, phase: Double(step) / Double(max(1, samples)))
             let rendered = candidate.rendered(at: depth)
             // Skipped if this colour has been shown ALREADY, not merely if it
             // repeats the previous step. A continuous lerp does not have to

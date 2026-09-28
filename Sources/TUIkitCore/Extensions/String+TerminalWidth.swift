@@ -640,7 +640,7 @@ extension Unicode.Scalar {
         // a terminal implementing the graphics protocol paints a piece of a
         // picture there instead, one cell wide. See
         // ``Unicode/Scalar/terminalImagePlaceholder``.
-        if scalarValue == Unicode.Scalar.terminalImagePlaceholder.value { return 1 }
+        if scalarValue == Self.terminalImagePlaceholder.value { return 1 }
 
         return 1
     }

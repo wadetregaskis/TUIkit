@@ -38,9 +38,9 @@ extension Color {
         let inkRGB = self.inkRGB
         for rung in hoverRungs {
             if let inkRGB, let pageRGB, let rungRGB = rung.inkRGB {
-                let from = Color.rgb(inkRGB.red, inkRGB.green, inkRGB.blue)
-                let to = Color.rgb(rungRGB.red, rungRGB.green, rungRGB.blue)
-                let ground = Color.rgb(pageRGB.red, pageRGB.green, pageRGB.blue)
+                let from = Self.rgb(inkRGB.red, inkRGB.green, inkRGB.blue)
+                let to = Self.rgb(rungRGB.red, rungRGB.green, rungRGB.blue)
+                let ground = Self.rgb(pageRGB.red, pageRGB.green, pageRGB.blue)
                 guard to.downsampledToPalette256() != from.downsampledToPalette256(),
                     to.contrastRatio(against: ground) >= from.contrastRatio(against: ground)
                 else { continue }

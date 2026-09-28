@@ -86,7 +86,7 @@ extension Color {
         // slot gets its own default.
         case .terminalBackground:
             guard let paper = rgbComponents else { return ["\(ANSIColor.defaultForegroundCode)"] }
-            return Color.rgb(paper.red, paper.green, paper.blue).foregroundCodes(depth: depth)
+            return Self.rgb(paper.red, paper.green, paper.blue).foregroundCodes(depth: depth)
         case .semantic:
             fatalError(
                 "Semantic color must be resolved before rendering. Call Color.resolve(with:) first."
@@ -149,7 +149,7 @@ extension Color {
         // own default while there is none.
         case .terminalForeground:
             guard let ink = rgbComponents else { return ["\(ANSIColor.defaultBackgroundCode)"] }
-            return Color.rgb(ink.red, ink.green, ink.blue).backgroundCodes(depth: depth)
+            return Self.rgb(ink.red, ink.green, ink.blue).backgroundCodes(depth: depth)
         case .semantic:
             fatalError(
                 "Semantic color must be resolved before rendering. Call Color.resolve(with:) first."

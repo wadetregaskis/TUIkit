@@ -1173,7 +1173,7 @@ extension RenderContext {
     mutating func leaveScrollOrigin() {
         if environment.scrollContentWindow != nil { environment.scrollContentWindow = nil }
         if scrollContentOriginDepth != 0 {
-            scrollContentOriginDepth = RenderContext.belowScrollContentOrigin
+            scrollContentOriginDepth = Self.belowScrollContentOrigin
         }
     }
 }

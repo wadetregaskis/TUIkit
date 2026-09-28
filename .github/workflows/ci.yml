@@ -71,7 +71,7 @@ concurrency:
 env:
   # Kept in step with the version developers run locally; bumping it is a
   # deliberate change, because a new SwiftLint release can add violations.
-  SWIFTLINT_VERSION: "0.63.2"
+  SWIFTLINT_VERSION: "0.65.1"
 
 jobs:
   # ── Lint ───────────────────────────────────────────────────────────────────

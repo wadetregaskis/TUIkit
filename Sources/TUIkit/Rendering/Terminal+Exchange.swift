@@ -59,7 +59,7 @@ extension Terminal {
             // ``Terminal/waitForInput(on:until:)``.
             let ready =
                 exchangeTransport?.waitForInput(deadline)
-                ?? Terminal.waitForInput(until: deadline)
+                ?? Self.waitForInput(until: deadline)
             guard ready else { break }
             let read = chunk.withUnsafeMutableBufferPointer { readSource($0) }
             guard read > 0 else { break }

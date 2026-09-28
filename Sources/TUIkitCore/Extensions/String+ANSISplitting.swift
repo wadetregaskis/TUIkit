@@ -113,7 +113,7 @@ extension String {
         func scan(_ bytes: UnsafeBufferPointer<UInt8>) -> Bool {
             var sawESC = false
             for byte in bytes {
-                if sawESC, String.isStringFamilyIntroducer(UInt32(byte)) { return true }
+                if sawESC, Self.isStringFamilyIntroducer(UInt32(byte)) { return true }
                 sawESC = byte == 0x1B
             }
             return false
@@ -232,10 +232,10 @@ extension String {
             case .sawESC:
                 // A string-family payload, or an nF escape, ends the byte
                 // walk's competence — see the note above.
-                if String.isStringFamilyIntroducer(value) || (0x20...0x2F).contains(value) {
+                if Self.isStringFamilyIntroducer(value) || (0x20...0x2F).contains(value) {
                     return nil
                 }
-                let seen = String.escapeIntroducerScan(on: value)
+                let seen = Self.escapeIntroducerScan(on: value)
                 state = seen.state
                 if seen.visible {
                     if width == visibleCount { return (prefixBytes(offset), width) }
@@ -243,8 +243,8 @@ extension String {
                 }
 
             case .csi:
-                if String.isCSIBodyByte(value) { break }  // parameter or intermediate
-                if String.isCSIFinalByte(value) {
+                if Self.isCSIBodyByte(value) { break }  // parameter or intermediate
+                if Self.isCSIFinalByte(value) {
                     state = .normal  // introducer complete, terminator consumed
                 } else if byte == 0x1B {
                     state = .sawESC  // ESC interrupts a malformed CSI

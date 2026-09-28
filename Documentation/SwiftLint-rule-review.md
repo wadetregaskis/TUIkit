@@ -1,6 +1,9 @@
 # SwiftLint: what we enforce, and every optional rule we don't
 
-**Reviewed 2026-08-25 against SwiftLint 0.63.2** (the CI-pinned version), by
+**CI pins SwiftLint 0.65.1 since 2026-09-28.** The optional rules that 0.64 and 0.65 added
+have not been reviewed here yet; a follow-up adds them to the tables below.
+
+**Reviewed 2026-08-25 against SwiftLint 0.63.2** (then the CI-pinned version), by
 rolling each existing exception back one at a time and by measuring every
 opt-in rule against the whole tree. Counts below are real: each rule was run
 over `Sources` + `Tests` (1,094 files) and the violations counted, so

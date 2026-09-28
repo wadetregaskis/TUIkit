@@ -207,12 +207,12 @@ extension String {
                 // the previous glyph wherever they sit relative to styling.
                 var fusedContent = ""
                 if let last = sequence.last, last.unicodeScalars.count > 1,
-                    let final = last.unicodeScalars.first?.value, String.isCSIFinalByte(final)
+                    let final = last.unicodeScalars.first?.value, Self.isCSIFinalByte(final)
                 {
                     let scalars = last.unicodeScalars
-                    fusedContent = String(String.UnicodeScalarView(scalars.dropFirst()))
+                    fusedContent = String(Self.UnicodeScalarView(scalars.dropFirst()))
                     sequence = String(sequence.dropLast())
-                        + String(String.UnicodeScalarView(scalars.prefix(1)))
+                        + String(Self.UnicodeScalarView(scalars.prefix(1)))
                 }
                 defer {
                     if !fusedContent.isEmpty {
@@ -363,7 +363,7 @@ extension String {
         // reach the reconciler one at a time, so a pending `ESC[…m` gets
         // emitted INSIDE the URI, and both the styling and the link are lost.
         if let scalar = self[index].unicodeScalars.first, self[index].unicodeScalars.count == 1,
-            String.isStringFamilyIntroducer(scalar.value)
+            Self.isStringFamilyIntroducer(scalar.value)
         {
             index = self.index(after: index)
             while index < endIndex {
@@ -391,7 +391,7 @@ extension String {
             // to the next letter swallows the following escape — which, when
             // that one ends in `m`, turns `ESC[1@ ESC[0m` into one "SGR" and
             // merges it into a corrupt parameter list.
-            if let value = character.unicodeScalars.first?.value, String.isCSIFinalByte(value) {
+            if let value = character.unicodeScalars.first?.value, Self.isCSIFinalByte(value) {
                 return index
             }
         }

@@ -162,7 +162,7 @@ extension FrameBuffer {
                 // The LAYER channel is the one that cycles; a colour's alpha does not
                 // animate itself (an animated one is a fresh region per frame through
                 // the ordinary render path), so the other two ride along unchanged.
-                return FrameBuffer.CellAlpha(
+                return Self.CellAlpha(
                     layer: values[step % values.count], ink: region.inkOpacity,
                     field: region.fieldOpacity)
             }

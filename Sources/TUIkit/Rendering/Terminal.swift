@@ -812,7 +812,7 @@ extension Terminal {
         guard !frameBuffer.isEmpty else { return }
         frameBuffer.withUnsafeBufferPointer { buffer in
             guard let baseAddress = buffer.baseAddress else { return }
-            Terminal.writeAll(baseAddress, buffer.count)
+            Self.writeAll(baseAddress, buffer.count)
         }
         frameBuffer.removeAll(keepingCapacity: true)
     }
@@ -827,7 +827,7 @@ extension Terminal {
             let count = buffer.count - 1
             guard count >= 1, let baseAddress = buffer.baseAddress else { return }
             baseAddress.withMemoryRebound(to: UInt8.self, capacity: count) { pointer in
-                Terminal.writeAll(pointer, count)
+                Self.writeAll(pointer, count)
             }
         }
     }

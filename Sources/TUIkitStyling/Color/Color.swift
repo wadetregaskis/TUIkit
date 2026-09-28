@@ -495,7 +495,7 @@ extension Color {
             resolved = token.resolve(with: palette).composingAlpha(of: resolved)
         }
         if case .semantic = resolved.value {
-            return Color.rgb(128, 128, 128).carryingAlpha(of: resolved)
+            return Self.rgb(128, 128, 128).carryingAlpha(of: resolved)
         }
         return resolved
     }
@@ -879,7 +879,7 @@ extension Color {
             l: start.l + (end.l - start.l) * clamped,
             a: start.a + (end.a - start.a) * clamped,
             b: start.b + (end.b - start.b) * clamped)
-        var result = Color.rgb(blended.red, blended.green, blended.blue)
+        var result = Self.rgb(blended.red, blended.green, blended.blue)
         // The fourth channel, interpolated linearly — alpha has no perceptual
         // space of its own, and OKLab has nothing to say about it. Both arms of
         // this function therefore agree about alpha even though they disagree
@@ -934,7 +934,7 @@ extension Color {
         case .mix(let start, let end): (fromRGB, toRGB) = (start, end)
         }
 
-        var result = Color.rgb(
+        var result = Self.rgb(
             mixedByte(fromRGB.red, toRGB.red, phase: clamped),
             mixedByte(fromRGB.green, toRGB.green, phase: clamped),
             mixedByte(fromRGB.blue, toRGB.blue, phase: clamped))

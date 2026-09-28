@@ -472,7 +472,7 @@ extension FrameBuffer {
                         // everything else, and the layer channel stays the outer
                         // region's because the payload has none.
                         let outer = perColumn[column]
-                        perColumn[column] = FrameBuffer.CellAlpha(
+                        perColumn[column] = Self.CellAlpha(
                             layer: outer?.layer ?? 1,
                             ink: (outer?.ink ?? 1) * span.ink,
                             field: (outer?.field ?? 1) * span.field)
@@ -494,7 +494,7 @@ extension FrameBuffer {
         of regions: [OpacityRegion], over columns: Range<Int>, row: Int,
         substituting: (OpacityRegion) -> FrameBuffer.CellAlpha?
     ) -> [FrameBuffer.CellAlpha?] {
-        var result = [FrameBuffer.CellAlpha?](repeating: nil, count: columns.count)
+        var result = [Self.CellAlpha?](repeating: nil, count: columns.count)
         for region in regions where region.spans(row: row) {
             guard let cell = substituting(region) else { continue }
             let from = max(columns.lowerBound, region.offsetX)

@@ -193,8 +193,8 @@ extension ASCIIConverter {
             for cellX in 0..<width {
                 let upper = image.pixel(at: cellX, 2 * cellY)
                 let lower = image.pixel(at: cellX, 2 * cellY + 1)
-                let topLit = ASCIIConverter.isMonoInk(upper, threshold: monoThreshold)
-                let bottomLit = ASCIIConverter.isMonoInk(lower, threshold: monoThreshold)
+                let topLit = Self.isMonoInk(upper, threshold: monoThreshold)
+                let bottomLit = Self.isMonoInk(lower, threshold: monoThreshold)
                 switch (topLit, bottomLit) {
                 case (false, false):
                     // Unlit is two different cells — a dark picture, and no picture — and

@@ -98,7 +98,7 @@ extension Gauge {
         @ViewBuilder minimumValueLabel: () -> BoundsLabel,
         @ViewBuilder maximumValueLabel: () -> BoundsLabel
     ) {
-        self.fraction = Gauge.normalized(value: value, in: bounds)
+        self.fraction = Self.normalized(value: value, in: bounds)
         self.label = label()
         self.currentValueLabel = currentValueLabel()
         self.minimumValueLabel = minimumValueLabel()
@@ -120,7 +120,7 @@ extension Gauge where BoundsLabel == EmptyView {
         @ViewBuilder label: () -> Label,
         @ViewBuilder currentValueLabel: () -> CurrentValueLabel
     ) {
-        self.fraction = Gauge.normalized(value: value, in: bounds)
+        self.fraction = Self.normalized(value: value, in: bounds)
         self.label = label()
         self.currentValueLabel = currentValueLabel()
         self.minimumValueLabel = nil
@@ -140,7 +140,7 @@ extension Gauge where CurrentValueLabel == EmptyView, BoundsLabel == EmptyView {
         in bounds: ClosedRange<V> = 0...1,
         @ViewBuilder label: () -> Label
     ) {
-        self.fraction = Gauge.normalized(value: value, in: bounds)
+        self.fraction = Self.normalized(value: value, in: bounds)
         self.label = label()
         self.currentValueLabel = nil
         self.minimumValueLabel = nil

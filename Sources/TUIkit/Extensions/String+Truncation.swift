@@ -73,7 +73,7 @@ extension String {
         if let visible = measured, visible <= width, !forceEllipsis { return self }
         guard width >= 1 else { return "" }
 
-        let ellipsis = String.truncationEllipsis
+        let ellipsis = Self.truncationEllipsis
 
         // Already fits, but a continuation marker is required: append the
         // ellipsis if there is a spare cell, otherwise fall through and

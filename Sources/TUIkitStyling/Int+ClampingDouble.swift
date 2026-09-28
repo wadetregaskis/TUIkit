@@ -26,11 +26,11 @@ extension Int {
     public init(clamping value: Double) {
         if value.isNaN {
             self = 0
-        } else if value >= Double(Int.max) {
+        } else if value >= Double(Self.max) {
             // `Double(Int.max)` rounds UP to 2^63, one past the largest `Int`,
             // so `>=` is exactly the set `Int(_:)` rejects on this side.
             self = .max
-        } else if value <= Double(Int.min) {
+        } else if value <= Double(Self.min) {
             self = .min
         } else {
             self = Int(value)

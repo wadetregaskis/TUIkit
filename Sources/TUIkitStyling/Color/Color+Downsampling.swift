@@ -30,7 +30,7 @@ extension Color {
             return self
         case .rgb(let red, let green, let blue):
             let index = Self.nearestPalette256Index(red: red, green: green, blue: blue)
-            return Color.palette256(index).carryingAlpha(of: self)
+            return Self.palette256(index).carryingAlpha(of: self)
         case .semantic:
             return self
         }
@@ -209,7 +209,7 @@ extension Color {
                 // translucent gradient rendered differently per entry at 256-colour
                 // depth and identically at truecolor — silently, since an opaque
                 // colour never trips the emitter's assertion.
-                entries[index] = Color.palette256(
+                entries[index] = Self.palette256(
                     nearestPalette256Index(
                         red: rgb.red, green: rgb.green, blue: rgb.blue, among: survivors)
                 ).carryingAlpha(of: sampled[index])
@@ -608,7 +608,7 @@ extension Color {
     /// answer depends on them, and a memo would have to be keyed on them too.
     fileprivate static func rgbToNearestANSI16(red: UInt8, green: UInt8, blue: UInt8) -> Color {
         let reported = TerminalColors.current.slots
-        var bestColor = Color.ansi(.white)
+        var bestColor = Self.ansi(.white)
         var bestDistance = Int.max
 
         // Deliberate linear scan: n=16 is trivially cheap and beats anything cleverer — don't "optimise".
