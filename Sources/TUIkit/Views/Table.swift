@@ -3445,14 +3445,20 @@ where Value.ID: Hashable {
         let existingTracker = context.environment.volatileReadTracker
         let tracker = existingTracker ?? VolatileReadTracker()
         let unsafeBefore = tracker.cacheUnsafeCount
+        // What the scan observed lives as long as the width it found is kept
+        // (see `ObservationLeases`). Cells are `String` closures, which no scope
+        // observes, so today the lease is always `nil`; a column that measured
+        // views would keep what they read.
+        let leaseMark = context.renderCache?.leases.beginComputation()
         let fitted = scanForFitWidth(of: column, cappedAt: cap, context: context)
+        let lease = context.renderCache?.leases.endComputation(leaseMark)
 
         if let memo, tracker.cacheUnsafeCount == unsafeBefore,
             !context.environment.hasUncomparableEnvironmentValue
         {
             memo.cache.storeSize(
                 key: key, identity: context.identity, view: memo.signature,
-                size: ViewSize.fixed(fitted, 0))
+                size: ViewSize.fixed(fitted, 0), lease: lease)
         }
         return fitted
     }

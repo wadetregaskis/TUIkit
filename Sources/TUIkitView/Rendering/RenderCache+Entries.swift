@@ -95,6 +95,12 @@ extension RenderCache {
         /// thing then — see ``showsItsAnimations(asAt:)``.
         package let drawnAt: AnimationInstant?
 
+        /// The lease of the computation that drew `buffer`: what keeps the
+        /// observation scopes that computation armed alive while the entry is
+        /// kept (see ``ObservationLeases``). `nil` when nothing beneath it
+        /// read.
+        package let lease: ObservationLease?
+
         /// Whether the buffer shows each of its runs as the run would show at
         /// `instant` — trivially so for an entry with no runs, or when either
         /// instant is unknown, which is how an entry behaved before it kept one.
@@ -124,7 +130,7 @@ extension RenderCache {
             viewSnapshot: Any, buffer: FrameBuffer, contextWidth: Int, contextHeight: Int,
             gradientFrame: GradientFrame?, surfaceBackground: Color?,
             effects: [EffectJournal.Entry], effectScope: EffectScope,
-            drawnAt: AnimationInstant? = nil
+            drawnAt: AnimationInstant? = nil, lease: ObservationLease? = nil
         ) {
             self.identity = identity
             self.viewSnapshot = viewSnapshot
@@ -136,6 +142,7 @@ extension RenderCache {
             self.effects = effects
             self.effectScope = effectScope
             self.drawnAt = buffer.animatedCells.isEmpty ? nil : drawnAt
+            self.lease = lease
         }
     }
 }

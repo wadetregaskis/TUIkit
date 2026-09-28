@@ -286,10 +286,18 @@ package func evaluateCompositeBody<V: View>(of view: V, context: RenderContext) 
     resolveEnvironmentProperties(of: view, in: context.environment)
     bindStateProperties(
         of: view, identity: context.identity, storage: context.stateStorage!)
+    // Read inside the scope, so the lease the scope is armed under can
+    // cancel it: `nil` — nothing extra read, and a scope that reads nothing
+    // arms nothing — until the type is known to read and leases are on.
+    let sentinel = context.renderCache?.scopeSentinel(forReader: V.self, at: context.identity)
     let body = withObservationTracking(
-        { view.body },
+        {
+            sentinel?.touch()
+            return view.body
+        },
         onChange: observedChange(
-            of: context, kind: context.isMeasuring ? .bodyMeasure : .bodyRender, reader: V.self))
+            of: context, kind: context.isMeasuring ? .bodyMeasure : .bodyRender, reader: V.self,
+            sentinel: sentinel))
     context.stateStorage!.markActive(context.identity)
     return body
 }
@@ -322,14 +330,29 @@ package func evaluateCompositeBody<V: View>(of view: V, context: RenderContext) 
 /// (a few counters) alive too, so a registration that fires or goes after its
 /// cache has gone still counts. With no census it is `nil`: one pointer, as
 /// the census reference it replaces was.
+///
+/// `sentinel` is what the scope read besides the body's own reads, when its
+/// lease can cancel it (``RenderCache/scopeSentinel(forReader:at:)``). A
+/// closure that finds it retired was cancelled, not changed: it counts itself
+/// cancelled and reports nothing. The check is the whole of what a
+/// retirement runs, on whichever thread lets the lease go; and it makes the
+/// closure idempotent, since a retirement racing a write on another thread
+/// can run it twice. A scope armed with no sentinel while scopes can be
+/// cancelled is counted unleased: its reader was not known to read, and this
+/// arm is what teaches the cache that it does.
 @inline(__always)
 package func observedChange(
-    of context: RenderContext, kind: ObservationCensus.Kind, reader: Any.Type
+    of context: RenderContext, kind: ObservationCensus.Kind, reader: Any.Type, sentinel: ScopeSentinel?
 ) -> @Sendable () -> Void {
     let cache = context.renderCache
-    cache?.noteReads(reader)
-    let registration = cache?.observationCensus?.arm(kind)
+    if sentinel == nil { cache?.noteReads(reader) }
+    let registration = cache?.observationCensus?.arm(
+        kind, unleased: sentinel == nil && cache?.leases.retirement != .never)
     return { [link = cache?.link, identity = context.identity] in
+        if let sentinel, sentinel.isRetired {
+            registration?.cancel()
+            return
+        }
         registration?.fire()
         reportObservedChange(at: identity, to: link)
     }

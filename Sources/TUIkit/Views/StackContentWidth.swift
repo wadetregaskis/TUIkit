@@ -203,6 +203,30 @@ struct ContentWidthRecord {
     /// around the stack refuse what it answers, as they refuse the timeline.
     var lapsesAt: Date?
 
+    /// The leases of the walks that measured the rows this maximum was taken
+    /// over — the first walk and every extension, one each — and of the last
+    /// challenge, which replaces the one before.
+    ///
+    /// The record is kept across frames outside the render cache, and learns
+    /// that a row moved only from a size clear (``verifiedGeneration``), which
+    /// a row's observed change makes. So the scopes those measures armed must
+    /// live as long as the record does: a row off the window, measured by the
+    /// walk and never drawn, is watched by nothing else once the frame that
+    /// walked it has gone (see `ObservationLeases`). A flat list rather than
+    /// a lease holding the one before, so a log extended every frame builds no
+    /// chain as long as its history for a release to recurse down.
+    var walkLeases: [ObservationLease] = []
+    var challengeLease: ObservationLease?
+
+    /// What this record's answer depends on, held by the computation it is
+    /// answering: whatever keeps the answer keeps the scopes behind it.
+    @MainActor
+    func use(in context: RenderContext) {
+        guard let leases = context.renderCache?.leases else { return }
+        for lease in walkLeases { leases.use(lease) }
+        leases.use(challengeLease)
+    }
+
     /// Whether this record was taken under the same world as `context`.
     func isCurrent(in context: RenderContext) -> Bool {
         widthGeneration == TerminalWidthTraits.generation
@@ -271,6 +295,8 @@ extension _VStackCore {
         // And when the prefix lapses, which an extension's own rows can only
         // bring forward.
         var inheritedLapse: Date?
+        // And the walks' leases, which an extension keeps beside its own.
+        var inheritedLeases: [ObservationLease] = []
         if var record = state.contentWidth, record.isCurrent(in: context) {
             let whole = record.rows == signature && record.covered == count
             // Challenged only once it is known to be USABLE: a record for other
@@ -287,6 +313,7 @@ extension _VStackCore {
                 let drawn = whole ? state.drawnOrdinals : 0..<0
                 if challenge(&record, children: children, drawn: drawn, context: context) {
                     state.contentWidth = record
+                    record.use(in: context)
                     // Whole or extended, the answer is the record's too, and
                     // what measures above the stack must not keep it past the
                     // instant the record lapses at.
@@ -304,6 +331,7 @@ extension _VStackCore {
                     isFlexible = record.isFlexible
                     inheritedVerification = record.verifiedGeneration
                     inheritedLapse = record.lapsesAt
+                    inheritedLeases = record.walkLeases + [record.challengeLease].compactMap { $0 }
                 } else {
                     // Falsified, so gone: a record known to be wrong answers
                     // nothing, and kept it would only be challenged again.
@@ -328,6 +356,7 @@ extension _VStackCore {
         // is the ceiling, and new rows measured under it could only be filed
         // beside a maximum measured under a higher one.
         var clamped = widest >= widthLimit
+        let leaseMark = context.renderCache?.leases.beginComputation()
         while !clamped, walked < count {
             let ordinal = walked
             let size = children[ordinal].measure(proposal: proposal, context: measureContext)
@@ -357,6 +386,8 @@ extension _VStackCore {
             }
         }
 
+        let walkLease = context.renderCache?.leases.endComputation(leaseMark)
+
         // A partial maximum must not be filed as if it were the whole one, and
         // a subtree that read a per-frame value or carries an environment that
         // cannot be compared must not be filed at all. One whose rows read
@@ -374,7 +405,8 @@ extension _VStackCore {
                 clearGeneration: context.renderCache?.clearGeneration ?? 0,
                 verifiedGeneration: inheritedVerification
                     ?? (context.renderCache?.sizeClearGeneration ?? 0),
-                lapsesAt: SizeHold.earlier(inheritedLapse, hold.lapsesAt))
+                lapsesAt: SizeHold.earlier(inheritedLapse, hold.lapsesAt),
+                walkLeases: inheritedLeases + [walkLease].compactMap { $0 })
         }
         return answer(widest: widest, isFlexible: isFlexible, limit: widthLimit)
     }
@@ -534,6 +566,14 @@ extension _VStackCore {
         let (measureContext, tracker) = rowWidthContext(context, width: record.measuredAt)
         let mark = tracker.beginScope()
         defer { tracker.endScope(mark) }
+        // What this challenge measures lives under a lease of its own, which
+        // the record keeps once the challenge answers — replacing the last
+        // challenge's — and which is let go of, with the record, when it falls.
+        let leaseMark = context.renderCache?.leases.beginComputation()
+        var leaseTaken = false
+        defer {
+            if !leaseTaken { _ = context.renderCache?.leases.endComputation(leaseMark) }
+        }
         // Asked as the walk asks — unproposed, under the mark — or the answers
         // are not comparable with the record's.
         let unproposed = ProposedSize(width: nil, height: nil)
@@ -581,6 +621,8 @@ extension _VStackCore {
         // Narrower than the bound on the rows NOT measured: one of them may be
         // the widest now, and only a walk can say which.
         guard widestOrdinal == nil || widest >= record.runnerUp else { return false }
+        leaseTaken = true
+        record.challengeLease = context.renderCache?.leases.endComputation(leaseMark)
         record.widest = widest
         record.widestOrdinal = widestOrdinal
         record.runnerUp = runnerUp

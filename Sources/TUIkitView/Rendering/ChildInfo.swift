@@ -459,6 +459,15 @@ private func memoizedMeasure<V: View>(
         // declares a render side effect or reads a per-frame-volatile value is
         // measured, but not remembered.
         let unsafeBefore = tracker.cacheUnsafeCount
+        // A computation of its own, whose lease the entry records and a hit
+        // hands on: a size measured here and served later this pass into a
+        // computation whose result is kept — a hug's walk, a memo's size —
+        // keeps the scopes this measure armed. Its OWN lease, never the one
+        // enclosing it: that may be the frame's, which a kept result must never
+        // hold (it holds every lease the frame used, and each frame would hold
+        // the one before), or an enclosing computation's, which holds this one
+        // (see `ObservationLeases`).
+        let leaseMark = cache.leases.beginComputation()
         let size: ViewSize
         if remembersDescendants {
             size = measureChildUncached(view, proposal: proposal, context: context)
@@ -478,13 +487,15 @@ private func memoizedMeasure<V: View>(
             cache.isProbing = wasProbing
             cache.volatileReadTracker = tracker
         }
+        let lease = cache.leases.endComputation(leaseMark)
         if tracker.cacheUnsafeCount == unsafeBefore {
             cache.storeMeasure(
                 key: key,
                 proposalWidthWasSpecified: proposal.width != nil,
                 proposalHeight: proposal.height,
                 availableHeight: context.availableHeight,
-                size: size)
+                size: size,
+                lease: lease)
         }
         return size
     }
@@ -559,8 +570,11 @@ private func servedMeasure<V: View>(
     else { return nil }
     if RenderCache.verifiesMeasureMemo {
         // The fresh size, not the served one: a debugging aid the layout
-        // shows, as the render verifier draws its fresh render.
+        // shows, as the render verifier draws its fresh render. Observing
+        // nothing past the check (see `verifyServe`).
+        let checkMark = cache.leases.beginDetachedComputation()
         let fresh = measureChildUncached(view, proposal: proposal, context: context)
+        _ = cache.leases.endComputation(checkMark)
         if fresh != cached {
             cache.noteMeasureMemoMismatch(
                 viewType: String(describing: V.self), served: cached, fresh: fresh,
@@ -824,8 +838,13 @@ private func measureCompositeBody<V: View>(
     guard let cache = context.renderCache, cache.readingTypes.contains(V.self) else {
         return measureChild(view.body, proposal: proposal, context: childContext)
     }
+    let sentinel = cache.leases.isActive ? cache.leases.sentinel(at: context.identity) : nil
     let body = withObservationTracking(
-        { view.body }, onChange: observedChange(of: context, kind: .bodyMeasure, reader: V.self))
+        {
+            sentinel?.touch()
+            return view.body
+        },
+        onChange: observedChange(of: context, kind: .bodyMeasure, reader: V.self, sentinel: sentinel))
     return measureChild(body, proposal: proposal, context: childContext)
 }
 

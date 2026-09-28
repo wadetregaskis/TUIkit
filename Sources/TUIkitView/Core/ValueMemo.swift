@@ -177,7 +177,12 @@ func renderValueMemoized<Key: Equatable, Row>(
     let journal = cache.effectJournal
     let journalStart = journal.beginRecording()
 
+    // The scopes this render arms are kept alive by the entry it stores, for as
+    // long as that is kept — and, stored or not, by what encloses this memo
+    // (see `ObservationLeases`).
+    let leaseMark = cache.leases.beginComputation()
     let buffer = render(build(), renderContext)
+    let lease = cache.leases.endComputation(leaseMark)
 
     if RenderCache.isStorable(
         buffer: buffer, context: context,
@@ -190,7 +195,7 @@ func renderValueMemoized<Key: Equatable, Row>(
             contextWidth: context.availableWidth, contextHeight: context.availableHeight,
             gradientFrame: context.gradientFrame,
             surfaceBackground: context.environment.surfaceBackground,
-            recorded: (effects, effects.isEmpty ? .none : context.effectScope))
+            recorded: (effects, effects.isEmpty ? .none : context.effectScope, lease))
     }
     // Empties the journal when this was the outermost recording memo. An inner
     // one leaves its entries in place for the memo enclosing it.
@@ -255,6 +260,13 @@ private func replayEffects(_ effects: [EffectJournal.Entry], context: RenderCont
 /// served stale, and the report names it. It is not a way to make anything
 /// work — it re-renders every serve, which costs more than the cache saves,
 /// and every difference it draws, it also reports.
+///
+/// The fresh render observes nothing past the check: it runs in a detached
+/// computation (``ObservationLeases/beginDetachedComputation()``), whose scopes
+/// are cancelled as it ends. Observed under the frame, it would watch every
+/// reader the entry holds — including one whose lease a kept result forgot
+/// to hold — until the next frame, and a write in between would clear the
+/// entry the verifier exists to catch serving stale.
 @MainActor
 private func verifyServe(
     _ entry: RenderCache.CacheEntry, viewType: () -> Any.Type, context: RenderContext,
@@ -265,7 +277,9 @@ private func verifyServe(
     defer { journal.endRecording() }
     let tracker = context.environment.volatileReadTracker
     let unreplayableBefore = tracker?.unreplayableCount ?? 0
+    let checkMark = cache.leases.beginDetachedComputation()
     let fresh = render(context)
+    _ = cache.leases.endComputation(checkMark)
     if fresh.lines != entry.buffer.lines {
         cache.noteRenderMemoMismatch(
             viewType: String(describing: viewType()), served: entry.buffer,
@@ -298,8 +312,10 @@ private func verifyServe(
 /// The per-pass memo's serves were checked and these were not: a size served
 /// here was returned as it stood, so an entry that outlived what it measured
 /// could be caught only by the pixels it happened to move. On a throwaway
-/// tracker, so what the check reads cannot decide what the live pass stores.
-/// Out of line, to keep the serve itself small.
+/// tracker, so what the check reads cannot decide what the live pass stores;
+/// and in a detached observation computation, so it observes nothing past the
+/// check either (see `verifyServe`). Out of line, to keep the serve itself
+/// small.
 ///
 /// - Parameters:
 ///   - served: What the memo handed back.
@@ -314,7 +330,9 @@ package func verifyServedSize(
     _ served: ViewSize, label: @autoclosure () -> String, proposal: ProposedSize, context: RenderContext,
     measure: (RenderContext) -> ViewSize
 ) -> ViewSize {
+    let checkMark = context.renderCache?.leases.beginDetachedComputation()
     let fresh = context.withVolatileReadTracker(VolatileReadTracker()) { measure($0) }
+    _ = context.renderCache?.leases.endComputation(checkMark)
     guard fresh != served else { return fresh }
     context.renderCache?.noteMeasureMemoMismatch(
         viewType: "\(label()) (cross-frame)", served: served, fresh: fresh, proposal: proposal,
@@ -385,7 +403,11 @@ func measureValueMemoized<Key: Equatable, Row>(
         ? context.withEnvironment(context.environment.setting(\.volatileReadTracker, to: tracker))
         : context
     let unsafeBefore = tracker.cacheUnsafeCount
+    // The scopes this measure arms are kept alive by the size it stores — see
+    // the buffer half.
+    let leaseMark = cache.leases.beginComputation()
     let size = measure(build(), measureContext)
+    let lease = cache.leases.endComputation(leaseMark)
     // The uncomparable-environment clause. A non-Equatable environment value in
     // force cannot be seen by the key, so a change to it could never invalidate a
     // stored size. This half is why the two memos are now one: the clause was
@@ -395,7 +417,7 @@ func measureValueMemoized<Key: Equatable, Row>(
     if tracker.cacheUnsafeCount == unsafeBefore,
         !context.environment.hasUncomparableEnvironmentValue
     {
-        cache.storeSize(key: sizeKey, identity: context.identity, view: key, size: size)
+        cache.storeSize(key: sizeKey, identity: context.identity, view: key, size: size, lease: lease)
     }
     return size
 }

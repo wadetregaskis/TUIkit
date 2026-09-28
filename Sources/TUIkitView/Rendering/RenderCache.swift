@@ -150,11 +150,16 @@ public final class RenderCache: @unchecked Sendable {
         /// almost every entry, when nothing but this cache's own invalidation
         /// can move it.
         let lapsesAt: Date?
-        init(viewSnapshot: Any, size: ViewSize, identity: ViewIdentity, lapsesAt: Date?) {
+        /// The lease of the measure that found `size`: what keeps the
+        /// observation scopes that measure armed alive while the size is kept
+        /// (see ``ObservationLeases``). `nil` when nothing beneath it read.
+        let lease: ObservationLease?
+        init(viewSnapshot: Any, size: ViewSize, identity: ViewIdentity, lapsesAt: Date?, lease: ObservationLease?) {
             self.viewSnapshot = viewSnapshot
             self.size = size
             self.identity = identity
             self.lapsesAt = lapsesAt
+            self.lease = lease
         }
     }
 
@@ -256,7 +261,30 @@ public final class RenderCache: @unchecked Sendable {
         let proposalHeight: Int?
         let availableHeight: Int
         let size: ViewSize
+        /// Where the measure's lease sits in ``passLeases``, or `-1` for none.
+        /// An index rather than the lease so the entry stays trivially
+        /// copyable: every probe and store copies one, some fourteen thousand
+        /// times a `fanout` frame, and a reference in it would make each copy
+        /// a retain and a release.
+        let leaseIndex: Int32
     }
+
+    /// The leases of this pass's measures, indexed by
+    /// ``MeasureEntry/leaseIndex``: what a per-pass hit hands the computation
+    /// it serves, so that a size measured under one computation and served
+    /// into another that keeps it keeps the scopes the measure armed (see
+    /// ``ObservationLeases``).
+    ///
+    /// Let go of when the pass ENDS (``removeInactive()``), a slot at a time,
+    /// and emptied with the entries when the next begins. A computation that
+    /// used one holds it itself, and the frame holds those its own measures
+    /// made, so nothing kept needs the table past the pass. Held until the
+    /// next pass began, a measure's scopes outlived what they guard by the
+    /// whole gap between frames — and a memo verifier's fresh measure, whose
+    /// scopes must end with the check, stored its leases here and so watched
+    /// the reader it checked until the next frame, which is exactly the watch
+    /// a kept result that forgot its lease relies on.
+    private var passLeases: [ObservationLease?] = []
 
     /// Memoized `measureChild` results — see ``lookupMeasure`` / ``storeMeasure``.
     ///
@@ -530,6 +558,10 @@ public final class RenderCache: @unchecked Sendable {
     /// only: set from the walk, read by ``beginRenderPass()``.
     private var clearsForNewReadingType = false
 
+    /// The computations this cache's walks arm observation scopes under, and
+    /// when a scope may be cancelled — see ``ObservationLeases``.
+    package let leases = ObservationLeases()
+
     /// Counts the observation registrations bodies drawn with this cache arm,
     /// fire and drop, by kind of reader, when a harness or a test installs one;
     /// `nil` otherwise, which is the whole of its cost — see
@@ -703,6 +735,7 @@ extension RenderCache {
         }
         stats.hits += 1
         logDebug("HIT \(identity.path)")
+        leases.use(entry.lease)
         return entry
     }
 
@@ -776,15 +809,19 @@ extension RenderCache {
             identity: identity, view: view, buffer: buffer,
             contextWidth: contextWidth, contextHeight: contextHeight,
             gradientFrame: gradientFrame, surfaceBackground: surfaceBackground,
-            recorded: (effects: [], scope: .none))
+            recorded: (effects: [], scope: .none, lease: nil))
     }
 
     /// Stores a rendered buffer with the registrations to make again on a hit.
     ///
-    /// - Parameter recorded: The replayable registrations the render made into
-    ///   its own key channels, in order, and where they were made (`.none`
-    ///   when there are none). One parameter, as the pair is only ever
-    ///   meaningful together.
+    /// - Parameter recorded: What the render recorded besides its buffer: the
+    ///   replayable registrations it made into its own key channels, in order,
+    ///   and where they were made (`.none` when there are none); and the lease
+    ///   of the computation that drew it (``ObservationLeases/endComputation(_:)``),
+    ///   which the entry keeps so the observation scopes that computation
+    ///   armed live as long as the entry does — a store that keeps a result
+    ///   says what it keeps with it. One parameter, as what one render recorded
+    ///   is only ever meaningful together.
     package func store<V: Equatable>(
         identity: ViewIdentity,
         view: V,
@@ -793,7 +830,7 @@ extension RenderCache {
         contextHeight: Int,
         gradientFrame: GradientFrame?,
         surfaceBackground: Color?,
-        recorded: (effects: [EffectJournal.Entry], scope: EffectScope)
+        recorded: (effects: [EffectJournal.Entry], scope: EffectScope, lease: ObservationLease?)
     ) {
         stats.stores += 1
         let key =
@@ -809,7 +846,8 @@ extension RenderCache {
             surfaceBackground: surfaceBackground,
             effects: recorded.effects,
             effectScope: recorded.scope,
-            drawnAt: frameInstant
+            drawnAt: frameInstant,
+            lease: recorded.lease
         )
         logDebug("STORE \(identity.path)")
     }
@@ -897,17 +935,35 @@ extension RenderCache {
             return nil
         }
         stats.hits += 1
+        leases.use(entry.lease)
         return (entry.size, entry.lapsesAt)
     }
 
     /// Stores a memoized measurement — see ``lookupSize(key:view:)`` for who
     /// asks. `lapsingAt` is `SizeHold.lapsesAt`, for the stores that honour
     /// one; every other store keeps the size until the cache drops it.
+    ///
+    /// Holds no observation lease: for a size measured outside any computation
+    /// the cache's walks open. The kept sizes the framework measures are
+    /// stored with the lease of the measure that found them
+    /// (the package `storeSize(key:identity:view:size:lapsingAt:lease:)`).
     public func storeSize<V: Equatable>(
         key: SizeKey, identity: ViewIdentity, view: V, size: ViewSize, lapsingAt: Date? = nil
     ) {
+        storeSize(key: key, identity: identity, view: view, size: size, lapsingAt: lapsingAt, lease: nil)
+    }
+
+    /// Stores a memoized measurement with the lease of the measure that found
+    /// it (``ObservationLeases/endComputation(_:)``), which the entry keeps so
+    /// the scopes that measure armed live as long as the size does. No
+    /// default: a store that keeps a result must say what it keeps with it.
+    package func storeSize<V: Equatable>(
+        key: SizeKey, identity: ViewIdentity, view: V, size: ViewSize, lapsingAt: Date? = nil,
+        lease: ObservationLease?
+    ) {
         stats.stores += 1
-        sizeEntries[key] = SizeEntry(viewSnapshot: view, size: size, identity: identity, lapsesAt: lapsingAt)
+        sizeEntries[key] = SizeEntry(
+            viewSnapshot: view, size: size, identity: identity, lapsesAt: lapsingAt, lease: lease)
     }
 
     /// Looks up this pass's memoized `measureChild` result.
@@ -941,6 +997,7 @@ extension RenderCache {
         {
             measureHits += 1
             measureMemoTotals.hits += 1
+            if entry.leaseIndex >= 0 { leases.use(passLeases[Int(entry.leaseIndex)]) }
             return entry.size
         }
         measureMisses += 1
@@ -961,11 +1018,34 @@ extension RenderCache {
         availableHeight: Int,
         size: ViewSize
     ) {
+        storeMeasure(
+            key: key, proposalWidthWasSpecified: proposalWidthWasSpecified, proposalHeight: proposalHeight,
+            availableHeight: availableHeight, size: size, lease: nil)
+    }
+
+    /// ``storeMeasure(key:proposalWidthWasSpecified:proposalHeight:availableHeight:size:)``
+    /// with the lease of the measure that found `size` — the per-pass slot
+    /// `measureChild` opens around a miss — which a later hit this pass hands
+    /// to the computation it serves.
+    package func storeMeasure(
+        key: MeasureKey,
+        proposalWidthWasSpecified: Bool,
+        proposalHeight: Int?,
+        availableHeight: Int,
+        size: ViewSize,
+        lease: ObservationLease?
+    ) {
+        var leaseIndex: Int32 = -1
+        if let lease {
+            leaseIndex = Int32(truncatingIfNeeded: passLeases.count)
+            passLeases.append(lease)
+        }
         let entry = MeasureEntry(
             proposalWidthWasSpecified: proposalWidthWasSpecified,
             proposalHeight: proposalHeight,
             availableHeight: availableHeight,
-            size: size)
+            size: size,
+            leaseIndex: leaseIndex)
         // `updateValue` so the common case is ONE dictionary access: the key
         // carries a `ViewIdentity`, whose hashing and structural comparison are
         // the most expensive thing here, and a read-then-write to decide the
@@ -1063,6 +1143,7 @@ extension RenderCache {
         frameCounter &+= 1
         // The measure memo is this frame's scratch space and nothing more.
         measureScratch.endOfPass(&measureEntries)
+        passLeases.removeAll(keepingCapacity: true)
         childViewScratch.endOfPass(&childViewEntries)
         measureHits = 0
         measureMisses = 0
@@ -1085,7 +1166,20 @@ extension RenderCache {
     /// type that reads.
     @inline(__always)
     package func noteReads(_ reader: Any.Type) {
-        if readingTypes.learn(reader) { clearsForNewReadingType = true }
+        guard readingTypes.learn(reader) else { return }
+        clearsForNewReadingType = true
+        leases.noteReaderLearned()
+    }
+
+    /// The sentinel a scope a body of `reader` is about to arm at `identity`
+    /// must read — so that the lease it is armed under can cancel it — or
+    /// `nil`, when leases are off or the type is not known to read: a scope
+    /// that reads nothing must arm nothing, and reading a sentinel is
+    /// reading something. See ``ObservationLeases``.
+    @inline(__always)
+    package func scopeSentinel(forReader reader: Any.Type, at identity: ViewIdentity) -> ScopeSentinel? {
+        guard leases.isActive, readingTypes.contains(reader) else { return nil }
+        return leases.sentinel(at: identity)
     }
 
     /// Applies the invalidations enqueued by ``invalidateRender(for:)`` since the
@@ -1135,6 +1229,11 @@ extension RenderCache {
         lastPrune = (
             renderEntries: entries.count + staleKeys.count, sizeEntries: sizeEntries.count + staleSizeKeys.count,
             retainedChecks: retainedChecks, prunedRender: staleKeys.count, prunedSizes: staleSizeKeys.count)
+        // The frame just drawn is on screen, and the one before it lets go of
+        // what it observed — after the prune, so what the prune dropped is
+        // released with it.
+        for index in passLeases.indices { passLeases[index] = nil }
+        leases.endPass { retained.retains($0) }
         // Environment slots are pruned by pass number, not by `activeIdentities`
         // — only memoizing views mark themselves active, and an environment
         // modifier is not one, so an identity check would drop every slot on
@@ -1315,6 +1414,7 @@ extension RenderCache {
     public func reset() {
         entries.removeAll()
         sizeEntries.removeAll()
+        leases.reset()
         activeIdentities.removeAll()
         retainedSubtreeRoots.removeAll()
         appliedEnvironment.removeAll()

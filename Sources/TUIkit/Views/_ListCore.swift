@@ -566,7 +566,12 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
         let mark = tracker.beginScope()
         defer { tracker.endScope(mark) }
+        // The walk's observation scopes — every row's, measured under the
+        // hug's own context — live as long as the width they found is kept,
+        // however the rows are drawn meanwhile (see `ObservationLeases`).
+        let leaseMark = context.renderCache?.leases.beginComputation()
         let widest = walkForWidestRow(source)
+        let lease = context.renderCache?.leases.endComputation(leaseMark)
         // Kept until the clock next moves a row's timeline, when that is all
         // that stood in the way: refused, a list of "5 min ago" rows would walk
         // every row on every frame it hugged (`VolatileReadTracker.clockedReads`).
@@ -575,7 +580,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         {
             memo.cache.storeSize(
                 key: key, identity: context.identity, view: memo.signature, size: ViewSize.fixed(widest, 0),
-                lapsingAt: hold.lapsesAt)
+                lapsingAt: hold.lapsesAt, lease: lease)
         }
         return widest
     }
