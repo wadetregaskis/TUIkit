@@ -7,15 +7,30 @@ clear page to the terminal?
 and 11 (the default foreground and background), OSC 4 for the sixteen ANSI
 slots except under tmux, and `CSI 5n` as the fence. Whatever the terminal
 answers is published to `TerminalColors.current` before `RenderLoop` draws
-anything. The unit tests (`TerminalColorStartupTests`) cover the exchange, the
-hand-back and what is published; `GroundedPaletteTerminalTests` covers how a
-translucent ground is spent against it. What they cannot see is the WIRING:
+anything. Under tmux the sixteen slots are asked for once frame one is out
+instead (`TerminalColorRequester`), in a request of their own that nothing
+waits for. The unit tests (`TerminalColorStartupTests`,
+`TerminalColorRequesterTests`, `TerminalColorRequestWiringTests`) cover the
+exchange, the hand-back, what is published and when the slots are asked;
+`GroundedPaletteTerminalTests` covers how a translucent ground is spent
+against it. What they cannot see is the WIRING:
 
   1. the request is sent at all, once, and before the first frame, which must
      wait for the fence: a frame drawn before the answer is a frame drawn with
      the colours unknown;
-  2. the request follows the host: no OSC 4 under tmux, where a silent client
-     holds the fence about half a second (measured, tmux 3.7c);
+  2. the request follows the host. Off tmux the sixteen OSC 4 queries are in
+     it. Under tmux they are not, because a silent client holds the fence
+     about half a second (measured, tmux 3.7c); they follow frame one instead,
+     where that half second holds up nothing that draws. So in a run where
+     the screen is never thrown away (a resize, a resumed suspend, a tmux
+     client change), the focus never comes back and the terminal never
+     reports its theme, which is every run here, OSC 4 is asked sixteen times
+     on any host: off tmux in the startup request, under tmux once after
+     frame one and never before it. Each of those three asks the whole
+     request again, OSC 4 included (`TerminalColorRequester`), so outside
+     such a run neither "once" holds. Not "no OSC 4 under tmux": that was this
+     check's rule, and it stopped being the app's when the post-frame request
+     landed (2026-09-15);
   3. a keystroke that arrives among the replies reaches the app;
   4. a terminal that answers the fence alone, or never answers it, still gets
      its first frame;
@@ -68,11 +83,16 @@ SLOTS = [
 ]
 
 ST = b"\x1b\\"
-NATIVE_REQUEST = (
-    b"\x1b]10;?" + ST + b"\x1b]11;?" + ST
-    + b"".join(b"\x1b]4;%d;?" % n + ST for n in range(16))
-    + b"\x1b[5n")
-TMUX_REQUEST = b"\x1b]10;?" + ST + b"\x1b]11;?" + ST + b"\x1b[5n"
+# Spelled as `TerminalColorQuery` composes them: the pair, the sixteen slot
+# queries, and the fence.
+PAIR_QUERIES = b"\x1b]10;?" + ST + b"\x1b]11;?" + ST
+SLOT_QUERIES = b"".join(b"\x1b]4;%d;?" % n + ST for n in range(16))
+FENCE = b"\x1b[5n"
+NATIVE_REQUEST = PAIR_QUERIES + SLOT_QUERIES + FENCE
+TMUX_REQUEST = PAIR_QUERIES + FENCE
+# What follows frame one under tmux, and only there.
+SLOTS_REQUEST = SLOT_QUERIES + FENCE
+OSC_4 = b"\x1b]4;"
 
 STRIPPED = (
     "TERM_PROGRAM", "TERM_PROGRAM_VERSION", "LC_TERMINAL", "LC_TERMINAL_VERSION",
@@ -115,7 +135,8 @@ def colour_reply(code):
 CASES = {
     # Replies held back 0.3 s: frame one must wait for them.
     "answering": (False, True, True, 0.3, None, {}, "request, then frame after the answer"),
-    "tmux": (True, True, True, 0.0, None, {}, "no OSC 4 under tmux"),
+    "tmux": (True, True, True, 0.0, None, {},
+             "under tmux the slots are asked once, after frame one"),
     "silent": (False, False, True, 0.0, None, {}, "frame drawn after a fence-only answer"),
     "no-fence": (False, True, False, 0.0, None, {}, "frame drawn once the deadline passes"),
     # `q` quits the Example: if it reaches the app, the app exits on its own.
@@ -264,8 +285,30 @@ def check(case, out, answered_at, exited):
     count = out.count(request)
     if count != 1:
         problems.append(f"request sent {count} times")
-    if tmux and b"\x1b]4;" in out:
-        problems.append("OSC 4 sent under tmux")
+    # Sixteen slot queries whatever the host: off tmux they are the startup
+    # request's (counted once above), under tmux the post-frame request's.
+    # Thirty-two under tmux would also be the post-frame request sent a second
+    # time, which the requester does when its fence is not back within a
+    # second (`TerminalColorRequester.defaultFenceTimeoutNanos`); this smoke
+    # answers that fence at once, so a resend is not expected here.
+    slot_queries = out.count(OSC_4)
+    if slot_queries != len(SLOTS):
+        problems.append(f"OSC 4 asked {slot_queries} times, not {len(SLOTS)}")
+    if tmux:
+        # The startup request left the slots out: they follow frame one, once.
+        frame_one = out.find(GLYPH)
+        first_slot = out.find(OSC_4)
+        if first_slot != -1 and not 0 <= frame_one < first_slot:
+            problems.append("OSC 4 sent under tmux before frame one")
+        # The whole request ends in the same sixteen queries and fence, so one
+        # after frame one is counted as that, not as a second slots request.
+        after = out[frame_one:] if frame_one != -1 else b""
+        whole = after.count(NATIVE_REQUEST)
+        slots = after.count(SLOTS_REQUEST) - whole
+        if slots != 1:
+            problems.append(f"slots request sent {slots} times after frame one, not once")
+        if whole:
+            problems.append(f"whole request sent {whole} times after frame one")
     foreground_queries = out.count(b"\x1b]10;?")
     if foreground_queries != 1:
         problems.append(f"OSC 10 asked {foreground_queries} times")

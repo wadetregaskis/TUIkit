@@ -4098,7 +4098,11 @@ until that run records it, with the host's version.
   OSC 4 once at startup through `Terminal.queryColors`, and publishes the
   answer to `TerminalColors.current` before the first frame. See "What the
   framework asks at startup"; `Tools/Smoke/colour_query_smoke.py` checks the
-  wiring, and that frame one of an app with clear grounds leaves them to the
+  wiring — the sixteen OSC 4 queries sent exactly once in a run where the screen
+  is never thrown away, the focus never comes back and the terminal never
+  reports its theme: in the startup request off tmux, after frame one under
+  tmux (`TerminalColorRequester`, below, which asks them again on each of those
+  three) — and that frame one of an app with clear grounds leaves them to the
   terminal (SGR 49) over a reported page and over silence.
 - `TerminalColorRefresher` — what the terminal says about its colours after that
   exchange has closed. `Terminal.noteVolunteeredColorReply` keeps an OSC 10, 11
