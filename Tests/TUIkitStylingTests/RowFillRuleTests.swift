@@ -78,6 +78,19 @@ struct RowFillRuleTests {
                 == [selection, focusDim, focusTop, emphasisDim, emphasisTop])
     }
 
+    @Test("16-colour fills match the reference, against the table the terminal reports", arguments: rowFillRuleGoldens)
+    func sixteen(_ golden: RowFillGolden) {
+        let rule = Self.rule(for: golden)
+        let table = golden.table.map { $0.map { RowFillRule.Swatch(UInt8($0 >> 16 & 0xFF), UInt8($0 >> 8 & 0xFF), UInt8($0 & 0xFF)) } }
+            ?? ANSIColor.allCases.map { RowFillRule.Swatch($0.xtermRGB.red, $0.xtermRGB.green, $0.xtermRGB.blue) }
+        let slots = rule.sixteen(toward: rule.truecolour(), table: table)
+        let (selection, focusDim, focusTop, emphasisDim, emphasisTop) = golden.sixteen
+        func slot(_ index: Int?) -> Int { index ?? -1 }
+        #expect(
+            [slots.selection, slot(slots.focusDim), slot(slots.focusTop), slot(slots.emphasisDim), slot(slots.emphasisTop)]
+                == [selection, focusDim, focusTop, emphasisDim, emphasisTop])
+    }
+
     // MARK: - What a palette draws
 
     private static let dusk = CustomRows(

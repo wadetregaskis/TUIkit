@@ -139,9 +139,19 @@ def swift_goldens():
         cube = rule.rule_256(c, true)
         ends = lambda lk: [lk['S'], lk['F'][0], lk['F'][1], lk['B'][0], lk['B'][1]]
         indices = ', '.join(str(rule._INDEX[tuple(x)]) for x in ends(cube))
+        table = [tuple(int(h[i:i + 2], 16) for i in (0, 2, 4)) for h in p['table']] if 'table' in p else rule.XTERM16
+        pick = rule.rule_16(c, true, table)['pick']
+        slot = lambda v: -1 if v == tuple(c['fg'] if p['live'] else table[rule.R4.nearest(c['fg'], table)]) \
+            else table.index(tuple(v))
+        slots = ', '.join(str(slot(pick[k])) for k in ('S', 'Fd', 'Ft', 'Bd', 'Bt'))
+        slot_hex = ['0x' + h for h in p.get('table', [])]
+        reported = ('[\n            ' + ', '.join(slot_hex[:8]) + ',\n            ' + ', '.join(slot_hex[8:]) + ',\n        ]'
+                    if 'table' in p else 'nil')
+
         lines.append(f"    RowFillGolden(\"{p['name']}\", page: 0x{p['page']}, text: 0x{p['text']}, "
                      f"secondary: 0x{p['secondary']}, accent: 0x{p['accent']}, live: {'true' if p['live'] else 'false'},\n"
-                     f"        truecolour: ({hexes(ends(true))}), cube: ({indices})),")
+                     f"        truecolour: ({hexes(ends(true))}), cube: ({indices}), sixteen: ({slots}),\n"
+                     f"        table: {reported}),")
     return GOLDENS_TEMPLATE.replace('COUNT', str(len(palettes))).replace('LINES', '\n'.join(lines))
 
 
@@ -157,7 +167,8 @@ GOLDENS_TEMPLATE = '''//  🖥️ TUIkit — Terminal UI Kit for Swift
 import Testing
 
 /// One runtime palette and the reference rule's fills for it: (S, F dim, F top,
-/// B dim, B top), as 0xRRGGBB at truecolour and as cube entries at 256 colours.
+/// B dim, B top), as 0xRRGGBB at truecolour, as cube entries at 256 colours, and as
+/// slots of the table the palette's terminal reports at 16.
 struct RowFillGolden: Sendable, CustomTestStringConvertible {
     let name: String
     let page: UInt32
@@ -167,13 +178,18 @@ struct RowFillGolden: Sendable, CustomTestStringConvertible {
     let live: Bool
     let truecolour: (UInt32, UInt32, UInt32, UInt32, UInt32)
     let cube: (UInt8, UInt8, UInt8, UInt8, UInt8)
+    /// Slots of `table`, -1 for reverse video.
+    let sixteen: (Int, Int, Int, Int, Int)
+    /// The sixteen slots the terminal reports, or `nil` for xterm's.
+    let table: [UInt32]?
 
     init(
         _ name: String, page: UInt32, text: UInt32, secondary: UInt32, accent: UInt32, live: Bool,
-        truecolour: (UInt32, UInt32, UInt32, UInt32, UInt32), cube: (UInt8, UInt8, UInt8, UInt8, UInt8)
+        truecolour: (UInt32, UInt32, UInt32, UInt32, UInt32), cube: (UInt8, UInt8, UInt8, UInt8, UInt8),
+        sixteen: (Int, Int, Int, Int, Int), table: [UInt32]?
     ) {
         (self.name, self.page, self.text, self.secondary, self.accent) = (name, page, text, secondary, accent)
-        (self.live, self.truecolour, self.cube) = (live, truecolour, cube)
+        (self.live, self.truecolour, self.cube, self.sixteen, self.table) = (live, truecolour, cube, sixteen, table)
     }
 
     var testDescription: String { name }
