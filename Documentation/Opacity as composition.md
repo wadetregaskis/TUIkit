@@ -3623,6 +3623,13 @@ cut at the cap at a back one. The front branch has no reachable claim today — 
 clip needs a drawn slot, and a drawn slot leaves no cursor row — and takes the same
 rule regardless.
 
+**2026-09-29: neither branch has a reachable claim now.** The last route to a translucent
+list-row fill of the list's own was a cursor row under `.rowSelectionIndicator(.hidden)`,
+which held the plain wash still. Every cursor row breathes now, and a breath spends the
+wash's alpha against the page; a parked one holds a spent colour too. The rule stays, for
+any translucent row fill a later change brings back, and `ListRowAlignmentTests` pins the
+outcome — nothing claimed past the rows — rather than a premise that can no longer be built.
+
 
 ## 55. A tab chip's breath ends disagreed about alpha (2026-09-10)
 
@@ -7078,7 +7085,9 @@ no root, and its lines are unchanged by construction.
 
 `TranslucentFillFieldTests` pins each shape above — the label at 0.3 and 0.6, the content's own
 fields (opaque, the terminal's own, faded, a translucent fill inside), a translucent ramp, a
-translucent `.listRowBackground`, a list's own translucent wash, a fade around the fill, the glyph
+translucent `.listRowBackground`, a fade around the fill (a list's own translucent wash too, until
+2026-09-29, when every cursor row came to breathe and so to spend its wash's alpha: no palette
+builds that shape any more, and its case went with it), the glyph
 contest through it at 0.3 and 0.6 — and a run inside the fill whose frames state a field of their
 own, none, and the terminal's own, faded inside it at 1, 0.6 and 0.3: every frame replayed over the
 row drawn at every other, against the row a render draws at it, as the cells look. Before, every

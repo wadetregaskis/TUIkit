@@ -76,28 +76,20 @@ enum RowBackground {
     /// plain wash, the look it has always had — `Palette.focusWashEmphasis(appearsActive:)`
     /// is the rule, and says why a translucent wash is held spent over the page.
     ///
-    /// Except where the control draws no ● (``View/rowSelectionIndicator(_:)`` with
-    /// `.hidden`): there it holds the still wash throughout. With the mark off, the
-    /// highlight is the only thing that says whether the cursor row is selected, and
-    /// on most shipped palettes the wash shares the accent's hue — all six phosphor
-    /// presets by construction, and Basic, Man Page, Ocean, Silver Aerogel, Solid
-    /// Colors and Pro, whose accent and wash come from one selection colour or are
-    /// both grey. Two breaths of one hue read as one: on Green the two dim ends stand
-    /// 1.03:1 apart. So motion says it instead — the selected cursor row breathes, the
-    /// unselected one does not — as it did before every cursor row breathed. Only
-    /// for a control that HAS a selection, though: `.hidden` is an environment
-    /// value, so an app that sets it at its root reaches every list, and a list
-    /// with no selection binding has nothing for motion to tell apart — its
-    /// cursor row breathes as everywhere else.
+    /// Under ``View/rowSelectionIndicator(_:)`` `.hidden` too, where no ● says whether
+    /// the cursor row is selected. Motion is what says where the keys go, so it cannot
+    /// also be what says "selected": this row used to hold the plain wash still there,
+    /// which made the one list on the page that had been told not to mark its
+    /// selection the one whose cursor did not move. The focus indicator always visibly
+    /// breathes, selected or not; which of the two a cursor row is, the breaths say
+    /// themselves — a selected cursor row's peaks clearly brighter than an unselected
+    /// one's (``Palette/accentFillPulse(over:)``).
     ///
     /// Here rather than at the two call sites for the reason ``focusedSelection(in:palette:)``
     /// is: the twins ask one question in one place.
     @MainActor
-    static func focused(in context: RenderContext, palette: any Palette, hasSelection: Bool) -> Self {
-        guard !(hasSelection && context.environment.rowSelectionIndicator == .hidden) else {
-            return still(palette.focusWashFill())
-        }
-        return breathing(
+    static func focused(in context: RenderContext, palette: any Palette) -> Self {
+        breathing(
             palette.focusWashEmphasis(appearsActive: context.environment.appearsActive),
             in: context)
     }
@@ -306,8 +298,8 @@ enum SelectableRowClaims {
 /// **It marks SELECTION, not focus.** Which row the cursor is on is said by the
 /// background, which breathes while the control has the keys; a row merely
 /// under the cursor has not been chosen, and says so with no glyph, and with the
-/// neutral focus wash behind it rather than the accent — breathing, or still
-/// where the control draws no mark at all (``RowBackground/focused(in:palette:)``).
+/// neutral focus wash behind it rather than the accent, breathing whether or not
+/// the control draws a mark at all (``RowBackground/focused(in:palette:)``).
 /// So a control with no selection at all draws no glyph on any row, which is
 /// what a plain `List` looked like before this existed and still looks like now.
 struct RowSelectionIndicator: Equatable {

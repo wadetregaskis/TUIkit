@@ -99,9 +99,8 @@ focused control. Selected, it breathes the accent; not selected, the neutral
 focus wash, from `focusBackground` up to twice its distance from the page
 (``Palette/focusWashPulse()``). The ● is what tells the two apart: most
 palettes' wash shares the accent's hue. A control drawn with
-`.rowSelectionIndicator(.hidden)` has no ●, so there an unselected cursor row
-holds the wash still, and motion says which row is selected: the selected one
-breathes, the other does not. A control that does not have the keys draws no
+`.rowSelectionIndicator(.hidden)` has no ●, and its cursor row breathes all the
+same, selected or not: the focus indicator always visibly breathes. A control that does not have the keys draws no
 breath: unfocused, it has no cursor row; focused in a window that has lost the
 terminal's focus, its cursor row holds still — the subtle accent on a selected
 row, the plain wash on one that is not (see <doc:FocusSystem>).

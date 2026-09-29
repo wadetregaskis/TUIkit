@@ -218,12 +218,14 @@ struct ListRowAlignmentTests {
     /// its focus wash on every line of it; and the wash's claims on the lines cut
     /// stayed behind, past the rows, on the "N more below" line and the border (§54).
     ///
-    /// Under `.rowSelectionIndicator(.hidden)`: there the cursor row holds the plain
-    /// wash, which is translucent here and so claims. Anywhere else it breathes, or
-    /// holds the breath's bottom in an inactive window, and both spend the wash's alpha
-    /// against the page and claim nothing (`Palette.focusWashPulse()`) — true, and no
-    /// test of the clip.
-    @Test("A reorder frame clipped from the back takes the cut lines' claims with it")
+    /// Under `.rowSelectionIndicator(.hidden)`, where the cursor row used to hold the
+    /// plain wash, translucent here, and so claim. It breathes there now as it does
+    /// everywhere, and a breath spends the wash's alpha against the page
+    /// (`Palette.focusWashPulse()`), so no palette gives a list row a translucent fill
+    /// of its own any more and the clip's claims branch has no input left to cut. What
+    /// is pinned is the outcome, which a translucent row fill brought back by any route
+    /// must keep: nothing claimed past the rows.
+    @Test("A reorder frame clipped from the back leaves no claims past the rows")
     func backClipTakesTheListsOwnClaims() throws {
         let fixture = ListReorderFixture(items: (0..<12).map { "row\($0)" }, feedback: .live)
         fixture.tallRows = ["row5": 3]
@@ -241,7 +243,6 @@ struct ListRowAlignmentTests {
         let lines = pressed.lines.map(\.stripped)
         #expect(fixture.handler?.reorder != nil, "the press began a hold")
         #expect(lines.filter { $0.contains("row5") }.count == 1, "row5 still straddles the bottom: \(lines)")
-        #expect(!pressed.opacityRegions.isEmpty, "the cursor row's wash claims")
         let strays = pressed.opacityRegions.flatMap { claim in
             (claim.offsetY..<(claim.offsetY + claim.height)).filter {
                 !(lines.indices.contains($0)

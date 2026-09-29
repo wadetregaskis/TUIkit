@@ -12,10 +12,9 @@
 //  on a selected row, as before, and in the neutral focus wash on one that is
 //  not (`Palette.focusWashPulse()`). A list that does not have them — unfocused,
 //  or in a window that has lost the terminal's focus — shows the still look it
-//  always did. The ● is what tells the two breathing rows apart: on most shipped
-//  palettes the wash shares the accent's hue. A list drawn with
-//  `.rowSelectionIndicator(.hidden)` has no ●, so there an unselected cursor row
-//  holds the still wash, and motion says which row is selected.
+//  always did. Under `.rowSelectionIndicator(.hidden)` too: the focus indicator
+//  always visibly breathes, and with no ● the two breaths themselves say which
+//  cursor row is selected. It used to hold the unselected one still there.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -173,34 +172,30 @@ struct CursorRowBreathTests {
     nonisolated static let statedPaletteNames =
         (PaletteRegistry.phosphorPresets + PaletteRegistry.appleTerminalProfiles).map(\.name)
 
-    /// With the ● off, the highlight is all that says whether the cursor row is
-    /// selected, and colour cannot say it: on most shipped palettes the neutral wash
-    /// shares the accent's hue — all six phosphor presets by construction, and Basic,
-    /// Man Page, Ocean, Silver Aerogel, Solid Colors and Pro — and on Green the two
-    /// breaths' dim ends stand 1.03:1 apart. So motion says it: the selected cursor
-    /// row breathes, and the unselected one holds the plain wash, on every palette.
-    /// Asking only that the two breaths share no exact colour let both breathe alike.
+    /// The focus indicator always visibly breathes, whether or not there is a
+    /// selection on the same row — with the ● off too. The unselected cursor row used
+    /// to hold the plain wash still here, so motion could say which row was selected;
+    /// it breathes the focus wash now, exactly as it does with the ● shown, and the
+    /// selected one breathes the accent.
     @Test(
-        "Under .rowSelectionIndicator(.hidden) only a selected cursor row breathes",
+        "Under .rowSelectionIndicator(.hidden) every cursor row breathes",
         arguments: ReversedCursorRowTests.Kind.allCases, statedPaletteNames)
-    func hiddenIndicatorMotionTellsSelection(kind: ReversedCursorRowTests.Kind, paletteName: String) throws {
+    func hiddenIndicatorEveryCursorRowBreathes(kind: ReversedCursorRowTests.Kind, paletteName: String) throws {
         let palette = try #require(PaletteRegistry.palette(withName: paletteName))
         let selected = try settled(
             CursorRowBreathApp(kind: kind, selection: [0], indicator: .hidden, palette: palette)
         ).frame
-        #expect(try !breath(of: selected).isEmpty, "the premise: a selected cursor row breathes")
+        #expect(try !breath(of: selected).isEmpty, "a selected cursor row stood still")
 
         let unselected = try settled(
             CursorRowBreathApp(kind: kind, selection: [2], indicator: .hidden, palette: palette)
         ).frame
-        let line = try #require(unselected.lines.firstIndex { $0.stripped.contains("row 0") })
+        let breath = try breath(of: unselected)
+        let ends = palette.focusWashPulse()
         #expect(
-            !unselected.runs.contains { $0.offsetY == line },
-            "an unselected cursor row breathes like a selected one, with no ● to tell them apart")
-        #expect(
-            try #require(sgrState(of: "row 0", in: unselected.lines)).renderedBackground
-                == renderedBackground(of: palette.focusBackground),
-            "an unselected cursor row should hold the plain focus wash")
+            breath.contains(renderedBackground(of: ends.dim))
+                && breath.contains(renderedBackground(of: ends.bright)),
+            "an unselected cursor row does not breathe the focus wash: \(Set(breath))")
     }
 
     /// Out and back, as `InactiveFocusIndicatorTests` takes a selected cursor row:

@@ -43,23 +43,6 @@ private struct FieldProbe: View, Renderable {
     }
 }
 
-/// The default page and ink, with a focus wash that is translucent: what a list's
-/// cursor row paints still where it draws no selection mark.
-private struct TranslucentWashPalette: Palette {
-    let id = "translucent-wash"
-    let name = "Translucent wash"
-    let background = Color.rgb(5, 10, 5)
-    let foreground = Color.rgb(51, 255, 51)
-    let foregroundTertiary = Color.rgb(30, 140, 30)
-    let accent = Color.rgb(40, 200, 40)
-    let success = Color.rgb(40, 200, 40)
-    let warning = Color.rgb(220, 200, 40)
-    let error = Color.rgb(220, 40, 40)
-    let info = Color.rgb(40, 120, 220)
-    let border = Color.rgb(30, 140, 30)
-    let focusBackground = Color.rgb(0, 0, 200).opacity(0.5)
-}
-
 @MainActor
 @Suite("A translucent fill is composited under its content, and the content's fades over it")
 struct TranslucentFillFieldTests {
@@ -208,42 +191,6 @@ struct TranslucentFillFieldTests {
         let unfaded = try #require(writtenRows(of: list(1)).dropFirst().first)
         #expect(faded.map(\.glyph) == unfaded.map(\.glyph))
         #expect(faded.map(\.glyph).contains("a"), "the row is \(String(faded.map(\.glyph)))")
-        for column in 0..<12 {
-            #expect(
-                faded[column].background == unfaded[column].background,
-                "column \(column): \(faded[column].background.debugDescription), unfaded \(unfaded[column].background.debugDescription)")
-        }
-    }
-
-    /// A list's own translucent row fill — the focus wash of a palette whose wash is
-    /// translucent, on the cursor row of a list that draws no selection mark — is a
-    /// painter too: a fade inside the row leaves the wash as the unfaded row has it,
-    /// and a field the row's content states stands whole over it.
-    @Test("A list row's own translucent fill is under its content, and the content's fades over it")
-    func aListRowsOwnTranslucentFill() throws {
-        let palette = TranslucentWashPalette()
-        func list(_ alpha: Double) -> some View {
-            List(selection: .constant(Optional(1))) {
-                ForEach(0..<2, id: \.self) { _ in
-                    HStack(spacing: 0) { Text("ab").opacity(alpha); Text("r").background(Self.red); Text("cd") }
-                }
-            }
-            .rowSelectionIndicator(.hidden)
-            .frame(width: 12, height: 2)
-        }
-        let faded = try #require(writtenRows(of: list(0.3), palette: palette).dropFirst().first)
-        let unfaded = try #require(writtenRows(of: list(1), palette: palette).dropFirst().first)
-        #expect(faded.map(\.glyph) == unfaded.map(\.glyph))
-        let red = try #require(unfaded.firstIndex { $0.glyph == "r" })
-        // Not vacuous: the row is on the wash as it lands on the page.
-        let landed = Self.landed(palette.focusBackground, over: palette.background)
-        #expect(unfaded[red - 1].background == Self.field(landed), "the row is on \(unfaded[red - 1].background.debugDescription)")
-        #expect(unfaded[red].background == Self.field(Self.red), "r is on \(unfaded[red].background.debugDescription)")
-        // And the label is faded, toward the wash under it.
-        let label = try #require(faded.firstIndex { $0.glyph == "a" })
-        #expect(
-            faded[label].ink == Self.ink(palette.foreground.opacity(0.3, over: landed)),
-            "a is in \(String(describing: faded[label].ink))")
         for column in 0..<12 {
             #expect(
                 faded[column].background == unfaded[column].background,
