@@ -99,9 +99,9 @@ struct HarbourPalette: Palette {
 /// session chose none, rather than one in a branch of an `if`: the branches are
 /// two identities, and switching between them made every control in the form
 /// a new one, the focused field included, and sent the focus to the first
-/// focus stop. The list is given none, so it is drawn in the app's palette:
-/// a palette written in the environment is not `Equatable`, which turns the
-/// value memos off below it, and the list is where the memos are worth having.
+/// focus stop. The list is given none, so it is drawn in the app's palette —
+/// where the `t` key's cycling reaches it, and where the row promises are
+/// judged.
 struct ThemesPage: View {
     let board: ThemeBoard
     @FocusState private var focus: ThemeFocus?

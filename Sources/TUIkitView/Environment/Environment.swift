@@ -5,6 +5,7 @@
 //  License: MIT
 
 import TUIkitCore
+import TUIkitStyling
 
 // MARK: - Environment Modifier
 
@@ -91,8 +92,18 @@ extension EnvironmentModifier {
     ///   marks the environment it passes down.
     fileprivate func noteEnvironmentChange(context: RenderContext) -> Bool {
         guard let cache = context.renderCache else { return false }
+        // A palette is noted as every other keeper of one compares it —
+        // `ComparablePalette`: by value where it is `Equatable`, through its
+        // derivation for the framework's own wrappers, by its id otherwise, as
+        // `Palette`'s documentation asks of a palette whose colours change. Noted
+        // raw, a palette with no `Equatable` of its own — the Theming guide's
+        // shape, and the Terminal palette once the environment has grounded it —
+        // answered `.incomparable`, and `.palette(_:)` turned off every memo below
+        // it for good. `.theme(_:)` and the render loop's snapshot already compare
+        // it this way.
+        let noted: Any = (value as? any Palette).map(ComparablePalette.init) ?? value
         switch cache.noteAppliedEnvironment(
-            value, identity: context.identity, keyPath: keyPath,
+            noted, identity: context.identity, keyPath: keyPath,
             depth: context.environmentApplicationDepth)
         {
         case .changed:
