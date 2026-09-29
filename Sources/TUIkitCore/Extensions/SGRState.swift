@@ -593,6 +593,9 @@ public struct SGRState: Sendable, Equatable {
     /// Whether reverse video (SGR 7) is in force.
     package var reversesVideo: Bool { attributes & Self.bit(7) != 0 }
 
+    /// Whether bold (SGR 1) is in force.
+    package var isBold: Bool { attributes & Self.bit(1) != 0 }
+
     /// Whether an attribute in force draws in the foreground colour on a blank
     /// cell — underline, blink, strike — so the foreground is visible there.
     package var paintsInkOnBlankCell: Bool {

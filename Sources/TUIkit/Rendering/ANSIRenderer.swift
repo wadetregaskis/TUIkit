@@ -187,9 +187,10 @@ extension ANSIRenderer {
     ///   - field: The colour the cell would be filled with, which reverse video
     ///     draws the glyph in.
     /// - Returns: The string with persistent reverse video applied.
-    static func applyPersistentReverse(_ string: String, ink: Color, field: Color) -> String {
+    static func applyPersistentReverse(_ string: String, ink: Color, field: Color, bold: Bool = false) -> String {
         var style = TextStyle()
         style.isInverted = true
+        style.isBold = bold
         style.foregroundColor = ink
         style.backgroundColor = field
         // Never nil: the 7 alone is a code, whatever the depth makes of the colours.
@@ -206,8 +207,11 @@ extension ANSIRenderer {
     /// alone reverses each child's OWN pair, so a label in the accent became an
     /// accent-coloured block and the row several colours at once; here the row is one
     /// colour, as a fill would make it, with its content in one other.
-    static func applyReversedPair(_ string: String, ink: Color, field: Color) -> String {
-        applyPersistentReverse(droppingColours(string), ink: ink, field: field)
+    ///
+    /// `bold` emboldens every cell as well: the other frame of a cursor row breath on
+    /// a terminal that draws no colour (`RowBackground`).
+    static func applyReversedPair(_ string: String, ink: Color, field: Color, bold: Bool = false) -> String {
+        applyPersistentReverse(droppingColours(string), ink: ink, field: field, bold: bold)
     }
 
     /// `string` with every colour its SGR sequences state removed — foreground,

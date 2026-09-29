@@ -250,6 +250,22 @@ public struct TerminalClient: Sendable, Equatable {
         }
     }
 
+    /// Whether the terminal draws bold visibly, as a heavier weight or a
+    /// brighter ink: what a cursor row breathes with where there is no colour
+    /// to breathe (`RowBackground`).
+    ///
+    /// Every program TUIkit has measured does (`bold_bright_card.py`: iTerm2
+    /// brightens, Apple Terminal, Ghostty and Warp thicken, and tmux passes it
+    /// through to whichever of them it is drawn in). An unidentified terminal
+    /// may be anything down to one that ignores SGR 1, so it is not assumed to.
+    @MainActor static var drawsBold: Bool {
+        drawsBoldPin ?? (effective.program != .unidentified)
+    }
+
+    /// A task-local answer for ``drawsBold`` — for tests, which must not write
+    /// the process-wide ``simulated`` program while other suites run.
+    @TaskLocal static var drawsBoldPin: Bool?
+
     /// The program whose model is actually being applied: ``simulated`` when
     /// one is set, and the detected client otherwise.
     @MainActor public static var effective: Self {

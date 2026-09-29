@@ -37,7 +37,8 @@ enum RowBackground {
     case reversed(ink: Color, field: Color)
 
     /// A breath with one end in reverse video, the other a fill: a 16-colour row whose
-    /// terminal has too few colours to tell every row's state apart (`RowFills`). The
+    /// terminal has too few colours to tell every row's state apart (`RowFills`) — or,
+    /// without colour, a reversal at both ends, bold at the bright one. The
     /// reversed end is the palette's pair exchanged, with every colour the row's
     /// content states dropped, so the whole row is the text's colour with its content
     /// in the page's (``ANSIRenderer/applyReversedPair(_:ink:field:)``).
@@ -49,15 +50,16 @@ enum RowBackground {
     /// How one frame of a breathing row paints its line.
     enum Paint {
         case fill(Color)
-        case reversed(ink: Color, field: Color)
+        /// The pair reversed; `bold` emboldens the whole row too.
+        case reversed(ink: Color, field: Color, bold: Bool = false)
 
         /// `line`, a row's finished line, painted this way. A fill is left in force at
         /// the end, as ``String/withPersistentBackground(_:)`` leaves it.
         func painting(_ line: String) -> String {
             switch self {
             case .fill(let colour): line.withPersistentBackground(colour)
-            case .reversed(let ink, let field):
-                ANSIRenderer.applyReversedPair(line, ink: ink.opaqueSpelling, field: field.opaqueSpelling)
+            case .reversed(let ink, let field, let bold):
+                ANSIRenderer.applyReversedPair(line, ink: ink.opaqueSpelling, field: field.opaqueSpelling, bold: bold)
             }
         }
 
@@ -147,7 +149,17 @@ enum RowBackground {
             guard cycle.isAnimating else { return bright.map(Self.fixed) ?? .reversed(ink: ink, field: field) }
             let reversal = Paint.reversed(ink: ink, field: field)
             return .pulsingReversal(cycle, dim: dim.map(Paint.fill) ?? reversal, bright: bright.map(Paint.fill) ?? reversal)
-        case .fill, .reversed:
+        case .reversed(let ink, let field):
+            // Without colour a cursor row is reversed, and breathes by its weight where
+            // the terminal draws bold — every one TUIkit has measured does. Elsewhere it
+            // holds still.
+            let cycle = context.environment.selectionEmphasis.cycle(true)
+            guard ColorDepth.current == .noColor, cycle.isAnimating, TerminalClient.drawsBold else {
+                return still(highlight)
+            }
+            return .pulsingReversal(
+                cycle, dim: .reversed(ink: ink, field: field), bright: .reversed(ink: ink, field: field, bold: true))
+        case .fill:
             return still(highlight)
         }
     }

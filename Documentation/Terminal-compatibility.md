@@ -2607,7 +2607,12 @@ trigger is a terminal that draws no colour at all (`ColorDepth.noColor`, e.g.
 `TERM=dumb`), where a fill is nothing: there a list's or table's cursor row, a
 menu's or drop-down's bar, a date field's active component and a split view's
 divider reverse (since 2026-09-29; before, a cursor row there looked like every
-other row). The ink and
+other row). A list's or table's cursor row there breathes by weight — reversed on
+every frame, bold on the bright ones — on every host TUIkit identifies, since each
+draws bold visibly (the bold/bright card above: iTerm2 brightens, Apple Terminal,
+Ghostty and Warp thicken, tmux passes it through). On an unidentified host it holds
+still, reversed. How a host paints bold under reverse video WITHOUT colour is
+unmeasured. The ink and
 the field are stated beside the 7 for the reason ECMA-48 gives below — a bare 7
 exchanges the pair IN FORCE, so a row's padding, which follows its content's
 last reset, would fill with the terminal's own foreground on a page the palette

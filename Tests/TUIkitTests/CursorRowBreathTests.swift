@@ -322,4 +322,41 @@ struct CursorRowBreathTests {
         #expect(reversed == Array(5...11))
         #expect(filled == [ColorDepth.withCurrent(.basic16) { renderedBackground(of: fills.emphasisBright) }])
     }
+
+    // MARK: - No colour
+
+    @Test(
+        "Without colour a cursor row breathes by weight where the terminal draws bold, reversed throughout",
+        arguments: ReversedCursorRowTests.Kind.allCases)
+    func noColourBreathesBold(kind: ReversedCursorRowTests.Kind) throws {
+        for selection in [Set([2]), [0]] {
+            try ColorDepth.withCurrent(.noColor) {
+                try TerminalClient.$drawsBoldPin.withValue(true) {
+                    let frame = try settled(CursorRowBreathApp(kind: kind, selection: selection)).frame
+                    let line = try #require(frame.lines.firstIndex { $0.stripped.contains("row 0") })
+                    let run = try #require(frame.runs.first { $0.offsetY == line }, "row 0 does not breathe")
+                    let states = try run.frames.map { try #require(sgrState(of: "row 0", in: [$0])) }
+                    let reversed = states.map(\.reversesVideo)
+                    let bold = states.indices.filter { states[$0].isBold }
+                    #expect(!reversed.contains(false), "\(kind), \(selection)")
+                    #expect(bold == [0, 1, 2, 3, 4, 12, 13, 14, 15], "\(kind), \(selection)")
+                }
+            }
+        }
+    }
+
+    @Test(
+        "Without colour, on a terminal not known to draw bold, a cursor row holds still, reversed",
+        arguments: ReversedCursorRowTests.Kind.allCases)
+    func noColourWithoutBoldHoldsStill(kind: ReversedCursorRowTests.Kind) throws {
+        try ColorDepth.withCurrent(.noColor) {
+            try TerminalClient.$drawsBoldPin.withValue(false) {
+                let frame = try settled(CursorRowBreathApp(kind: kind, selection: [2])).frame
+                let line = try #require(frame.lines.firstIndex { $0.stripped.contains("row 0") })
+                #expect(!frame.runs.contains { $0.offsetY == line })
+                let state = try #require(sgrState(of: "row 0", in: [frame.lines[line]]))
+                #expect(state.reversesVideo)
+            }
+        }
+    }
 }
