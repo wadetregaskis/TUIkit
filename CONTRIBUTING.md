@@ -12,8 +12,11 @@ TUIkit is a SwiftUI-like framework for building Terminal User Interfaces in pure
 
 ### What CI covers
 
-Every lane runs `swift build`, `swift test`, and both smoke tests
-(`Stress --selfcheck` everywhere; the PTY walk on macOS and Linux).
+Every lane runs `swift build`, the test suite, and both smoke tests
+(`Stress --selfcheck` everywhere; the PTY walk on macOS and Linux). On macOS
+and Linux the suite runs through `Tools/ParallelTest/parallel_test.py -j 4`
+rather than `swift test` — see "Running the suite in parallel" below; Windows
+runs `swift test`.
 
 The three released Swift versions, 6.2, 6.3 and 6.4, are each covered on every
 operating system, and trunk on macOS and Linux:
@@ -255,12 +258,14 @@ combined RSS, the largest single one 265 MiB. `swift test` peaks lower in total
 compressor never moved, and there were no swapins or swapouts. `-j 12` is
 comfortable here; the ceiling is cores, not RAM.
 
-**CI does not use it, and neither does the merge gate** — those run `swift
-test` in one process, exactly as above, and that is unchanged. The harness is
-for anyone running the suite repeatedly. It runs every test, and fails loudly
-unless the union of test IDs returned by its processes matches the enumerated
-suite exactly, so a process that quietly ran nothing cannot be mistaken for a
-pass. That identity check held in all 25 full-suite runs behind this section:
+**CI's macOS and Linux lanes use it**, at `-j 4`, since single-process
+`swift test` runs there had grown to 290–650 s and one of them outlasted a
+test's 600 s sleep (see the comment on the macOS Test step in
+`.github/workflows/ci.yml`; `-j 4` is an experiment, and the arm64 macOS
+runners' 7 GB is the thing to watch). The Windows lanes still run `swift
+test`. The harness runs every test, and fails loudly unless the union of test
+IDs returned by its processes matches the enumerated suite exactly, so a
+process that quietly ran nothing cannot be mistaken for a pass. That identity check held in all 25 full-suite runs behind this section:
 7,591 tests, 1,082 suites, 21 known issues, nothing missing, extra or
 duplicated. Two of the 25 did print a reconciliation problem, but it was a gap
 in how the harness parsed a summary line — since closed, and recorded in its
@@ -372,7 +377,8 @@ Public APIs **must** match SwiftUI signatures exactly unless terminal constraint
   ships rather than a copy of its shape: a copy goes on passing after the
   app's view is changed back.
 - To run the whole suite faster while developing, see "Running the suite in
-  parallel" above. CI and the merge gate still run plain `swift test`.
+  parallel" above. CI runs the suite the same way on macOS and Linux (`-j 4`),
+  and plain `swift test` on Windows.
 
 ## The `project-template/` directory
 

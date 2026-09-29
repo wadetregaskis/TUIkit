@@ -67,18 +67,40 @@ into throughput. The measurement that makes the point: one process spends
 ~14 s for ~142 CPU-seconds — less total CPU, not more, because the CPU the one
 process spent taking turns was never work.
 
-## It is not a substitute for `swift test`
+## CI runs it
 
-CI runs `swift test`, in one process, exactly the way a contributor does, and
-that stays the gate. This harness is a local accelerant for anyone running the
-suite repeatedly. It differs in three ways worth knowing:
+CI's macOS and Linux lanes run the suite through this harness —
+`python3 Tools/ParallelTest/parallel_test.py -j 4 --no-build
+--full-failing-logs`, after their own `swift build --build-tests` — and no
+longer through `swift test`. One `swift test` process queues every
+`@MainActor` test on one main actor however many cores the runner has; whole-
+suite runs there had grown from 120–290 s (early 2026-09) to 290–650 s, and on
+2026-09-28 the trunk lane's 640.6 s run outlasted a test's 600 s `Task.sleep`
+and failed it (`LifecycleManagerTests`, fixed in `a3bb5790`). The Windows lanes
+still run `swift test`: they are advisory for tests, and the harness does not
+support Windows.
+
+`-j 4` is an experiment, to be tuned from the lanes' own timings. GitHub's
+arm64 macOS runners have 3 M1 cores and 7 GB, the Linux ones 4 cores and
+16 GB. Four processes oversubscribe the macOS CPU slightly, deliberately — much
+of their time is spent waiting on their own main actor — and the macOS memory
+is the risk: the only figures are this machine's (~265 MiB per process split
+twelve ways, ~1 GiB for the whole suite in one), not a runner's. CI has no
+weight cache, so the groups are split by test COUNT, not cost: at `-j 4` here
+that gave one group 147 s and another 46 s, so the critical path is roughly
+twice what balanced groups would give. A committed weight table, or a smaller
+`-j` on macOS, are the obvious next tunings.
+
+It still differs from `swift test` in three ways worth knowing:
 
 * **Different interleaving.** Tests are spread across processes, so anything
   depending on the order a single process happens to give them can behave
   differently. That is a property of the test, not of the harness — see
   "Known order dependence" below.
-* **Different driver.** It invokes `swiftpm-testing-helper` directly rather than
-  going through `swift test` (see "Why not `swift test --filter`").
+* **Different driver.** It invokes `swiftpm-testing-helper` (on Linux, the test
+  binary) directly rather than going through `swift test`, with the arguments
+  and environment `swift test` would use (see "Toolchains and platforms"), so
+  that the processes never touch the build database (trap 1 below).
 * **No XCTest.** The package has none; the harness drives swift-testing only.
 
 ## Usage

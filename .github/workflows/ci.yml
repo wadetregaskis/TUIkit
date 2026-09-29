@@ -340,8 +340,43 @@ jobs:
       - name: Build
         run: $SWIFT build --build-tests
 
+      # Why the suite runs through Tools/ParallelTest/parallel_test.py, in
+      # several processes, rather than `$SWIFT test` in one:
+      #
+      # `swift test` runs every test in ONE process, and ~81% of them are in
+      # @MainActor suites, so they all queue on that process's one main actor
+      # however many cores the runner has. Whole-suite runs had grown to
+      # 290–650 s here (120–290 s in early 2026-09), and on 2026-09-28 the
+      # trunk lane ran 640.6 s — long enough for a test's 600 s `Task.sleep`
+      # to expire while the main actor was still starved, and fail
+      # (LifecycleManagerTests; the test was fixed in a3bb5790). Each process
+      # has its own main actor, so splitting the suite turns that queue back
+      # into throughput. The harness launches swift-testing the way SwiftPM
+      # does on each platform (the helper on macOS, the test binary itself on
+      # Linux) and fails unless every enumerated test ran exactly once — see
+      # Tools/ParallelTest/README.md.
+      #
+      # `-j 4` IS AN EXPERIMENT, to be tuned from these lanes' timings. GitHub's
+      # arm64 macOS runners for public repositories (macos-15, macos-26; the
+      # xcode-27 preview image is not listed, and presumably the same) have
+      # 3 M1 cores and 7 GB, so four processes oversubscribe the CPU a little,
+      # on purpose: they spend much of their time waiting on their own main
+      # actor, not computing. MEMORY is the risk to watch. Measured locally, a
+      # process peaks at ~265 MiB with the suite split twelve ways, and the
+      # whole suite in one process at ~1 GiB, so four quarters should fit in
+      # 7 GB beside the compiler's leftovers — but nobody has measured it on a
+      # runner. If a macOS lane starts dying with no test failure named, or
+      # slows sharply, lower `-j` first. There is no weight cache here, so the
+      # groups are split by test count, not cost, and come out uneven (147 s
+      # against 46 s at -j 4 locally); see Tools/ParallelTest/README.md,
+      # "CI runs it", for the tunings that would even them.
+      #
+      # `--no-build`: the Build step above has built the tests, with the same
+      # $SWIFT the harness reads. `--full-failing-logs`: a failing process's
+      # whole log is printed (folded) into this job log, because the harness's
+      # own files under .build do not outlive the runner.
       - name: Test
-        run: $SWIFT test
+        run: python3 Tools/ParallelTest/parallel_test.py -j 4 --no-build --full-failing-logs
 
       - name: Smoke — headless render of every scenario
         # With the buffer memo VERIFIED: `--selfcheck` renders each scenario
@@ -420,11 +455,26 @@ jobs:
       - name: Toolchain version
         run: swift --version
 
+      # The `swift:*-noble` images carry no Python — swift-docker's Dockerfiles
+      # install `libpython3-dev` (for LLDB) but not `python3`, and on the
+      # 2026-09-29 run apt installed `python3` itself as NEW for the smoke
+      # step's venv. The test harness and the PTY smoke both need it, so it is
+      # installed once, here.
+      - name: Install Python
+        run: apt-get update && apt-get install -y python3 python3-venv
+
       - name: Build
         run: swift build --build-tests
 
+      # Several processes rather than `swift test`'s one; the macOS job's Test
+      # step says why, and why `-j 4` is an experiment. Linux runners have
+      # 4 cores and 16 GB (x86_64 and arm64 alike), so memory is less of a
+      # worry here than on macOS. swift 6.4 and trunk build with swift-build
+      # by default, which makes one test binary per test target instead of one
+      # for the package; the harness runs each group's share of each binary in
+      # turn, so there are still never more than four test processes at once.
       - name: Test
-        run: swift test
+        run: python3 Tools/ParallelTest/parallel_test.py -j 4 --no-build --full-failing-logs
 
       - name: Smoke — headless render of every scenario
         env:
@@ -432,9 +482,7 @@ jobs:
         run: swift run Stress --selfcheck
 
       - name: Smoke — drive both apps in a real PTY (${{ matrix.smoke }})
-        run: |
-          apt-get update && apt-get install -y python3-venv
-          ./Tools/Smoke/ci-pty-smoke.sh ${{ matrix.smoke }}
+        run: ./Tools/Smoke/ci-pty-smoke.sh ${{ matrix.smoke }}
 
   # ── Windows (advisory: the port is in progress) ─────────────────────────────
   #

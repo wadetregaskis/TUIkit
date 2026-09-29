@@ -18,12 +18,13 @@ cores (see CONTRIBUTING.md for the full before/after):
     swift test (one process)   51.6 s suite / 59.7 s wall
     this harness, -j 6         ~15 s
 
-WHAT IT DOES NOT DO
--------------------
-It does not replace the `swift test` CI lanes. CI runs the suite exactly the
-way a contributor does, in one process; this is a local accelerant for anyone
-running the suite repeatedly. It is also not a different *selection* of tests:
-it runs all of them, and refuses to report success unless it can prove it.
+WHERE IT RUNS
+-------------
+Locally, as an accelerant for anyone running the suite repeatedly, and on
+CI's macOS and Linux lanes (`-j 4 --no-build --full-failing-logs`), where one
+`swift test` process had grown to 290–650 s a run and once outlasted a test's
+600 s sleep. It is not a different *selection* of tests: it runs all of them,
+and refuses to report success unless it can prove it.
 
 THE FOUR TRAPS THIS HARNESS IS BUILT AROUND
 -------------------------------------------
