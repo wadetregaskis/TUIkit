@@ -729,20 +729,9 @@ extension AppRunner {
 
             case .mouse(let mouseEvent):
                 focusManager.noteInputSource(.pointer)
-                // Hit-test regions are in content-area coordinates; translate
-                // the terminal-space y by the header height before dispatch.
-                let translated = MouseEvent(
-                    button: mouseEvent.button,
-                    phase: mouseEvent.phase,
-                    x: mouseEvent.x,
-                    y: mouseEvent.y - appHeader.height,
-                    shift: mouseEvent.shift,
-                    ctrl: mouseEvent.ctrl,
-                    meta: mouseEvent.meta
-                )
                 // Re-render only when a handler consumed the event — with
                 // any-event mouse mode the terminal reports every motion.
-                if tuiContext.mouseEventDispatcher.dispatch(translated) {
+                if tuiContext.mouseEventDispatcher.dispatch(mouseEvent.inContent(belowHeaderOf: appHeader.height)) {
                     appState.setNeedsRender()
                 }
 

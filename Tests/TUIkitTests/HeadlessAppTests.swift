@@ -81,6 +81,40 @@ private struct PointerPage: View {
     }
 }
 
+/// A pop-up menu and a line that says what it last ran — under an app header,
+/// or not.
+private struct MenuApp: App {
+    let headed: Bool
+
+    init() { headed = false }
+
+    init(headed: Bool) { self.headed = headed }
+
+    var body: some Scene {
+        WindowGroup {
+            if headed {
+                MenuPage().appHeader { Text("A header over the page") }
+            } else {
+                MenuPage()
+            }
+        }
+    }
+}
+
+private struct MenuPage: View {
+    @State private var ran = "nothing"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Menu("Actions") {
+                Button("First") { ran = "first" }
+                Button("Second") { ran = "second" }
+            }
+            Text("ran \(ran)")
+        }
+    }
+}
+
 /// Whether some line of `screen`, with its styling stripped, contains `text`.
 private func shows(_ text: String, on screen: [String]) -> Bool {
     screen.contains { $0.stripped.contains(text) }
@@ -187,6 +221,46 @@ struct HeadlessAppTests {
         #expect(shows("double clicks: 0", on: app.screen), "two clicks a second apart made a double click")
         click(after: 16_666_667)
         #expect(shows("double clicks: 1", on: app.screen), "two clicks a frame apart made no double click")
+    }
+
+    /// A script aims at what it SEES: a position on the screen, the header's
+    /// lines included. The app's event funnel takes the header's height off
+    /// every mouse event before it dispatches, because hit regions are laid out
+    /// in the content's coordinates; a harness that dispatched the screen's row
+    /// as it stood pressed whatever was drawn that many rows further down.
+    @Test("A click lands on what the screen draws there, under an app header")
+    func aClickUnderAHeaderLandsWhereItIsDrawn() throws {
+        let app = HeadlessApp(MenuApp(headed: true), width: 40, height: 12)
+        app.frame(atNanos: 16_666_667)
+        #expect(shows("A header over the page", on: app.screen), "precondition: the header is drawn")
+        let (x, y) = try #require(position(of: "Actions", on: app.screen), "precondition: the menu is drawn")
+        app.send(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
+        app.send(MouseEvent(button: .left, phase: .released, x: x, y: y))
+        app.frame(atNanos: 33_333_334)
+        #expect(shows("Second", on: app.screen), "the click did not open the menu drawn where it landed")
+    }
+
+    /// Which device opened a menu decides what it highlights: the pointer
+    /// nothing, the keyboard its first item. The app's event funnel records the
+    /// device before it dispatches; a harness that skipped the record opened
+    /// every menu as the keyboard does, whatever opened it. Down then Return
+    /// tells the two apart: from nothing, Down lands on the first item; from
+    /// the first, on the second.
+    @Test("A menu opened by a click highlights nothing, as the pointer opens one in the app")
+    func aClickOpensAMenuAsThePointer() throws {
+        // No header, so the click lands wherever the header's height is taken.
+        let app = HeadlessApp(MenuApp(headed: false), width: 40, height: 12)
+        app.frame(atNanos: 16_666_667)
+        let (x, y) = try #require(position(of: "Actions", on: app.screen), "precondition: the menu is drawn")
+        app.send(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
+        app.send(MouseEvent(button: .left, phase: .released, x: x, y: y))
+        app.frame(atNanos: 33_333_334)
+        #expect(shows("Second", on: app.screen), "precondition: the click opened the menu")
+        app.send(KeyEvent(key: .down))
+        app.frame(atNanos: 50_000_000)
+        app.send(KeyEvent(key: .enter))
+        app.frame(atNanos: 66_666_667)
+        #expect(shows("ran first", on: app.screen), "Down from a click-opened menu did not land on its first item")
     }
 
     @Test("An instance with no render cache draws what one with a cache draws")

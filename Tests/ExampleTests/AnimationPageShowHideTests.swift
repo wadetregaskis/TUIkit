@@ -105,28 +105,15 @@ private final class PageDriver<A: App> {
     /// pressed there, a frame, and the button released. Whether a handler
     /// took both halves.
     ///
-    /// `HeadlessApp.send(_:)` hands the event straight to the dispatcher,
-    /// which works in the page's own space — below the app header, where the
-    /// app's input handler has already moved a terminal's click — so the
-    /// header's rows come off the screen row.
+    /// At the screen's own row: `HeadlessApp.send(_:)` takes the app header's
+    /// rows off it, as the app's event funnel does a terminal's click.
     func click(_ text: String) -> Bool {
         guard let at = position(of: text) else { return false }
         let x = at.column + text.count / 2
-        let y = at.row - appHeaderRows
-        let pressed = app.send(MouseEvent(button: .left, phase: .pressed, x: x, y: y))
+        let pressed = app.send(MouseEvent(button: .left, phase: .pressed, x: x, y: at.row))
         advance(byMillis: 17)
-        let released = app.send(MouseEvent(button: .left, phase: .released, x: x, y: y))
+        let released = app.send(MouseEvent(button: .left, phase: .released, x: x, y: at.row))
         return pressed && released
-    }
-
-    /// The rows the app header takes at the top of the screen: its box, when
-    /// the page has one, and none otherwise.
-    private var appHeaderRows: Int {
-        let lines = screen.map(\.stripped)
-        guard lines.first?.hasPrefix("╭") == true,
-            let bottom = lines.firstIndex(where: { $0.hasPrefix("╰") })
-        else { return 0 }
-        return bottom + 1
     }
 
     /// Renders a frame every 1/60 s until `millis` have passed.

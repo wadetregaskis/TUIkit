@@ -132,3 +132,21 @@ extension EnvironmentValues {
         set { self[AppHeaderKey.self] = newValue }
     }
 }
+
+// MARK: - Pointer Coordinates
+
+extension MouseEvent {
+    /// This event as the content sees it: its row counted from the top of the
+    /// content, `headerHeight` lines below the top of the terminal.
+    ///
+    /// A terminal reports the pointer on the screen, header included, while
+    /// every hit-test region is laid out in the content's own coordinates. Each
+    /// place an event enters an app takes the header off here: the run loop's
+    /// event funnel, and `HeadlessApp`, whose scripts aim at what the screen
+    /// draws.
+    func inContent(belowHeaderOf headerHeight: Int) -> MouseEvent {
+        MouseEvent(
+            button: button, phase: phase, x: x, y: y - headerHeight,
+            shift: shift, ctrl: ctrl, meta: meta, clickCount: clickCount)
+    }
+}

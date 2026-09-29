@@ -59,6 +59,8 @@ package final class HeadlessApp<A: App> {
     private let renderer: RenderLoop<A>
     private let inputHandler: InputHandler
     private let tuiContext: TUIContext
+    private let focusManager: FocusManager
+    private let appHeader: AppHeaderState
     private let animationScheduler = AnimationScheduler()
     /// The instant of the last frame, which the mouse dispatcher reads as the
     /// time an event arrives. See the type's discussion.
@@ -80,10 +82,13 @@ package final class HeadlessApp<A: App> {
         let tuiContext = TUIContext()
         let paletteManager = ThemeManager(items: PaletteRegistry.all, renderTrigger: {})
         let appearanceManager = ThemeManager(items: AppearanceRegistry.all, renderTrigger: {})
+        let appHeader = AppHeaderState()
         self.terminal = terminal
         self.tuiContext = tuiContext
+        self.focusManager = focusManager
+        self.appHeader = appHeader
         self.renderer = RenderLoop(
-            app: app, terminal: terminal, statusBar: statusBar, appHeader: AppHeaderState(),
+            app: app, terminal: terminal, statusBar: statusBar, appHeader: appHeader,
             focusManager: focusManager, paletteManager: paletteManager,
             appearanceManager: appearanceManager, tuiContext: tuiContext, isTmux: false)
         self.inputHandler = InputHandler(
@@ -119,18 +124,25 @@ package final class HeadlessApp<A: App> {
         animationScheduler.endFrame()
     }
 
-    /// Delivers a key through the five-layer chain, as a keypress is.
+    /// Delivers a key through the five-layer chain, as a keypress is — noted
+    /// first as the keyboard's, as the app's event funnel notes it.
     /// - Returns: Whether some layer consumed it.
     @discardableResult
     package func send(_ event: KeyEvent) -> Bool {
-        inputHandler.handle(event)
+        focusManager.noteInputSource(.keyboard)
+        return inputHandler.handle(event)
     }
 
-    /// Delivers a mouse event to the handlers the last frame registered.
+    /// Delivers a mouse event to the handlers the last frame registered, as
+    /// the app's event funnel delivers one: noted as the pointer's, which is
+    /// what a menu it opens asks (the pointer highlights nothing, the keyboard
+    /// the first item), and with its row taken from the screen — where a script
+    /// aims, at what it sees — to the content, below the app header.
     /// - Returns: Whether a handler consumed it.
     @discardableResult
     package func send(_ event: MouseEvent) -> Bool {
-        tuiContext.mouseEventDispatcher.dispatch(event)
+        focusManager.noteInputSource(.pointer)
+        return tuiContext.mouseEventDispatcher.dispatch(event.inContent(belowHeaderOf: appHeader.height))
     }
 
     /// Changes the terminal's size, as `SIGWINCH` reports it: the next frame
