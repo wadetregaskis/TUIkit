@@ -139,7 +139,8 @@ package struct ValueHashPlan {
 ///   reference's, `[Int]?`). `OptionalWholeBytesTests` measures both in the
 ///   suite. Otherwise a typed step: `== nil`, then the payload's own plan
 ///   (`String?`, a closure's, `Color?`).
-/// - **``_ValueHashing``** (`ConditionalView`, `AnyView`): a typed step.
+/// - **``_ValueHashing``** (`ConditionalView`, `Optional`, TUIkit's payload
+///   enums): a typed step.
 /// - **An opaque existential** (`any P`, `Any`): a typed step that loads it as
 ///   its static type and opens it — see ``ExistentialField``. Never its
 ///   container's words: the unused ones are undefined, and a boxed payload's

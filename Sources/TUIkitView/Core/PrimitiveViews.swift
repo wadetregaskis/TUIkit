@@ -102,6 +102,14 @@ public struct AnyView: View {
     /// `Layoutable` conformances open it back to the concrete type via implicit
     /// existential opening — identical dispatch to the old captured closures.
     /// Mirrors `ChildView` (see `ChildInfo.swift`).
+    ///
+    /// The value hash reads it as the plan reads any existential field: its
+    /// content's type, then the content by its own plan — opened from the
+    /// existential by Swift, never read out of its container, and never the
+    /// address of the box holding it, which names a value only while that
+    /// value is alive (a freed box's comes straight back for the next one).
+    /// The type is mixed because nothing else in the key says it: the key's
+    /// own view type is `AnyView` for every erased view.
     private let view: any View
 
     /// Creates an AnyView wrapping the given view.
@@ -131,30 +139,14 @@ extension AnyView {
     var erasedValueHash: Int { erasedViewValueHash(view) }
 }
 
-extension AnyView: _ValueHashing {
-    /// The content's type, then the content by its own plan — opened from the
-    /// existential by Swift, never read out of its container.
-    ///
-    /// The type is mixed because nothing else in the key says it: the key's
-    /// own view type is `AnyView` for every erased view, and a `Text` and a
-    /// `Divider` whose structs held the same bytes would otherwise be one key.
-    /// The content is hashed, never the address of the box holding it — an
-    /// address names a value only while that value is alive, and a freed box's
-    /// comes straight back for the next one.
-    package static func _mixValueHash(
-        at pointer: UnsafeRawPointer, into hash: inout UInt64, plans: ValueHashPlans
-    ) -> Bool {
-        mixOpenedView(pointer.assumingMemoryBound(to: AnyView.self).pointee.view, into: &hash, plans: plans)
-    }
-}
-
 // MARK: - ConditionalView's Value
 
 extension ConditionalView: _ValueHashing {
     /// The branch, then its content by its own plan — read by a `switch`,
     /// never from the case's byte, and never the other branch's payload,
-    /// which holds whatever the memory held before.
-    package static func _mixValueHash(
+    /// which holds whatever the memory held before. `nonisolated`, as every
+    /// step is (see `ValueHashPlans`).
+    package nonisolated static func _mixValueHash(
         at pointer: UnsafeRawPointer, into hash: inout UInt64, plans: ValueHashPlans
     ) -> Bool {
         switch pointer.assumingMemoryBound(to: Self.self).pointee {

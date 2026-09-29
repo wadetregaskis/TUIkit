@@ -7,6 +7,8 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import TUIkitCore
+
 /// Every ``ValueHashPlan`` one render cache has built, keyed by type.
 ///
 /// Looked up once per measured view, so it is shaped for that: open addressing
@@ -24,6 +26,16 @@
 /// constant, so a lookup is loads from memory nothing else aliases — not
 /// accesses to a class's stored variables, which Swift checks for exclusivity
 /// at run time.
+///
+/// Nothing here is isolated to the main actor, though every caller is on it:
+/// the plans are only ever run from inside a measure, synchronously. That is
+/// not a nicety. A `@MainActor` function's closures are isolated too, and
+/// Swift 6 checks the executor on entry to one handed to the standard
+/// library's `withUnsafeBytes` or `_openExistential` (SE-0423) — and a hash
+/// that runs steps passes several: measured with the plans wired in, the
+/// check's leaves were more than half of `viewValueHash`'s inclusive time on
+/// `fanout`. The one thing that needs the main actor, the stack guard's
+/// floor, is read at the entry (``armStackCheck()``).
 package final class ValueHashPlans {
     private struct Slot {
         /// The metadata address of the planned type; 0 for an empty slot.
@@ -40,7 +52,17 @@ package final class ValueHashPlans {
         var count: Int
     }
 
+    /// What running a plan keeps between one entry and the steps below it.
+    private struct Running {
+        /// The stack address below which a step gives up rather than open
+        /// another existential: ``StackGuard``'s floor for the thread the
+        /// last entry ran on, set by ``armStackCheck()``. 0 until then —
+        /// no check — which only a test calling the steps directly sees.
+        var stackFloor: UInt = 0
+    }
+
     private let table: UnsafeMutablePointer<Table>
+    private let running: UnsafeMutablePointer<Running>
     private let builder: ValueHashPlanBuilder
 
     /// A table to start with: enough for the few hundred types a large app's
@@ -55,6 +77,8 @@ package final class ValueHashPlans {
         self.builder = builder
         table = .allocate(capacity: 1)
         table.initialize(to: Self.emptyTable(capacity: Self.initialCapacity))
+        running = .allocate(capacity: 1)
+        running.initialize(to: Running())
     }
 
     deinit {
@@ -69,6 +93,8 @@ package final class ValueHashPlans {
         current.slots.deallocate()
         table.deinitialize(count: 1)
         table.deallocate()
+        running.deinitialize(count: 1)
+        running.deallocate()
     }
 
     /// How many types have a plan — what a test counts.
@@ -176,19 +202,45 @@ package final class ValueHashPlans {
 extension ValueHashPlans {
     /// The value hash of the value of type `V` at `value`, by its plan, or
     /// `nil` when its type bypasses.
+    ///
+    /// On the main actor for the stack guard alone, and with no closure of
+    /// its own, so nothing here checks the executor (see the type).
     @MainActor
     package func valueHash<V>(at value: UnsafePointer<V>) -> Int? {
         let plan = plan(for: V.self)
         if plan.pointee.shape == .dense {
             return hashOfRawBytes(UnsafeRawBufferPointer(start: value, count: MemoryLayout<V>.size))
         }
+        armStackCheck()
         return hashByPlan(UnsafeRawPointer(value), plan)
+    }
+
+    /// Readies the check ``mixOpened(_:into:plans:)`` makes before it opens
+    /// an existential, for the thread this runs on: every entry that runs a
+    /// plan with steps calls this first, on the main actor, where the stack
+    /// guard's state lives.
+    ///
+    /// The steps below compare the stack pointer with the floor read here,
+    /// off the main actor — sound because an entry and every step under it
+    /// run synchronously, on one thread, the one this found the floor of.
+    /// `UInt.max` when there is no headroom even here, so every opening
+    /// gives up; 0 when the guard is off, so none does — its answers exactly.
+    @MainActor @inline(__always)
+    func armStackCheck() {
+        running.pointee.stackFloor = StackGuard.uncountedFloor()
+    }
+
+    /// Whether a step may open another existential: the stack pointer is
+    /// above the floor the entry armed. See ``armStackCheck()``.
+    @inline(__always)
+    var hasStackHeadroom: Bool {
+        StackGuard.currentStackPointer() > running.pointee.stackFloor
     }
 
     /// The hash of a value whose plan is not dense: its runs, then its steps,
     /// seeded and finalised as the dense hash is. Out of line, off the dense
-    /// path.
-    @MainActor @inline(never)
+    /// path. The caller has armed the stack check.
+    @inline(never)
     func hashByPlan(_ base: UnsafeRawPointer, _ plan: UnsafePointer<ValueHashPlan>) -> Int? {
         var hash = hashFoldSeed
         guard mix(at: base, plan: plan, into: &hash) else { return nil }
@@ -197,7 +249,6 @@ extension ValueHashPlans {
 
     /// Mixes the value of `type` at `base` into `hash`, by `type`'s plan;
     /// `false` when it bypasses.
-    @MainActor
     func mix(at base: UnsafeRawPointer, type: Any.Type, into hash: inout UInt64) -> Bool {
         mix(at: base, plan: plan(for: type), into: &hash)
     }
@@ -208,7 +259,6 @@ extension ValueHashPlans {
     /// `caseIndex` is the case's own number, distinct for every case of the
     /// type, so two cases never mix the same words whatever their payloads;
     /// pass `()` for a case without one.
-    @MainActor
     package func mixCase<Payload>(_ caseIndex: Int, _ payload: Payload, into hash: inout UInt64) -> Bool {
         hash = mixHashWord(hash, UInt64(bitPattern: Int64(caseIndex)))
         return mixValue(payload, into: &hash)
@@ -216,7 +266,6 @@ extension ValueHashPlans {
 
     /// Mixes `value` into `hash` by its type's plan — for a step that has
     /// opened or switched its way to a payload of its own, in a local.
-    @MainActor
     package func mixValue<Value>(_ value: Value, into hash: inout UInt64) -> Bool {
         let plan = plan(for: Value.self)
         guard plan.pointee.size > 0 else { return true }
@@ -225,7 +274,6 @@ extension ValueHashPlans {
         }
     }
 
-    @MainActor
     private func mix(at base: UnsafeRawPointer, plan: UnsafePointer<ValueHashPlan>, into hash: inout UInt64) -> Bool {
         switch plan.pointee.shape {
         case .dense:

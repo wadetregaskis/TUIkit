@@ -209,6 +209,17 @@ public enum StackGuard {
         return headroomSlowPath(stackPointer: stackPointer, countsTruncation: false)
     }
 
+    /// The floor ``hasHeadroomUncounted()`` compares the stack pointer with on
+    /// the running thread, for a caller that makes the comparison itself,
+    /// later and off the main actor — `currentStackPointer() > floor` — but on
+    /// this thread, synchronously under this call: the value hash, whose steps
+    /// are nonisolated. `UInt.max` when there is no headroom here already, so
+    /// every comparison fails; 0 when the guard is off, so none does.
+    @MainActor
+    package static func uncountedFloor() -> UInt {
+        hasHeadroomUncounted() ? cachedExtent.floor : .max
+    }
+
     /// The out-of-line half of ``hasHeadroom()``: either genuinely out of
     /// stack, or on a thread the cache does not describe. A `false` is counted
     /// in ``truncationCount`` when `countsTruncation`.

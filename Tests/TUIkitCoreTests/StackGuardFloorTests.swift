@@ -319,6 +319,38 @@ struct StackGuardExtentCacheTests {
         #expect(StackGuard.hasHeadroomUncounted())
     }
 
+    /// The value hash compares the stack pointer with a floor it read at its
+    /// entry, off the main actor. The floor must be the one
+    /// `hasHeadroomUncounted()` compares with — a comparison against it gives
+    /// that answer — and must make every comparison fail where there is no
+    /// headroom already, and none where the guard is off.
+    @Test("The floor for a comparison made elsewhere answers as the guard does, uncounted")
+    func uncountedFloorAnswersAsTheGuardDoes() {
+        let saved = StackGuard.cachedExtent
+        let savedCount = StackGuard.truncationCount
+        defer {
+            StackGuard.cachedExtent = saved
+            StackGuard.truncationCount = savedCount
+        }
+
+        StackGuard.cachedExtent = .unseeded
+        let floor = StackGuard.uncountedFloor()
+        #expect(StackGuard.currentStackPointer() > floor, "a shallow stack is above its floor")
+        #expect(floor == StackGuard.cachedExtent.floor || StackGuard.cachedExtent == .disabled)
+
+        let stackPointer = currentStackPointer()
+        let megabyte: UInt = 1 << 20
+        StackGuard.cachedExtent = StackGuard.StackExtent(
+            low: stackPointer - megabyte,
+            floor: stackPointer + megabyte,
+            high: stackPointer + 2 * megabyte)
+        #expect(StackGuard.uncountedFloor() == .max, "no headroom here: every comparison fails")
+        #expect(StackGuard.truncationCount == savedCount, "not counted")
+
+        StackGuard.cachedExtent = .disabled
+        #expect(StackGuard.uncountedFloor() == 0, "the guard off: no comparison fails")
+    }
+
     /// The counter must not move when the guard is simply doing nothing, or a
     /// harness would read a healthy render as truncated.
     @Test("A render with headroom to spare counts no truncations")

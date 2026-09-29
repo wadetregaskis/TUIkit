@@ -325,7 +325,7 @@ struct ValueHashPlanTests {
     func conditionalAndErased() {
         #expect(plan(ConditionalView<EmptyView, EmptyView>.self).stepDescriptions
             == ["0: ConditionalView<EmptyView, EmptyView>"])
-        #expect(plan(AnyView.self).stepDescriptions == ["0: AnyView"])
+        #expect(plan(AnyView.self).stepDescriptions == ["0: existential view"])
     }
 
     @Test("An existential field is opened through its static type, never read from its container")
@@ -431,6 +431,29 @@ struct ValueHashPlanTests {
         #expect(StackGuard.truncationCount == truncations)
         // A shallow one hashes.
         #expect(hash(levels[3], plans: plans) != nil)
+    }
+
+    /// The steps run off the main actor and compare the stack pointer with the
+    /// floor their entry read from the stack guard. An entry that finds no
+    /// headroom must leave every opening to give up — and only openings: a
+    /// value with steps but no existential is hashed as before.
+    @Test("An entry with no headroom left opens no existential, and hashes the rest")
+    func noHeadroomAtTheEntry() {
+        let saved = StackGuard.cachedExtent
+        defer { StackGuard.cachedExtent = saved }
+        let erased = AnyView(Text("x"))
+        let conditional = ConditionalView<Text, EmptyView>.trueContent(Text("x"))
+        #expect(hash(erased, plans: plans) != nil)
+
+        let stackPointer = StackGuard.currentStackPointer()
+        let megabyte: UInt = 1 << 20
+        StackGuard.cachedExtent = StackGuard.StackExtent(
+            low: stackPointer - megabyte, floor: stackPointer + megabyte, high: stackPointer + 2 * megabyte)
+        #expect(hash(erased, plans: plans) == nil)
+        #expect(hash(conditional, plans: plans) != nil)
+
+        StackGuard.cachedExtent = saved
+        #expect(hash(erased, plans: plans) != nil)
     }
 
     // MARK: Bypass

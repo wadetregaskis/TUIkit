@@ -16,8 +16,9 @@ import TUIkitStyling
 
 /// A type whose value hash is mixed by typed Swift that reads it, rather than
 /// from its bytes: `Optional` (its case, then its payload), `ConditionalView`
-/// (its branch, then the branch's content), `AnyView` (its content's type,
-/// then the content).
+/// (its branch, then the branch's content), and a handful of TUIkit's own
+/// payload enums (their case, then its payload). An existential field needs
+/// none: the plan opens it (`ExistentialField`) — `AnyView`'s content so.
 ///
 /// For a type some of whose bytes can be left undefined by a value that is
 /// perfectly well formed — an enum's inactive payload, the half of a `nil` its
@@ -33,7 +34,10 @@ package protocol _ValueHashing {
     /// Mixes the value of this type at `pointer` into `hash`, reading it through
     /// typed Swift; `false` when some part of it cannot be hashed, and the whole
     /// value must go unhashed.
-    @MainActor
+    ///
+    /// Nonisolated, as everything that runs a plan is (see
+    /// ``ValueHashPlans``): a conformance on a view, which is isolated to the
+    /// main actor, declares its witness `nonisolated`.
     static func _mixValueHash(at pointer: UnsafeRawPointer, into hash: inout UInt64, plans: ValueHashPlans) -> Bool
 }
 
@@ -61,7 +65,6 @@ extension Optional: _ValueHashing {
     /// in place, so no fixed choice of bytes says which case it is and holds
     /// nothing undefined. The plan reads a whole optional without asking this
     /// where its bytes are always all written — see `ValueHashPlanBuilder`.
-    @MainActor
     package static func _mixValueHash(
         at pointer: UnsafeRawPointer, into hash: inout UInt64, plans: ValueHashPlans
     ) -> Bool {
@@ -114,7 +117,6 @@ enum ExistentialField {
 
     /// Mixes the existential at `pointer` into `hash`: its payload's dynamic
     /// type, then the payload by that type's plan.
-    @MainActor
     func mix(at pointer: UnsafeRawPointer, into hash: inout UInt64, plans: ValueHashPlans) -> Bool {
         switch self {
         case .any:
@@ -150,10 +152,12 @@ enum ExistentialField {
 /// build, 2026-09-28). A value too deep to hash is measured unkeyed — and the
 /// measure descends anyway, under its own guard — so giving up here is not a
 /// truncation, and is not counted as one (`StackGuard.truncationCount`, which
-/// a harness reads as "the tree was cut short").
-@MainActor
+/// a harness reads as "the tree was cut short"). The floor it compares with
+/// is the stack guard's, read by the entry that began this hash
+/// (``ValueHashPlans/armStackCheck()``): the guard's state is the main
+/// actor's, and nothing here is isolated to it.
 func mixOpened<Payload>(_ value: Payload, into hash: inout UInt64, plans: ValueHashPlans) -> Bool {
-    guard StackGuard.hasHeadroomUncounted() else { return false }
+    guard plans.hasStackHeadroom else { return false }
     hash = mixHashWord(hash, UInt64(UInt(bitPattern: ObjectIdentifier(Payload.self))))
     return plans.mixValue(value, into: &hash)
 }
@@ -164,13 +168,11 @@ func mixOpened<Payload>(_ value: Payload, into hash: inout UInt64, plans: ValueH
 // payload's type is never seen (measured on 6.2.4: `any P` → `P`, `Any` → `Any`).
 
 /// ``mixOpened(_:into:plans:)`` for an `any View`, opened.
-@MainActor
-func mixOpenedView<Payload: View>(_ value: Payload, into hash: inout UInt64, plans: ValueHashPlans) -> Bool {
+private func mixOpenedView<Payload: View>(_ value: Payload, into hash: inout UInt64, plans: ValueHashPlans) -> Bool {
     mixOpened(value, into: &hash, plans: plans)
 }
 
 /// ``mixOpened(_:into:plans:)`` for an `any Equatable`, opened.
-@MainActor
 private func mixOpenedEquatable<Payload: Equatable>(
     _ value: Payload, into hash: inout UInt64, plans: ValueHashPlans
 ) -> Bool {
@@ -178,7 +180,6 @@ private func mixOpenedEquatable<Payload: Equatable>(
 }
 
 /// ``mixOpened(_:into:plans:)`` for an `any Hashable`, opened.
-@MainActor
 private func mixOpenedHashable<Payload: Hashable>(
     _ value: Payload, into hash: inout UInt64, plans: ValueHashPlans
 ) -> Bool {
@@ -187,7 +188,6 @@ private func mixOpenedHashable<Payload: Hashable>(
 
 /// ``mixOpened(_:into:plans:)`` for an `Any`, which no constraint can open:
 /// `_openExistential` does.
-@MainActor
 private func mixOpenedAny(_ value: Any, into hash: inout UInt64, plans: ValueHashPlans) -> Bool {
     func opened<Payload>(_ payload: Payload) -> Bool {
         mixOpened(payload, into: &hash, plans: plans)
@@ -197,7 +197,6 @@ private func mixOpenedAny(_ value: Any, into hash: inout UInt64, plans: ValueHas
 
 /// An existential of a static type the value hash has no direct opener for:
 /// loaded as that type, found through its metatype.
-@MainActor
 private func mixExistential(
     at pointer: UnsafeRawPointer, staticType: Any.Type, into hash: inout UInt64, plans: ValueHashPlans
 ) -> Bool {
@@ -211,7 +210,6 @@ private func mixExistential(
 /// type: `type(of:)` over it as `Any` finds that type, and a cast to it
 /// unwraps the payload. (Opening the `Any` would find the existential's own
 /// type again, not its payload's.)
-@MainActor
 private func mixDynamic<Existential>(_ value: Existential, into hash: inout UInt64, plans: ValueHashPlans) -> Bool {
     func cast<Payload>(_: Payload.Type) -> Bool {
         guard let payload = value as? Payload else { return false }
