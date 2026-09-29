@@ -497,7 +497,7 @@ are not mirrored. CI's Windows lanes keep running `swift test`.
 python3 Tools/ParallelTest/test_parallel_test.py
 ```
 
-68 tests covering the parts that can be tested without running the suite: ID
+74 tests covering the parts that can be tested without running the suite: ID
 escaping and pattern anchoring, the partition proof rejecting a gap or an
 overlap, bin packing, both weight paths, all eight shapes of the summary line
 in both their singular and plural wordings, the malformed-xunit recovery, the
@@ -505,10 +505,13 @@ event-stream duration join, and the run lock making a second run wait. And,
 for the toolchains: `$SWIFT` parsing; the macOS environment for each of the
 three layouts in "Toolchains and platforms" (a mutation that lets the platform
 come before a swift.org toolchain's own swift-testing, or puts two copies on the
-path, fails them); test-binary discovery for native and swift-build output on
-both platforms; the helper and direct command lines; the per-binary plan; a
-slot running its invocations in turn while slots run at once; and the failure
-excerpt on real Linux (CI) and macOS (probe) output.
+path, fails them); the compiler-version spellings and the 6.4 cut-over for the
+build directory on the library path, with its place in the order on both
+platforms; test-binary discovery for native and swift-build output on both
+platforms; the helper and direct command lines; the per-binary plan; a slot
+running its invocations in turn while slots run at once; the failure excerpt
+on real Linux (CI) and macOS (probe) output; and the escaping of the `::error`
+annotations.
 
 Two of those are a negative control on the summary parser and are the reason
 to run it after touching `SUMMARY_RE`: a log with no run summary in it — empty,
