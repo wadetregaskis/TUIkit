@@ -615,3 +615,20 @@ extension View {
         keyboardShortcut(KeyboardShortcut(key, modifiers: modifiers))
     }
 }
+
+// MARK: - Value Hash
+
+/// Read by a `switch` — a key equivalent holds a `Character`, so the enum is
+/// not trivial and its bytes cannot be read whole — and the key's payload by
+/// its own plan. See `_ValueHashing`.
+extension KeyboardShortcut.Trigger: _ValueHashing {
+    package static func _mixValueHash(
+        at pointer: UnsafeRawPointer, into hash: inout UInt64, plans: ValueHashPlans
+    ) -> Bool {
+        switch pointer.assumingMemoryBound(to: Self.self).pointee {
+        case .defaultAction: plans.mixCase(0, (), into: &hash)
+        case .cancelAction: plans.mixCase(1, (), into: &hash)
+        case .key(let key, let modifiers): plans.mixCase(2, (key, modifiers), into: &hash)
+        }
+    }
+}

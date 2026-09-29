@@ -193,3 +193,19 @@ extension TrackConfiguration {
             fillGradient: gradient)
     }
 }
+
+// MARK: - Value Hash
+
+/// Read by a `switch`: `solid` is spelled in the pattern string's spare values,
+/// so the string's first word is written by nobody when it is stored in place.
+/// See `_ValueHashing`.
+extension TrackConfiguration.Background: _ValueHashing {
+    package static func _mixValueHash(
+        at pointer: UnsafeRawPointer, into hash: inout UInt64, plans: ValueHashPlans
+    ) -> Bool {
+        switch pointer.assumingMemoryBound(to: Self.self).pointee {
+        case .pattern(let pattern): plans.mixCase(0, pattern, into: &hash)
+        case .solid: plans.mixCase(1, (), into: &hash)
+        }
+    }
+}

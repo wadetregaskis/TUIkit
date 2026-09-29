@@ -147,3 +147,44 @@ public enum SegmentColoring: Sendable, Equatable {
     /// fall back to the control's filled colour).
     case gradient(Gradient)
 }
+
+// MARK: - Value Hash
+
+/// Read by a `switch` — its payloads hold strings, gradients and colours, so no
+/// fixed choice of its bytes is always written — and each case's payload by
+/// its own plan. See `_ValueHashing`.
+extension TrackStyle: _ValueHashing {
+    package static func _mixValueHash(
+        at pointer: UnsafeRawPointer, into hash: inout UInt64, plans: ValueHashPlans
+    ) -> Bool {
+        switch pointer.assumingMemoryBound(to: Self.self).pointee {
+        case .bar: plans.mixCase(0, (), into: &hash)
+        case .block: plans.mixCase(1, (), into: &hash)
+        case .blockFine: plans.mixCase(2, (), into: &hash)
+        case .dot: plans.mixCase(3, (), into: &hash)
+        case .knob: plans.mixCase(4, (), into: &hash)
+        case .marker: plans.mixCase(5, (), into: &hash)
+        case .shade: plans.mixCase(6, (), into: &hash)
+        case .braille: plans.mixCase(7, (), into: &hash)
+        case .shadeRamp(let gradient): plans.mixCase(8, gradient, into: &hash)
+        case .threeSegment(let leading, let middle, let trailing, let backgroundPattern, let coloring):
+            plans.mixCase(9, (leading, middle, trailing, backgroundPattern, coloring), into: &hash)
+        case .custom(let configuration): plans.mixCase(10, configuration, into: &hash)
+        }
+    }
+}
+
+/// Read by a `switch`, as ``TrackStyle`` is.
+extension SegmentColoring: _ValueHashing {
+    package static func _mixValueHash(
+        at pointer: UnsafeRawPointer, into hash: inout UInt64, plans: ValueHashPlans
+    ) -> Bool {
+        switch pointer.assumingMemoryBound(to: Self.self).pointee {
+        case .automatic: plans.mixCase(0, (), into: &hash)
+        case .solid(let color): plans.mixCase(1, color, into: &hash)
+        case .perSegment(let leading, let middle, let trailing):
+            plans.mixCase(2, (leading, middle, trailing), into: &hash)
+        case .gradient(let gradient): plans.mixCase(3, gradient, into: &hash)
+        }
+    }
+}

@@ -198,3 +198,10 @@ extension AnimationCurve {
         return high
     }
 }
+
+// MARK: - Value Hash
+
+/// A trivial non-generic enum, internal, whose cases only this module builds:
+/// every byte of every value is written, so the per-pass memos' value hash
+/// reads it whole. See `_AllBytesDefined`.
+extension AnimationCurve: _AllBytesDefined {}

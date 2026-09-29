@@ -384,3 +384,10 @@ extension Animation {
         return "\((value * 1_000_000).rounded() / 1_000_000)"
     }
 }
+
+// MARK: - Value Hash
+
+/// A trivial non-generic enum, internal, whose cases only this module builds:
+/// every byte of every value is written, so the per-pass memos' value hash
+/// reads it whole. See `_AllBytesDefined`.
+extension Animation.Repeat: _AllBytesDefined {}

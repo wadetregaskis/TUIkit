@@ -2,7 +2,7 @@
 //  ValueHashing.swift
 //
 //  How the value hash reads the values whose bytes it must not read whole:
-//  the two opt-ins a type can make, the optional's case, and an
+//  the typed opt-in a type can make, the optional's case, and an
 //  existential's payload — all through typed Swift, never by reading how
 //  Swift lays out an enum's case or an existential's container.
 //
@@ -10,6 +10,7 @@
 //  License: MIT
 
 import TUIkitCore
+import TUIkitStyling
 
 // MARK: - The opt-ins
 
@@ -35,33 +36,6 @@ package protocol _ValueHashing {
     @MainActor
     static func _mixValueHash(at pointer: UnsafeRawPointer, into hash: inout UInt64, plans: ValueHashPlans) -> Bool
 }
-
-/// A non-generic enum whose values are only ever built by code that knows its
-/// layout, so every byte of every value is written — which lets the value hash
-/// read it whole, as it does a word.
-///
-/// Why that holds, measured (2026-09-28, arm64 macOS, Swift 6.2.4 and 6.4, at
-/// -Onone and -O): compiled code that builds an enum case writes the whole
-/// payload area, the unused part of a smaller case's payload included; so does
-/// a copy, generic or not, of a value built that way. The ONE thing that writes
-/// part of a payload is the enum's own inject witness, which the runtime calls
-/// where the layout is not known at compile time: generic code building a case
-/// of a type parameter (an enum that is generic, or `Optional<Self>`'s `nil` —
-/// the optional's business, not this type's), and a module that sees the type
-/// resiliently. So a conformer must be:
-/// - an enum — the rule is about cases, and anything else carrying the marker
-///   bypasses;
-/// - not generic, so no generic code can build its cases;
-/// - trivially copyable (`_isPOD`), so no copy is ever field by field;
-/// - visible to every module that builds it with its layout known: internal
-///   or package, or public and `@frozen` — `@frozen` changes nothing in a
-///   build without library evolution, which is how TUIkit is built, and keeps
-///   this true in one with it.
-///
-/// `AllBytesDefinedTests` pins every conformer against all of that, building
-/// each case into memory filled two ways and checking every byte came out the
-/// same; a new conformer goes on its list.
-package protocol _AllBytesDefined {}
 
 // MARK: - Markers
 
@@ -245,3 +219,10 @@ private func mixDynamic<Existential>(_ value: Existential, into hash: inout UInt
     }
     return _openExistential(type(of: value as Any), do: cast)
 }
+
+// MARK: - Colours
+
+/// A colour's value: a trivial non-generic enum, public and `@frozen`, so every
+/// module builds it knowing its layout — see `_AllBytesDefined`. Declared here
+/// because the colour's own module does not depend on the protocol's.
+extension Color.ColorValue: _AllBytesDefined {}

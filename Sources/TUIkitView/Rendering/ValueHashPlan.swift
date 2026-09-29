@@ -8,6 +8,8 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import TUIkitCore
+
 /// How the value hash reads one type's values: the runs of bytes every value
 /// defines, and the parts only typed Swift can read. Built once per type, from
 /// the type alone (``ValueHashPlanBuilder``), and kept by ``ValueHashPlans``.
@@ -126,7 +128,7 @@ package struct ValueHashPlan {
 ///   word at 24 — padding, as stored).
 /// - **An enum of one byte or none**: its bytes — every write of a one-byte
 ///   value writes the byte.
-/// - **``_AllBytesDefined``** (a non-generic, trivial enum only ever built
+/// - **`_AllBytesDefined`** (TUIkitCore: a non-generic, trivial enum only ever built
 ///   where its layout is known): its bytes.
 /// - **`Optional`**: whole bytes where every value's are all written, measured
 ///   (2026-09-28) — a payload with no spare values, so `nil` has a tag byte of

@@ -21,6 +21,10 @@ import TUIkitCore
 ///
 /// The public modifiers still take `Int?`, matching SwiftUI exactly. This is
 /// what they store.
+///
+/// `@frozen`, and every byte of a value written, so the per-pass memos' value
+/// hash reads a limit whole — see `Color.ColorValue`, the same bargain.
+@frozen
 public enum LineLimit: Sendable, Equatable {
     /// No cap — the text occupies as many lines as it needs (or as its
     /// container allows).
@@ -153,3 +157,9 @@ extension View {
         environment(\.lineLimit, LineLimit(limit, reservesSpace: reservesSpace))
     }
 }
+
+// MARK: - Value Hash
+
+/// A trivial non-generic enum, frozen: every module builds it knowing its
+/// layout, so every byte of every value is written. See `_AllBytesDefined`.
+extension LineLimit: _AllBytesDefined {}

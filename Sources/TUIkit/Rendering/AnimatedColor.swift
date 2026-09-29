@@ -45,7 +45,7 @@ public struct AnimatedColor: Sendable, Equatable {
     /// one. Every bordered container in a frame builds one of these, and an
     /// array — even of a single element — is a heap allocation apiece; a
     /// paired A/B measured that at ~1% of a table frame before this split.
-    private enum Storage: Sendable, Equatable {
+    fileprivate enum Storage: Sendable, Equatable {
         case constant(Color)
         case cycle([Color])
     }
@@ -234,5 +234,21 @@ extension SelectionEmphasisCycle {
         AnimatedColor(
             frames: colors(dim: dim, bright: bright), step: step,
             frameTicks: timing.frameTicks, clock: timing.clock)
+    }
+}
+
+// MARK: - Value Hash
+
+/// Read by a `switch` — a cycle holds an array, so the enum is not trivial and
+/// its bytes cannot be read whole — and each case's payload by its own plan.
+/// See `_ValueHashing`.
+extension AnimatedColor.Storage: _ValueHashing {
+    static func _mixValueHash(
+        at pointer: UnsafeRawPointer, into hash: inout UInt64, plans: ValueHashPlans
+    ) -> Bool {
+        switch pointer.assumingMemoryBound(to: Self.self).pointee {
+        case .constant(let colour): plans.mixCase(0, colour, into: &hash)
+        case .cycle(let colours): plans.mixCase(1, colours, into: &hash)
+        }
     }
 }

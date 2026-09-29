@@ -91,3 +91,24 @@ public enum StyleScope: Sendable, Hashable {
         }
     }
 }
+
+// MARK: - Value Hash
+
+/// Read by a `switch` — `controlVariant` holds a string, so the enum is not
+/// trivial and its bytes cannot be read whole — and each case's payload by its
+/// own plan. See `_ValueHashing`.
+extension StyleScope: _ValueHashing {
+    package static func _mixValueHash(
+        at pointer: UnsafeRawPointer, into hash: inout UInt64, plans: ValueHashPlans
+    ) -> Bool {
+        switch pointer.assumingMemoryBound(to: Self.self).pointee {
+        case .all: plans.mixCase(0, (), into: &hash)
+        case .text: plans.mixCase(1, (), into: &hash)
+        case .semanticColor(let color): plans.mixCase(2, color, into: &hash)
+        case .control(let kind): plans.mixCase(3, kind, into: &hash)
+        case .controlVariant(let kind, let variant): plans.mixCase(4, (kind, variant), into: &hash)
+        case .chrome(let role): plans.mixCase(5, role, into: &hash)
+        case .font(let style): plans.mixCase(6, style, into: &hash)
+        }
+    }
+}

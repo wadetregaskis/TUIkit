@@ -574,6 +574,44 @@ struct ValueHashPlanTests {
         #expect(Set(shapeHashes).count == shapes.count, "\(shapeHashes)")
     }
 
+    @Test("TUIkit's own payload enums hash by their cases: equal values together, different cases apart")
+    func frameworkEnums() {
+        let types: [Any.Type] = [
+            TrackStyle.self, SegmentColoring.self, StyleScope.self, TrackConfiguration.Background.self,
+            KeyboardShortcut.Trigger.self,
+        ]
+        for type in types {
+            #expect(plan(type).stepDescriptions == ["0: \(type)"], "\(type)")
+        }
+        let styles: [TrackStyle] = [
+            .bar, .block, .shadeRamp(gradient: nil), .shadeRamp(gradient: Gradient(colors: [.red, .blue])),
+            .threeSegment(leading: "a", middle: "b", trailing: "c"),
+            .threeSegment(leading: "a", middle: "b", trailing: "c", coloring: .solid(.red)),
+            .custom(.block),
+        ]
+        let hashes = styles.map { hash($0, plans: plans) }
+        #expect(!hashes.contains(nil))
+        #expect(Set(hashes).count == styles.count, "\(hashes)")
+        #expect(hashes == styles.map { hash($0, plans: plans) })
+        let scopes: [StyleScope] = [
+            .all, .text, .semanticColor(.accent), .control(.button), .controlVariant(.button, "a"),
+            .controlVariant(.button, "b"), .font(.headline),
+        ]
+        let scopeHashes = scopes.map { hash($0, plans: plans) }
+        #expect(!scopeHashes.contains(nil))
+        #expect(Set(scopeHashes).count == scopes.count, "\(scopeHashes)")
+        let shortcuts: [KeyboardShortcut] = [.defaultAction, .cancelAction, KeyboardShortcut("k"), KeyboardShortcut("j")]
+        let shortcutHashes = shortcuts.map { hash($0, plans: plans) }
+        #expect(!shortcutHashes.contains(nil))
+        #expect(Set(shortcutHashes).count == shortcuts.count, "\(shortcutHashes)")
+        let colours: [AnimatedColor] = [
+            AnimatedColor(.red), AnimatedColor(.blue), AnimatedColor(frames: [.red, .blue], step: 0),
+        ]
+        let colourHashes = colours.map { hash($0, plans: plans) }
+        #expect(!colourHashes.contains(nil))
+        #expect(Set(colourHashes).count == colours.count, "\(colourHashes)")
+    }
+
     @Test("A type that bypasses has no hash")
     func bypassHasNoHash() {
         #expect(hash(Choice.number(1), plans: plans) == nil)

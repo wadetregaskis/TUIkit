@@ -124,6 +124,16 @@ public struct Color: Sendable, Hashable {
     }
 
     /// Internal enum for different color types.
+    ///
+    /// `@frozen` so that every module building one knows its layout and
+    /// writes every byte of it, which is what lets the per-pass memos' value
+    /// hash read a colour whole (`_AllBytesDefined`: declared in TUIkitCore,
+    /// conformed to in TUIkitView — this module depends on neither). In a
+    /// build without library evolution — which is how TUIkit is built — it
+    /// changes nothing at all; with it, a module that saw this enum
+    /// resiliently would build a case through its inject witness, which
+    /// leaves a smaller case's unused payload bytes as they were.
+    @frozen
     public enum ColorValue: Sendable, Hashable {
         /// One of the terminal's sixteen colour slots: SGR 30–37 or 90–97 as a
         /// foreground, 40–47 or 100–107 as a background. It measures as the colour

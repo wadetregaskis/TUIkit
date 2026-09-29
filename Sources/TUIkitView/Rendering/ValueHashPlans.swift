@@ -202,10 +202,22 @@ extension ValueHashPlans {
         mix(at: base, plan: plan(for: type), into: &hash)
     }
 
+    /// For an enum's ``_ValueHashing`` conformance: mixes the case it
+    /// switched to, then that case's payload by the payload's plan.
+    ///
+    /// `caseIndex` is the case's own number, distinct for every case of the
+    /// type, so two cases never mix the same words whatever their payloads;
+    /// pass `()` for a case without one.
+    @MainActor
+    package func mixCase<Payload>(_ caseIndex: Int, _ payload: Payload, into hash: inout UInt64) -> Bool {
+        hash = mixHashWord(hash, UInt64(bitPattern: Int64(caseIndex)))
+        return mixValue(payload, into: &hash)
+    }
+
     /// Mixes `value` into `hash` by its type's plan — for a step that has
     /// opened or switched its way to a payload of its own, in a local.
     @MainActor
-    func mixValue<Value>(_ value: Value, into hash: inout UInt64) -> Bool {
+    package func mixValue<Value>(_ value: Value, into hash: inout UInt64) -> Bool {
         let plan = plan(for: Value.self)
         guard plan.pointee.size > 0 else { return true }
         return withUnsafeBytes(of: value) { bytes in
