@@ -82,6 +82,28 @@ struct SelectionEmphasisRampTests {
         }
     }
 
+    /// Each shade of a ramp gets an equal share of the clock — the frames are
+    /// spaced in TIME, and the phase is a cosine of time. Slicing the phase
+    /// evenly instead gave a three-shade ramp 7/2/7 frames, so its middle
+    /// shade flashed past. The real clock's phases are used, so this also
+    /// pins where frame 12's 0.4999… lands.
+    @Test("A ramp's shades share the cycle's frames evenly in time", arguments: [
+        (2, [7, 9]), (3, [5, 6, 5]), (4, [3, 4, 4, 5]),
+    ])
+    func shadesShareTheClockEvenly(shades: Int, expected: [Int]) {
+        let ramp = (0..<shades).map { Color.rgb(UInt8($0 * 40), 0, 0) }
+        let emphasis = (0..<16).map { frame in
+            SelectionEmphasis(
+                isFocused: true, animation: .pulse,
+                phase: CursorTimer.pulsePhase(atFrame: frame, of: 16), blinkOn: true)
+        }
+        let steps = emphasis.map { ramp.firstIndex(of: $0.color(dim: ramp[0], bright: ramp[shades - 1], ramp: ramp))! }
+        #expect((0..<shades).map { step in steps.count { $0 == step } } == expected, "steps by frame: \(steps)")
+        // Symmetric about the dim frame, and frame 0 is the bright end.
+        #expect(steps[0] == shades - 1)
+        #expect((1..<16).allSatisfy { steps[$0] == steps[16 - $0] }, "steps by frame: \(steps)")
+    }
+
     // MARK: - The shapes that draw a whole cycle
 
     /// Renders `view` focused, at 256 colours, and returns its buffer.

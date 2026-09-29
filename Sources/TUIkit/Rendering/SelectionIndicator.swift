@@ -264,12 +264,22 @@ public struct SelectionEmphasis: Equatable, Sendable {
     /// turns GREY, which reads as a glitch rather than a dim. Walking the
     /// distinct, in-hue shades at even intervals instead gives every one of them
     /// the same screen time. See ``Color/pulseRamp(from:to:depth:samples:)``.
+    ///
+    /// Even intervals of TIME, not of `phase`. The phase is a cosine of the
+    /// clock (``CursorTimer/pulsePhase(atFrame:of:)``), so slicing it evenly
+    /// gave the ends most of the cycle: a three-shade ramp over 16 frames
+    /// showed 7/2/7 frames, and the middle shade flashed past. `acos` undoes
+    /// the cosine, so the same ramp shows 5/6/5; a two-shade ramp (every
+    /// 16-colour breath) shows its bright end on frames 0–4 and 12–15 and its
+    /// dim end on 5–11 — symmetric about the dim frame. The epsilon keeps
+    /// frame 12, whose phase computes as 0.4999…, on the same side as frame 4.
     private static func pulsed(
         dim: Color, bright: Color, phase: Double, ramp: [Color]?
     ) -> Color {
         guard let ramp else { return Color.lerp(dim, bright, phase: phase) }
         guard ramp.count > 1 else { return ramp[0] }
-        let step = Int((phase * Double(ramp.count)).rounded(.down))
+        let time = acos(min(1, max(-1, 1 - 2 * phase))) / .pi
+        let step = Int((time * Double(ramp.count) + 1e-9).rounded(.down))
         return ramp[min(max(0, step), ramp.count - 1)]
     }
 }
