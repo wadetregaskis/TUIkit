@@ -4,6 +4,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import Testing
 
 @testable import TUIkit
@@ -99,6 +100,60 @@ enum ProcessWideState {
     @MainActor static var simulatedQuirks: TerminalQuirks? {
         get { TerminalClient.simulatedQuirks }
         set { if mayWrite("TerminalClient.simulatedQuirks") { TerminalClient.simulatedQuirks = newValue } }
+    }
+
+    /// `TerminalClient.hyperlinkSupport`, which republishes
+    /// `TerminalHyperlink.isSupported`: whether every render emits OSC 8.
+    @MainActor static var hyperlinkSupport: Bool? {
+        get { TerminalClient.hyperlinkSupport }
+        set { if mayWrite("TerminalClient.hyperlinkSupport") { TerminalClient.hyperlinkSupport = newValue } }
+    }
+
+    /// `TerminalClient.graphicsSupport`, which republishes
+    /// `KittyGraphics.isSupported`: whether every render places pictures.
+    @MainActor static var graphicsSupport: Bool? {
+        get { TerminalClient.graphicsSupport }
+        set { if mayWrite("TerminalClient.graphicsSupport") { TerminalClient.graphicsSupport = newValue } }
+    }
+
+    /// `KittyGraphics.isSupported` itself, written behind the override's back
+    /// — as the startup path's publish would find it.
+    static var picturesSupported: Bool {
+        get { KittyGraphics.isSupported }
+        set { if mayWrite("KittyGraphics.isSupported") { KittyGraphics.isSupported = newValue } }
+    }
+
+    /// `TerminalClient.applyGraphicsSupport()`: publishes the ladder's live
+    /// answer to `KittyGraphics.isSupported`.
+    @MainActor static func applyGraphicsSupport() {
+        if mayWrite("TerminalClient.applyGraphicsSupport()") { TerminalClient.applyGraphicsSupport() }
+    }
+
+    /// `TerminalClient.urlOpeningSupport`, which republishes
+    /// `TerminalURLOpening.isEnabled`: whether activating a link in ANY test
+    /// hands its URL to the system opener, which launches a real browser.
+    @MainActor static var urlOpeningSupport: Bool? {
+        get { TerminalClient.urlOpeningSupport }
+        set { if mayWrite("TerminalClient.urlOpeningSupport") { TerminalClient.urlOpeningSupport = newValue } }
+    }
+
+    /// `TerminalHost.seedDiscoveredHost(_:)`: what identification does with the
+    /// name a terminal answered. It writes the environment, where each
+    /// `TerminalHost` detector not yet read finds it, and every one that reads
+    /// it keeps that answer for the life of the process.
+    static func seedDiscoveredHost(_ name: String) {
+        if mayWrite("TerminalHost.seedDiscoveredHost(_:)") { TerminalHost.seedDiscoveredHost(name) }
+    }
+
+    /// Sets `name` in the process environment, or unsets it for `nil`.
+    ///
+    /// There is one environment, every thread reads it, and `setenv` may move
+    /// the array a concurrent reader is walking. Several lazily-initialised
+    /// globals also latch on their first read of it — see SwiftLint's
+    /// `process_terminal_environment_mutation`.
+    static func setEnvironment(_ name: String, to value: String?) {
+        guard mayWrite("The environment variable \(name)") else { return }
+        if let value { setenv(name, value, 1) } else { unsetenv(name) }
     }
 }
 

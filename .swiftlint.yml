@@ -305,10 +305,13 @@ custom_rules:
   # list, so the prose that explains the rule does not trip it.
   #
   # What it cannot see: an indirected name, `let name = "TERM"` followed by
-  # `setenv(name, …)`. The two suites that mutate the environment through a
-  # local like that (TerminalGraphicsSupportTests, TerminalURLOpeningTests) use
-  # TUIKIT_* variables, which are nobody's latch. The runtime backstop for the
-  # indirected case is `ColorDepthDetectionTests`'s last test.
+  # `setenv(name, …)`. `ProcessWideState.setEnvironment(_:to:)` in the tests is
+  # one, and writes any name, but only inside an exit test, whose process no
+  # other test shares. The two suites that still write the environment through
+  # a local in the shared process (TerminalIdentityQueryTests,
+  # TerminalSizeFallbackTests) use TUIKIT_* scratch variables, which are
+  # nobody's latch. The runtime backstop for the indirected case is
+  # `ColorDepthDetectionTests`'s last test.
   process_terminal_environment_mutation:
     name: "Process TERM/COLORTERM mutation"
     message: >-

@@ -20,92 +20,93 @@ import Testing
 
 @testable import TUIkit
 
+/// The ladder is asked on its inputs, so those tests set nothing. The one test
+/// about publication sets the override, which republishes the flag the
+/// activation path reads — and while that flag is on, activating a link with
+/// the default action in ANY test hands its URL to the system opener, which
+/// launches a real browser. So it runs in an exit test, whose child process no
+/// other test shares. See `ProcessWideState`. These used to set and restore the
+/// override and `TUIKIT_OPEN_URLS` in the shared process, `.serialized`, which
+/// kept out only this suite's own tests and other main-actor ones.
 @MainActor
-@Suite("Opening a URL is off unless something says this machine is the user's", .serialized)
+@Suite("Opening a URL is off unless something says this machine is the user's")
 struct TerminalURLOpeningTests {
 
-    /// Leaves the override as it found it — it is process-wide, and a test
-    /// that set it would otherwise decide the answer for every test after it.
-    private func withOverride(_ value: Bool?, _ body: () -> Void) {
-        let saved = TerminalClient.urlOpeningSupport
-        TerminalClient.urlOpeningSupport = value
-        defer {
-            TerminalClient.urlOpeningSupport = saved
-            TerminalClient.applyURLOpeningSupport()
-        }
-        body()
+    /// The ladder, asked with `TUIKIT_OPEN_URLS` set to `value` or unset.
+    private static func answer(override: Bool?, environment value: String?) -> Bool {
+        TerminalClient.urlOpeningEnabled(
+            override: override, environment: value.map { ["TUIKIT_OPEN_URLS": $0] } ?? [:])
     }
 
     @Test("The default is off")
     func defaultIsOff() {
-        withOverride(nil) {
-            #expect(!TerminalClient.urlOpeningEnabled)
-        }
+        #expect(!Self.answer(override: nil, environment: nil))
     }
 
     @Test("An app can turn it on, and off again")
     func overrideWins() {
-        withOverride(true) { #expect(TerminalClient.urlOpeningEnabled) }
-        withOverride(false) { #expect(!TerminalClient.urlOpeningEnabled) }
-    }
-
-    /// Sets the variable for `body` and puts it back — process-wide, like the
-    /// override, and for the same reason.
-    private func withEnvironment(_ value: String?, _ body: () -> Void) {
-        let name = "TUIKIT_OPEN_URLS"
-        let saved = ProcessInfo.processInfo.environment[name]
-        if let value { setenv(name, value, 1) } else { unsetenv(name) }
-        defer {
-            if let saved { setenv(name, saved, 1) } else { unsetenv(name) }
-        }
-        body()
+        #expect(Self.answer(override: true, environment: nil))
+        #expect(!Self.answer(override: false, environment: nil))
     }
 
     /// The doc promised this and the code could not deliver it: the `"0"`
     /// arm sat behind the override, where nothing ever reached it.
     @Test("TUIKIT_OPEN_URLS=0 is a kill switch, even against an app that turned it on")
     func environmentZeroWins() {
-        withEnvironment("0") {
-            withOverride(true) { #expect(!TerminalClient.urlOpeningEnabled) }
-            withOverride(nil) { #expect(!TerminalClient.urlOpeningEnabled) }
-        }
+        #expect(!Self.answer(override: true, environment: "0"))
+        #expect(!Self.answer(override: nil, environment: "0"))
     }
 
     @Test("TUIKIT_OPEN_URLS=1 answers for the user only where the app has not answered")
     func environmentOneIsAnOptIn() {
-        withEnvironment("1") {
-            withOverride(nil) { #expect(TerminalClient.urlOpeningEnabled) }
-            withOverride(false) { #expect(!TerminalClient.urlOpeningEnabled) }
-        }
-        withEnvironment(nil) {
-            withOverride(nil) { #expect(!TerminalClient.urlOpeningEnabled) }
-        }
+        #expect(Self.answer(override: nil, environment: "1"))
+        #expect(!Self.answer(override: false, environment: "1"))
+        #expect(!Self.answer(override: nil, environment: nil))
     }
 
     /// The published flag is what the activation path actually reads — it is
     /// `nonisolated`, because that path has no actor — so setting the override
     /// and not publishing it would change nothing where it counts.
+    ///
+    /// An exit test, because the publication is the subject. `TUIKIT_OPEN_URLS`
+    /// is cleared first, in the child, so a developer who exported `0` cannot
+    /// veto the override being published.
+    ///
+    /// The ladder's own tests above pose it on arguments, so they cannot see
+    /// what the live answer passes it. The last part here can: the process's
+    /// own `TUIKIT_OPEN_URLS=0` vetoing the real override, live and published.
     @Test("Setting the override publishes it to the path that reads it")
-    func overridePublishes() {
-        withOverride(true) {
-            #expect(TerminalURLOpening.isEnabled)
-        }
-        withOverride(false) {
-            #expect(!TerminalURLOpening.isEnabled)
+    func overridePublishes() async {
+        await #expect(processExitsWith: .success) {
+            await MainActor.run {
+                ProcessWideState.setEnvironment("TUIKIT_OPEN_URLS", to: nil)
+                ProcessWideState.urlOpeningSupport = true
+                #expect(TerminalURLOpening.isEnabled)
+                ProcessWideState.urlOpeningSupport = false
+                #expect(!TerminalURLOpening.isEnabled)
+
+                ProcessWideState.setEnvironment("TUIKIT_OPEN_URLS", to: "0")
+                ProcessWideState.urlOpeningSupport = true
+                #expect(!TerminalClient.urlOpeningEnabled, "the process's TUIKIT_OPEN_URLS=0 reaches the ladder")
+                #expect(!TerminalURLOpening.isEnabled, "and what is published is its veto")
+            }
         }
     }
 
     /// A handler that does the work itself is NOT gated. What is gated is only
     /// the framework launching a process on the user's behalf; an app that
     /// knows how it wants to open a URL was never the risk.
+    ///
+    /// The gate is closed in this process — nothing in a test process
+    /// publishes it open outside an exit test — and the `#require` checks that
+    /// rather than assuming it.
     @Test("A handler that handles the URL itself still runs")
-    func customHandlerIsNotGated() {
-        withOverride(false) {
-            let sink = OpenedURL()
-            let action = OpenURLAction { sink.url = $0 }
-            action(URL(string: "https://swift.org")!)
-            #expect(sink.url?.absoluteString == "https://swift.org")
-        }
+    func customHandlerIsNotGated() throws {
+        try #require(!TerminalURLOpening.isEnabled, "the fixture: the system opener is gated")
+        let sink = OpenedURL()
+        let action = OpenURLAction { sink.url = $0 }
+        action(URL(string: "https://swift.org")!)
+        #expect(sink.url?.absoluteString == "https://swift.org")
     }
 
     private final class OpenedURL: @unchecked Sendable {

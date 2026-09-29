@@ -10,7 +10,6 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
-import Foundation
 import Testing
 
 @testable import TUIkit
@@ -18,71 +17,54 @@ import Testing
 
 /// How "does this terminal draw pictures" is decided.
 ///
-/// `.serialized`, and every test restores what it changed: the override, the
-/// environment variable and the simulation are all process-wide.
-@Suite("Terminal graphics support", .serialized)
+/// The ladder is asked on its inputs — an override, an environment and a
+/// handshake answer — so those tests set nothing. The tests that are about the
+/// live answer or its publication set the override, `KittyGraphics.isSupported`
+/// (which every render reads to decide whether to place a picture), the
+/// environment, or `simulated`, all process-wide; each runs in an exit test,
+/// whose child process no other test shares. See `ProcessWideState`. They used
+/// to set and restore all of it in the shared process, `.serialized`, which
+/// kept out only this suite's own tests and other main-actor ones — and
+/// `setenv` from one thread while others read the environment.
+@Suite("Terminal graphics support")
 @MainActor
 struct TerminalGraphicsSupportTests {
 
-    /// Runs `body` with `TUIKIT_GRAPHICS` set to `value` (or unset), restoring
-    /// whatever was there — same shape as `TerminalURLOpeningTests`.
-    private func withEnvironment(_ value: String?, _ body: () -> Void) {
-        let name = "TUIKIT_GRAPHICS"
-        let saved = ProcessInfo.processInfo.environment[name]
-        if let value { setenv(name, value, 1) } else { unsetenv(name) }
-        defer {
-            if let saved { setenv(name, saved, 1) } else { unsetenv(name) }
-        }
-        body()
-    }
-
-    /// Runs `body` with the override set, restoring it afterwards.
-    ///
-    /// Restoring it to `nil` also republishes `KittyGraphics.isSupported`
-    /// through `didSet`, so nothing leaks into a suite rendering in parallel.
-    private func withOverride(_ value: Bool?, _ body: () -> Void) {
-        let saved = TerminalClient.graphicsSupport
-        TerminalClient.graphicsSupport = value
-        defer { TerminalClient.graphicsSupport = saved }
-        body()
+    /// The ladder with no handshake answer: none has run in a test process.
+    private static func answer(_ override: Bool?, _ environment: String?) -> Bool {
+        TerminalClient.graphicsSupported(
+            override: override,
+            environment: environment.map { ["TUIKIT_GRAPHICS": $0] } ?? [:],
+            detected: nil)
     }
 
     @Test("The override outranks the environment in both directions")
     func overrideOutranksTheEnvironment() {
         for environment in ["1", "0", nil] {
-            withEnvironment(environment) {
-                withOverride(true) {
-                    #expect(TerminalClient.graphicsSupported, "on, against \(environment ?? "unset")")
-                }
-                withOverride(false) {
-                    #expect(
-                        !TerminalClient.graphicsSupported, "off, against \(environment ?? "unset")")
-                }
-            }
+            #expect(Self.answer(true, environment), "on, against \(environment ?? "unset")")
+            #expect(!Self.answer(false, environment), "off, against \(environment ?? "unset")")
         }
     }
 
     @Test("TUIKIT_GRAPHICS answers for the user when the app has not")
     func environmentAnswersWhereTheAppHasNot() {
-        withOverride(nil) {
-            withEnvironment("1") { #expect(TerminalClient.graphicsSupported) }
-            withEnvironment("0") { #expect(!TerminalClient.graphicsSupported) }
-            // No handshake has run in a test process, so `detectedGraphics` is
-            // nil and the ladder's last rung is the safe default.
-            withEnvironment(nil) { #expect(!TerminalClient.graphicsSupported) }
-        }
+        #expect(Self.answer(nil, "1"))
+        #expect(!Self.answer(nil, "0"))
+        // No handshake answer, so the ladder's last rung is the safe default.
+        #expect(!Self.answer(nil, nil))
     }
 
     @Test("Only `1` and `0` are answers; anything else falls through to the handshake")
     func otherEnvironmentValuesAreNotAnswers() {
         // The switch has no `default: true` arm by design — a stray
         // `TUIKIT_GRAPHICS=yes` must not turn pictures on for a terminal that
-        // was never asked.
-        withOverride(nil) {
-            for value in ["yes", "true", "", "01"] {
-                withEnvironment(value) {
-                    #expect(!TerminalClient.graphicsSupported, "\(value.debugDescription)")
-                }
+        // was never asked. Asked both ways, so falling through is seen to
+        // reach the handshake's answer rather than a constant.
+        for value in ["yes", "true", "", "01"] {
+            for detected in [false, true] {
+                let answer = TerminalClient.graphicsSupported(
+                    override: nil, environment: ["TUIKIT_GRAPHICS": value], detected: detected)
+                #expect(answer == detected, "\(value.debugDescription), handshake \(detected)")
             }
         }
     }
@@ -91,12 +73,16 @@ struct TerminalGraphicsSupportTests {
     /// which DOES read through `effective`. Simulating a host is a statement
     /// about which compensations to emit, not a claim that the terminal in
     /// front of the user has stopped being able to draw.
+    ///
+    /// An exit test, because it is about the live answers, which read the
+    /// process's own knobs and environment.
     @Test("Simulating a program does not change whether pictures are drawn")
-    func simulationDoesNotChangeTheAnswer() {
-        defer { TerminalClient.simulated = nil }
-        withOverride(nil) {
-            withEnvironment(nil) {
-                TerminalClient.simulated = .ghostty
+    func simulationDoesNotChangeTheAnswer() async {
+        await #expect(processExitsWith: .success) {
+            await MainActor.run {
+                ProcessWideState.setEnvironment("TUIKIT_GRAPHICS", to: nil)
+                ProcessWideState.setEnvironment("TUIKIT_HYPERLINKS", to: nil)
+                ProcessWideState.simulated = .ghostty
                 // Ghostty draws pictures and honours links, so if the graphics
                 // answer read through `simulated` this would be true.
                 #expect(TerminalClient.hyperlinksSupported, "the twin does read through it")
@@ -109,29 +95,38 @@ struct TerminalGraphicsSupportTests {
     /// `nonisolated`, because that path cannot ask a terminal anything — so an
     /// override that is not published changes nothing where it counts.
     @Test("Setting the override publishes it to the path that reads it")
-    func overrideIsPublished() {
-        withEnvironment(nil) {
-            withOverride(true) { #expect(KittyGraphics.isSupported) }
-            // And back: clearing the override republishes the ladder's answer,
-            // which is what keeps the flag from sticking on.
-            #expect(!KittyGraphics.isSupported)
+    func overrideIsPublished() async {
+        await #expect(processExitsWith: .success) {
+            await MainActor.run {
+                ProcessWideState.setEnvironment("TUIKIT_GRAPHICS", to: nil)
+                ProcessWideState.graphicsSupport = true
+                #expect(KittyGraphics.isSupported)
+                // And back: clearing the override republishes the ladder's
+                // answer, which is what keeps the flag from sticking on.
+                ProcessWideState.graphicsSupport = nil
+                #expect(!KittyGraphics.isSupported)
 
-            withOverride(false) { #expect(!KittyGraphics.isSupported) }
+                ProcessWideState.graphicsSupport = false
+                #expect(!KittyGraphics.isSupported)
+            }
         }
     }
 
     @Test("applyGraphicsSupport publishes the current answer on demand")
-    func applyPublishesOnDemand() {
-        withEnvironment("1") {
-            withOverride(nil) {
+    func applyPublishesOnDemand() async {
+        await #expect(processExitsWith: .success) {
+            await MainActor.run {
+                ProcessWideState.setEnvironment("TUIKIT_GRAPHICS", to: "1")
                 // Written behind the accessor's back, as the startup path's
                 // publish would find it.
-                KittyGraphics.isSupported = false
-                TerminalClient.applyGraphicsSupport()
+                ProcessWideState.picturesSupported = false
+                ProcessWideState.applyGraphicsSupport()
                 #expect(KittyGraphics.isSupported)
+
+                ProcessWideState.setEnvironment("TUIKIT_GRAPHICS", to: nil)
+                ProcessWideState.applyGraphicsSupport()
+                #expect(!KittyGraphics.isSupported, "and back to the default once nothing forces it")
             }
         }
-        TerminalClient.applyGraphicsSupport()
-        #expect(!KittyGraphics.isSupported, "and back to the default once nothing forces it")
     }
 }
