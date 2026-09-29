@@ -16,11 +16,18 @@ import TUIkitCore
 /// It exists only to satisfy the `View` protocol requirement.
 /// All actual work happens in `renderToBuffer(context:)`.
 public struct EnvironmentModifier<Content: View, V>: View {
-    /// The content view.
-    public let content: Content
+    // The key path, the content, then the value: the per-pass memos key a
+    // view by its raw bytes, and padding is whatever the memory held before.
+    // The content first left a gap before the word-aligned key path whatever
+    // its size; here only a word-aligned value after an odd-sized content can
+    // leave one, and most environment values are byte-aligned (flags, colours,
+    // enums). `ContainerLayoutPaddingTests`.
 
     /// The key path to modify.
     public let keyPath: WritableKeyPath<EnvironmentValues, V>
+
+    /// The content view.
+    public let content: Content
 
     /// The value to inject.
     public let value: V
@@ -160,14 +167,19 @@ extension EnvironmentModifier: Layoutable {
 /// keeps this a pure value computation: no extra node in the identity path, no
 /// second dispatch, and one place where injection is implemented.
 public struct TransformEnvironmentModifier<Content: View, V>: View {
-    /// The content view.
-    public let content: Content
+    // The two word-sized fields, then the content last, so nothing follows it
+    // whatever its size: the content first left seven undefined bytes before
+    // the key path over a scroll view (`ContainerLayoutPaddingTests`), which
+    // the per-pass memos' raw-byte key read.
 
     /// The key path to transform.
     public let keyPath: WritableKeyPath<EnvironmentValues, V>
 
     /// The transformation to apply to the inherited value.
     public let transform: (inout V) -> Void
+
+    /// The content view.
+    public let content: Content
 
     /// Creates a new transforming environment modifier.
     public init(

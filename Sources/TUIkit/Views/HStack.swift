@@ -66,12 +66,22 @@ public struct HStack<Content: View>: View {
 /// `LazyHStack` is `.window` (append whole columns while they fit
 /// `availableWidth`, stopping at the first that won't).
 struct _HStackCore<Content: View>: View, Renderable, Layoutable {
+    // The one-byte `overflow` after the content, not before it: before, it
+    // left seven undefined bytes ahead of the word-aligned content, which the
+    // per-pass memos' raw-byte key read (`ContainerLayoutPaddingTests`).
     let alignment: VerticalAlignment
     let spacing: Int
+    let content: Content
     /// Trailing-overflow behaviour: `.clip` (eager `HStack`) or `.window`
     /// (lazy `LazyHStack`).
     let overflow: StackOverflow
-    let content: Content
+
+    init(alignment: VerticalAlignment, spacing: Int, overflow: StackOverflow, content: Content) {
+        self.alignment = alignment
+        self.spacing = spacing
+        self.content = content
+        self.overflow = overflow
+    }
 
     var body: Never {
         fatalError("_HStackCore renders via Renderable")

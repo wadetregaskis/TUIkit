@@ -68,12 +68,22 @@ public struct VStack<Content: View>: View {
 /// `LazyVStack` is `.window` (append whole rows while they fit `availableHeight`,
 /// stopping at the first that won't).
 struct _VStackCore<Content: View>: View, Renderable, Layoutable {
+    // The one-byte `overflow` after the content, not before it: before, it
+    // left seven undefined bytes ahead of the word-aligned content, which the
+    // per-pass memos' raw-byte key read (`ContainerLayoutPaddingTests`).
     let alignment: HorizontalAlignment
     let spacing: Int
+    let content: Content
     /// Trailing-overflow behaviour: `.clip` (eager `VStack`) or `.window`
     /// (lazy `LazyVStack`).
     let overflow: StackOverflow
-    let content: Content
+
+    init(alignment: HorizontalAlignment, spacing: Int, overflow: StackOverflow, content: Content) {
+        self.alignment = alignment
+        self.spacing = spacing
+        self.content = content
+        self.overflow = overflow
+    }
 
     var body: Never {
         fatalError("_VStackCore renders via Renderable")
