@@ -14,6 +14,7 @@ known issues out of runs that had 21).
 
 import importlib.util
 import os
+import sys
 import tempfile
 import unittest
 
@@ -427,6 +428,295 @@ class TestWeights(unittest.TestCase):
         weights = {"M.A/a()": 2.0, "M.A/b()": 2.0, "M.A/c()": 2.0, "M.S/old()": 0.5}
         filled, _ = pt.fill_weights(["M.A/a()", "M.A/b()", "M.A/c()", "M.S/n1()", "M.S/n2()"], weights)
         self.assertEqual(filled["M.S/n1()"], 2.0)
+
+
+class TestSwiftCommand(unittest.TestCase):
+    def test_default_is_the_swift_on_path(self):
+        self.assertEqual(pt.swift_command({}), ["swift"])
+        self.assertEqual(pt.swift_command({"SWIFT": ""}), ["swift"])
+
+    def test_ci_spelling_of_a_swift_org_toolchain(self):
+        # What the macOS lanes write to $GITHUB_ENV for a swift.org toolchain.
+        self.assertEqual(
+            pt.swift_command({"SWIFT": "xcrun --toolchain org.swift.640202609131a swift"}),
+            ["xcrun", "--toolchain", "org.swift.640202609131a", "swift"])
+
+
+class TestDarwinTestEnv(unittest.TestCase):
+    """The layouts are real ones, transcribed from this machine: swiftly's
+    swift.org toolchains, Xcode 26.3, and the Command Line Tools."""
+
+    SWIFTORG = "/U/Library/Developer/Toolchains/swift-6.2.4-RELEASE.xctoolchain"
+    XCODE_TC = "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain"
+    PLATFORM = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform"
+    CLT = "/Library/Developer/CommandLineTools"
+
+    def env(self, root, present, platform=None, environ=None):
+        exists = lambda p: p in present
+        return pt.darwin_test_env(root + "/usr/lib/swift", environ or {}, platform, exists)
+
+    def test_swift_org_toolchain_under_the_command_line_tools_is_unchanged(self):
+        # The local swiftly workflow: xcrun finds no platform, so the one
+        # variable is the toolchain's testing directory — exactly what the
+        # harness always set.
+        lib = self.SWIFTORG + "/usr/lib/swift/macosx/testing"
+        env, found = self.env(self.SWIFTORG, {lib})
+        self.assertEqual(env, {"DYLD_LIBRARY_PATH": lib})
+        self.assertEqual(found, [lib])
+
+    def test_swift_org_toolchain_with_xcode_selected_loads_its_own_testing_first(self):
+        # CI's swift.org lanes. The platform goes AFTER the toolchain's own
+        # swift-testing, or Xcode's Testing.framework would shadow it.
+        lib = self.SWIFTORG + "/usr/lib/swift/macosx/testing"
+        env, found = self.env(self.SWIFTORG, {lib}, self.PLATFORM)
+        dev = self.PLATFORM + "/Developer"
+        self.assertEqual(env["DYLD_LIBRARY_PATH"], lib + ":" + dev + "/usr/lib")
+        self.assertEqual(env["DYLD_FRAMEWORK_PATH"],
+                         dev + "/Library/Frameworks:" + dev + "/Library/PrivateFrameworks")
+        self.assertEqual(found, [lib])
+
+    def test_xcode_finds_testing_in_the_platform(self):
+        dev = self.PLATFORM + "/Developer"
+        fw = dev + "/Library/Frameworks"
+        env, found = self.env(self.XCODE_TC, {fw + "/Testing.framework"}, self.PLATFORM)
+        self.assertEqual(env, {
+            "DYLD_FRAMEWORK_PATH": fw + ":" + dev + "/Library/PrivateFrameworks",
+            "DYLD_LIBRARY_PATH": dev + "/usr/lib"})
+        self.assertEqual(found, [fw])
+
+    def test_command_line_tools_use_their_frameworks_directory(self):
+        fw = self.CLT + "/Library/Developer/Frameworks"
+        env, found = self.env(self.CLT, {fw + "/Testing.framework"})
+        self.assertEqual(env, {"DYLD_FRAMEWORK_PATH": fw,
+                               "DYLD_LIBRARY_PATH": self.CLT + "/Library/Developer/usr/lib"})
+        self.assertEqual(found, [fw])
+
+    def test_the_frameworks_directory_wins_when_both_exist(self):
+        # SwiftPM's `deriveSwiftTestingPath` returns the first it finds; it
+        # never puts two copies of swift-testing on the search paths.
+        fw = self.CLT + "/Library/Developer/Frameworks"
+        lib = self.CLT + "/usr/lib/swift/macosx/testing"
+        env, found = self.env(self.CLT, {fw + "/Testing.framework", lib})
+        self.assertNotIn(lib, env["DYLD_LIBRARY_PATH"])
+        self.assertEqual(found, [fw])
+
+    def test_a_users_own_setting_comes_first(self):
+        lib = self.SWIFTORG + "/usr/lib/swift/macosx/testing"
+        env, _ = self.env(self.SWIFTORG, {lib}, environ={"DYLD_LIBRARY_PATH": "/mine"})
+        self.assertEqual(env["DYLD_LIBRARY_PATH"], "/mine:" + lib)
+
+    def test_nothing_found_is_reported_as_nothing(self):
+        _, found = self.env(self.XCODE_TC, set())
+        self.assertEqual(found, [])
+
+
+class TestSdkPlatformPath(unittest.TestCase):
+    class Out(object):
+        def __init__(self, rc, stdout):
+            self.returncode, self.stdout = rc, stdout
+
+    def test_the_override_wins_without_asking_xcrun(self):
+        def run(*a, **k):
+            raise AssertionError("xcrun should not run")
+        self.assertEqual(pt.sdk_platform_path({"SWIFTPM_PLATFORM_PATH_macosx": "/P"}, run), "/P")
+
+    def test_xcrun_answer(self):
+        run = lambda *a, **k: self.Out(0, "/X/MacOSX.platform\n")
+        self.assertEqual(pt.sdk_platform_path({}, run), "/X/MacOSX.platform")
+
+    def test_command_line_tools_have_no_platform(self):
+        run = lambda *a, **k: self.Out(1, "")
+        self.assertIsNone(pt.sdk_platform_path({}, run))
+
+    def test_no_xcrun_at_all(self):
+        def run(*a, **k):
+            raise FileNotFoundError("/usr/bin/xcrun")
+        self.assertIsNone(pt.sdk_platform_path({}, run))
+
+
+class TestTestBinaries(unittest.TestCase):
+    def touch(self, path, mode=0o755):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as fh:
+            fh.write("")
+        os.chmod(path, mode)
+
+    def test_native_macos_is_one_bundle(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.touch(os.path.join(d, "PkgPackageTests.xctest/Contents/MacOS/PkgPackageTests"))
+            self.assertEqual(pt.test_binaries(d, True), {
+                "PkgPackageTests":
+                    os.path.join(d, "PkgPackageTests.xctest/Contents/MacOS/PkgPackageTests")})
+
+    def test_swift_build_on_macos_is_one_bundle_per_test_target(self):
+        with tempfile.TemporaryDirectory() as d:
+            for n in ("ATests", "BTests"):
+                self.touch(os.path.join(d, "%s.xctest/Contents/MacOS/%s" % (n, n)))
+            self.touch(os.path.join(d, "A.o"))
+            self.assertEqual(sorted(pt.test_binaries(d, True)), ["ATests", "BTests"])
+
+    def test_native_linux_is_one_executable_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.touch(os.path.join(d, "PkgPackageTests.xctest"))
+            self.assertEqual(pt.test_binaries(d, False), {
+                "PkgPackageTests": os.path.join(d, "PkgPackageTests.xctest")})
+
+    def test_swift_build_on_linux_runs_the_launchers(self):
+        with tempfile.TemporaryDirectory() as d:
+            for n in ("ATests", "BTests"):
+                self.touch(os.path.join(d, n + "-test-runner"))
+                self.touch(os.path.join(d, n + ".so"))
+            self.touch(os.path.join(d, "PkgPackageTests.xctest"))  # stale native build
+            self.assertEqual(pt.test_binaries(d, False), {
+                "ATests": os.path.join(d, "ATests-test-runner"),
+                "BTests": os.path.join(d, "BTests-test-runner")})
+
+    def test_no_binary_is_an_error_not_an_empty_run(self):
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaises(SystemExit):
+                pt.test_binaries(d, True)
+            with self.assertRaises(SystemExit):
+                pt.test_binaries(os.path.join(d, "absent"), False)
+
+
+class TestCommandLine(unittest.TestCase):
+    def test_macos_goes_through_the_helper_as_before(self):
+        tc = pt.Toolchain("/tc/helper", {}, True, "")
+        self.assertEqual(
+            pt.test_cmd(tc, "/b/T", "^(?:A/)", xunit="/o.xml", events="/o.jsonl"),
+            ["/tc/helper", "--test-bundle-path", "/b/T", "/b/T",
+             "--testing-library", "swift-testing", "--filter", "^(?:A/)",
+             "--xunit-output", "/o.xml",
+             "--event-stream-output-path", "/o.jsonl", "--event-stream-version", "0"])
+
+    def test_linux_runs_the_binary_with_the_library_flag_last(self):
+        tc = pt.Toolchain(None, {}, False, "")
+        self.assertEqual(
+            pt.test_cmd(tc, "/b/T.xctest", "^(?:A/)", serial=True),
+            ["/b/T.xctest", "--filter", "^(?:A/)", "--no-parallel",
+             "--testing-library", "swift-testing"])
+        self.assertEqual(pt.test_cmd(tc, "/b/T.xctest", None, extra=["--list-tests"]),
+                         ["/b/T.xctest", "--list-tests", "--testing-library", "swift-testing"])
+
+
+class TestPlan(unittest.TestCase):
+    def test_one_binary_is_one_invocation_per_group(self):
+        owner = {"M.A/a()": "P", "M.A/b()": "P", "M.B/c()": "P"}
+        pats = [pt.group_pattern([("suite", "M.A")]), pt.group_pattern([("suite", "M.B")])]
+        plan = pt.plan_invocations(pats, owner, {"P": "/p"})
+        self.assertEqual([(i["tag"], i["selected"]) for i in plan], [("g0", 2), ("g1", 1)])
+
+    def test_a_group_spanning_binaries_is_split_and_nothing_is_run_twice(self):
+        owner = {"X.A/a()": "XTests", "X.A/b()": "XTests",
+                 "Y.B/c()": "YTests", "Z.C/d()": "ZTests"}
+        pats = [pt.group_pattern([("suite", "X.A"), ("suite", "Y.B")]),
+                pt.group_pattern([("suite", "Z.C")])]
+        bins = {"XTests": "/x", "YTests": "/y", "ZTests": "/z"}
+        plan = pt.plan_invocations(pats, owner, bins)
+        self.assertEqual([(i["tag"], i["group"], i["selected"]) for i in plan],
+                         [("g0-XTests", 0, 2), ("g0-YTests", 0, 1), ("g1-ZTests", 1, 1)])
+        self.assertEqual(sum(i["selected"] for i in plan), len(owner))
+
+
+class TestRunProcesses(unittest.TestCase):
+    """A slot's invocations run one after another; slots run at once."""
+
+    def setUp(self):
+        self._work = pt.WORK
+        self._tmp = tempfile.TemporaryDirectory()
+        pt.WORK = self._tmp.name
+
+    def tearDown(self):
+        pt.WORK = self._work
+        self._tmp.cleanup()
+
+    def stamp(self, tag, slot, code=0):
+        prog = ("import time, sys; print(time.time()); sys.stdout.flush(); "
+                "time.sleep(0.3); print(time.time()); sys.exit(%d)" % code)
+        return {"tag": tag, "slot": slot, "cmd": [sys.executable, "-c", prog]}
+
+    def times(self, r):
+        with open(r["log"]) as fh:
+            return [float(x) for x in fh.read().split()]
+
+    def test_chained_in_a_slot_and_concurrent_across_slots(self):
+        tc = pt.Toolchain(None, {}, False, "")
+        invs = [self.stamp("a1", 0), self.stamp("a2", 0, code=3), self.stamp("b1", 1)]
+        done, _ = pt.run_processes(invs, tc, lambda i: i["slot"])
+        by = {r["tag"]: r for r in done}
+        self.assertEqual(sorted(by), ["a1", "a2", "b1"])
+        a1, a2, b1 = (self.times(by[t]) for t in ("a1", "a2", "b1"))
+        self.assertGreaterEqual(a2[0], a1[1], "slot 0 ran its two invocations at once")
+        self.assertLess(b1[0], a1[1], "slot 1 waited for slot 0")
+        self.assertEqual((by["a1"]["rc"], by["a2"]["rc"]), (0, 3))
+
+
+class TestFailureExcerpt(unittest.TestCase):
+    # Linux, verbatim from CI job 109198918461 (Swift 6.4), less the timestamps.
+    LINUX = "\n".join([
+        '✔ Suite "Indeterminate configuration" passed after 30.502 seconds.',
+        '✘ Test "Deciding the bar" recorded an issue at ScrollbarFirstRoundTests.swift:236:9: '
+        'Expectation failed: hundredThousand == tenThousand',
+        '↳ deciding the bar cost 37 lookups over 100,000 rows, 11 over 10,000',
+        '  10000 rows — decided: 38 hits, 97 misses, 0 rows measured',
+        '↳ hundredThousand == tenThousand → false',
+        '↳   hundredThousand → 37',
+        '✔ Test "A closed picker lets Tab propagate for focus navigation" passed after 36.471 seconds.',
+        '✘ Test "Deciding the bar" failed after 424.937 seconds with 1 issue.',
+    ])
+    # macOS 6.2.4, from a probe package: SF Symbols in the private-use area.
+    MACOS = "\n".join([
+        "\U00100884  Test bad() recorded an issue at F.swift:3:40: Expectation failed: (a → 1) == (b → 2)",
+        "\U00100135  why",
+        "     second line",
+        "\U00100883  Test known() recorded a known issue at F.swift:4:41: Expectation failed: Bool(false)",
+        "\U00100884  Test bad() failed after 0.001 seconds with 1 issue.",
+    ])
+
+    def test_linux_issue_and_its_details(self):
+        got = pt.failure_excerpt(self.LINUX)
+        self.assertEqual(len(got), 5)
+        self.assertIn("recorded an issue", got[0])
+        self.assertTrue(got[-1].startswith("↳   hundredThousand"))
+
+    def test_macos_issue_and_its_details_but_not_the_known_issue(self):
+        got = pt.failure_excerpt(self.MACOS)
+        self.assertEqual(got, self.MACOS.splitlines()[:3])
+
+    def test_a_detail_that_starts_with_the_word_test_is_still_a_detail(self):
+        text = "✘ Test t() recorded an issue at A.swift:1:1: x\n↳ Test value → 3\n✔ Test u() passed"
+        self.assertEqual(len(pt.failure_excerpt(text)), 2)
+
+    def test_a_passing_log_has_nothing_to_show(self):
+        self.assertEqual(pt.failure_excerpt("✔ Test a() passed after 0.1 seconds.\n"), [])
+
+
+class TestReportFailingLogs(unittest.TestCase):
+    def proc(self, d, tag, text, rc, summary):
+        log = os.path.join(d, tag + ".log")
+        with open(log, "w") as fh:
+            fh.write(text)
+        return {"tag": tag, "binary": "B", "log": log, "rc": rc, "summary": summary}
+
+    def test_only_failing_processes_are_shown_and_a_crash_shows_its_tail(self):
+        import io
+        from unittest import mock
+        ok = {"passed": True}
+        with tempfile.TemporaryDirectory() as d:
+            procs = [self.proc(d, "g0", "✔ Test a() passed\n", 0, ok),
+                     self.proc(d, "g1", TestFailureExcerpt.LINUX, 1, {"passed": False}),
+                     self.proc(d, "g2", "line 1\nFatal error: boom\n", -11, None)]
+            out = io.StringIO()
+            with mock.patch.dict(os.environ, {"GITHUB_ACTIONS": "true"}):
+                pt.report_failing_logs(procs, {"g1": {"M.S/t()"}}, True, out)
+            text = out.getvalue()
+        self.assertNotIn("── g0", text)
+        self.assertIn("── g1 (B, exit 1) ──", text)
+        self.assertIn("recorded an issue", text)
+        self.assertIn("── g2 (B, killed by signal 11) ──", text)
+        self.assertIn("Fatal error: boom", text)
+        self.assertEqual(text.count("::group::"), 2)
+        self.assertEqual(text.count("::endgroup::"), 2)
 
 
 if __name__ == "__main__":

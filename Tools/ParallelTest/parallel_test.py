@@ -33,7 +33,8 @@ THE FOUR TRAPS THIS HARNESS IS BUILT AROUND
    "database is locked / no tests found" having run NOTHING. Measured: 1 run
    in 4 silently lost 2,168 tests while being the slowest of the four. So we
    take the build lock exactly once, up front, and then invoke
-   `swiftpm-testing-helper` directly — it touches no build database.
+   `swiftpm-testing-helper` directly (on Linux, the test binary itself, as
+   `swift test` does there) — neither touches the build database.
 
 2. The helper SILENTLY IGNORES unknown flags. Passing `--no-such-flag` does
    not error; it runs the entire suite. So a typo or a future toolchain
@@ -65,17 +66,23 @@ Speed is worthless if a process quietly runs nothing. Every run is gated on:
 Any of those failing is a hard failure, whatever the exit codes said.
 
 Usage:
-    Tools/ParallelTest/parallel-test.py [-j N] [--calibrate] [--plan-only]
+    [SWIFT="xcrun --toolchain <id> swift"]
+    Tools/ParallelTest/parallel_test.py [-j N] [--calibrate] [--plan-only]
                                         [--filter REGEX] [--no-build]
-                                        [--expect-known-issues N] [--json PATH]
+                                        [--expect-known-issues N]
+                                        [--full-failing-logs] [--json PATH]
+
+Runs on macOS (swift.org, Xcode and Command Line Tools toolchains) and Linux,
+with SwiftPM's native build system or swift-build; see "Toolchains and
+platforms" in README.md.
 """
 
 import argparse
-import glob
 import json
 import math
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -366,42 +373,189 @@ def prove(patterns, ids):
 
 
 # ---------------------------------------------------------------- environment
+#
+# Everything below mirrors how `swift test` itself launches swift-testing, so
+# that a run here is the same program in the same environment as a run there,
+# on every toolchain CI uses. The references are SwiftPM's own sources —
+# `SwiftTestCommand.swift` (`TestRunner.args(forTestAt:)`),
+# `Utilities/TestingSupport.swift` (`constructTestEnvironment`),
+# `UserToolchain.deriveSwiftTestingPath` and `SwiftSDK.sdkPlatformPaths` — read
+# at the `release/6.2`, `release/6.3` and `swift-6.4.0-RELEASE` tags. Where
+# they differ, the note says which one is followed.
 
-def toolchain():
-    """Locate swiftpm-testing-helper and the testing library beside it.
+def swift_command(environ=None):
+    """The `swift` to drive, as an argv prefix.
 
-    Derived from the `swift` on PATH rather than assumed, so swiftly's default
-    toolchain, an Xcode one and a CI one all resolve to their own helper.
+    `$SWIFT` when it is set, which is how CI's macOS lanes name their toolchain:
+    `xcrun --toolchain <bundle id> swift` for a swift.org one, plain `swift`
+    under Xcode. Otherwise `swift` from PATH — swiftly's default, locally.
+    Every build, `--show-bin-path` and `-print-target-info` goes through it, so
+    the toolchain that runs the tests is the one that built them.
+    """
+    environ = os.environ if environ is None else environ
+    return shlex.split(environ.get("SWIFT") or "swift")
+
+
+class Toolchain(object):
+    """How to launch a test binary: through `helper` (macOS), or directly
+    (`helper` None: Linux), with `env` merged over the parent's environment."""
+
+    def __init__(self, helper, env, darwin, where):
+        self.helper, self.env, self.darwin, self.where = helper, env, darwin, where
+
+
+def append_path(env, environ, key, value):
+    """SwiftPM's `Environment.appendPath`: after whatever is already there —
+    the user's own setting wins — separated by `:`."""
+    old = env.get(key, environ.get(key, ""))
+    env[key] = old + ":" + value if old else value
+
+
+def sdk_platform_path(environ, run=subprocess.run):
+    """`SwiftSDK.sdkPlatformPaths(for: .macOS)`'s platform directory, or None.
+
+    SwiftPM asks `/usr/bin/xcrun --sdk macosx --show-sdk-platform-path` unless
+    `SWIFTPM_PLATFORM_PATH_macosx` names it, and carries on without it when
+    xcrun fails — which it does under the Command Line Tools, which have no
+    platform directory (the local swiftly setup here)."""
+    given = environ.get("SWIFTPM_PLATFORM_PATH_macosx")
+    if given:
+        return given
+    try:
+        out = run(["/usr/bin/xcrun", "--sdk", "macosx", "--show-sdk-platform-path"],
+                  capture_output=True, text=True, env=dict(environ))
+    except OSError:
+        return None
+    path = out.stdout.strip()
+    return path if out.returncode == 0 and path else None
+
+
+def darwin_test_env(resource_dir, environ, platform_path, exists=os.path.exists):
+    """The DYLD_* variables `swift test` gives swift-testing on macOS.
+
+    Three layouts put the testing library in three places, and SwiftPM finds
+    each in turn:
+
+    * Command Line Tools: `Testing.framework` in `<toolchain>/Library/
+      Developer/Frameworks` (the toolchain root being `usr/..`). That path goes
+      on DYLD_FRAMEWORK_PATH, and — 6.4 onward — `<toolchain>/Library/
+      Developer/usr/lib` (lib_TestingInterop) on DYLD_LIBRARY_PATH. 6.2 omits
+      the second; it is followed here because a missing directory on a search
+      path is inert.
+    * swift.org toolchains: `usr/lib/swift/macosx/testing` on DYLD_LIBRARY_PATH.
+    * Xcode: neither. Its Testing.framework lives in the PLATFORM, which the
+      next step adds for every toolchain alike.
+
+    Then the macOS platform, when there is one: `<platform>/Developer/Library/
+    {Frameworks,PrivateFrameworks}` on DYLD_FRAMEWORK_PATH and `<platform>/
+    Developer/usr/lib` on DYLD_LIBRARY_PATH — appended AFTER the toolchain's
+    own, so a swift.org toolchain run with Xcode selected (CI's swift.org
+    lanes) still loads its own swift-testing.
+
+    Not mirrored: `SWIFT_TESTING_XCTEST_INTEROP_MODE`, which 6.4 sets only for
+    packages whose tools version is 6.4 or later (this one's is 6.2), and the
+    sanitizer / code-coverage variables, which `swift test` sets only when asked.
+
+    -> (env dict, [where the testing library was found]).
+    """
+    env, found = {}, []
+    usr = os.path.dirname(os.path.dirname(resource_dir))
+    root = os.path.dirname(usr)
+    frameworks = os.path.join(root, "Library", "Developer", "Frameworks")
+    testing_lib = os.path.join(resource_dir, "macosx", "testing")
+    if exists(os.path.join(frameworks, "Testing.framework")):
+        append_path(env, environ, "DYLD_FRAMEWORK_PATH", frameworks)
+        append_path(env, environ, "DYLD_LIBRARY_PATH",
+                    os.path.join(root, "Library", "Developer", "usr", "lib"))
+        found.append(frameworks)
+    elif exists(testing_lib):
+        append_path(env, environ, "DYLD_LIBRARY_PATH", testing_lib)
+        found.append(testing_lib)
+    if platform_path:
+        dev = os.path.join(platform_path, "Developer")
+        platform_frameworks = os.path.join(dev, "Library", "Frameworks")
+        append_path(env, environ, "DYLD_FRAMEWORK_PATH", platform_frameworks)
+        append_path(env, environ, "DYLD_FRAMEWORK_PATH",
+                    os.path.join(dev, "Library", "PrivateFrameworks"))
+        append_path(env, environ, "DYLD_LIBRARY_PATH", os.path.join(dev, "usr", "lib"))
+        if exists(os.path.join(platform_frameworks, "Testing.framework")):
+            found.append(platform_frameworks)
+    return env, found
+
+
+def toolchain(swift):
+    """Locate the helper (macOS) and the environment the tests need.
+
+    Derived from the toolchain `swift` names rather than assumed, so swiftly's
+    default, an Xcode toolchain and a CI one each resolve to their own helper
+    and their own swift-testing.
     """
     info = json.loads(subprocess.run(
-        ["swift", "-print-target-info"], capture_output=True, text=True,
+        swift + ["-print-target-info"], capture_output=True, text=True,
         check=True).stdout)
-    res = info.get("paths", info)["runtimeResourcePath"]      # <usr>/lib/swift
+    triple = info.get("target", {}).get("triple", "")
+    res = os.path.realpath(info.get("paths", info)["runtimeResourcePath"])  # <usr>/lib/swift
+    darwin = "-apple-" in triple if triple else sys.platform == "darwin"
+    if not darwin:
+        # Linux (and Windows): no helper. The test product is an executable,
+        # and `swift test` runs it directly with nothing added to the
+        # environment (`constructTestEnvironment` returns early off macOS,
+        # bar a PATH tweak on Windows this harness does not support).
+        return Toolchain(None, {}, False, triple or sys.platform)
     usr = os.path.dirname(os.path.dirname(res))               # <usr>
     helper = os.path.join(usr, "libexec", "swift", "pm", "swiftpm-testing-helper")
     if not os.path.exists(helper):
         sys.exit("parallel-test: no swiftpm-testing-helper at %s" % helper)
-    for platform in ("macosx", "linux", "windows"):
-        lib = os.path.join(res, platform, "testing")
-        if os.path.isdir(lib):
-            return helper, lib
-    sys.exit("parallel-test: no testing library under %s/*/testing" % res)
+    env, found = darwin_test_env(res, os.environ, sdk_platform_path(os.environ))
+    if not found:
+        sys.exit("parallel-test: no swift-testing library for the toolchain at %s "
+                 "(looked for Library/Developer/Frameworks/Testing.framework, "
+                 "usr/lib/swift/macosx/testing, and the macOS platform's "
+                 "Testing.framework)" % os.path.dirname(usr))
+    return Toolchain(helper, env, True, ", ".join(found))
 
 
-def bundle_path(bin_dir):
-    """The Mach-O INSIDE the .xctest bundle — not the bundle directory, which
-    the helper accepts and then fails to dlopen."""
-    bundles = glob.glob(os.path.join(bin_dir, "*.xctest"))
-    if len(bundles) != 1:
-        sys.exit("parallel-test: expected one .xctest in %s, found %d"
-                 % (bin_dir, len(bundles)))
-    b = bundles[0]
-    name = os.path.basename(b)[: -len(".xctest")]
-    inner = os.path.join(b, "Contents", "MacOS", name)
-    return inner if os.path.exists(inner) else os.path.join(b, name)
+def test_binaries(bin_dir, darwin, isfile=os.path.isfile, isdir=os.path.isdir,
+                  listdir=os.listdir):
+    """Every test binary the build produced, as {name: path}.
+
+    ONE with SwiftPM's native build system — `<Package>PackageTests.xctest` —
+    and ONE PER TEST TARGET with swift-build, which is the default from 6.4
+    (`swift build --help`: "default: swiftbuild"), so CI's 6.4 lanes and
+    trunk get six. Per platform (`BuildParameters.binaryRelativePath` /
+    `testBinaryRelativePath`):
+
+    * macOS, either system: `<name>.xctest/Contents/MacOS/<name>` — the Mach-O
+      INSIDE the bundle, not the bundle, which the helper accepts and then
+      fails to dlopen.
+    * Linux, native: `<name>.xctest`, an executable FILE.
+    * Linux, swift-build: `<name>-test-runner`, a launcher that loads the
+      `<name>.so` beside it. If any exist they are the test binaries; an
+      `.xctest` beside them would be a stale native build.
+    """
+    names = sorted(listdir(bin_dir)) if isdir(bin_dir) else []
+    found = {}
+    if darwin:
+        for n in names:
+            if n.endswith(".xctest") and isdir(os.path.join(bin_dir, n)):
+                name = n[: -len(".xctest")]
+                inner = os.path.join(bin_dir, n, "Contents", "MacOS", name)
+                found[name] = inner if isfile(inner) else os.path.join(bin_dir, n, name)
+    else:
+        for n in names:
+            if n.endswith("-test-runner") and isfile(os.path.join(bin_dir, n)):
+                found[n[: -len("-test-runner")]] = os.path.join(bin_dir, n)
+        if not found:
+            for n in names:
+                if n.endswith(".xctest") and isfile(os.path.join(bin_dir, n)):
+                    found[n[: -len(".xctest")]] = os.path.join(bin_dir, n)
+    if not found:
+        sys.exit("parallel-test: no test binary in %s (built with --build-tests?)"
+                 % bin_dir)
+    return found
 
 
-def child_env(base_lib, slot):
+def child_env(tc, slot):
     """Per-process isolation.
 
     Each process gets its own config directory and TMPDIR: the persistence
@@ -410,12 +564,12 @@ def child_env(base_lib, slot):
     (signal handlers, TERM, fd 2, the colour report) is per-process already,
     which is the whole point of using processes.
 
-    DYLD_LIBRARY_PATH must be set HERE, by this unprotected Python parent: SIP
-    strips DYLD_* across a protected binary, so wrapping the helper in
+    The DYLD_* variables must be set HERE, by this unprotected Python parent:
+    SIP strips DYLD_* across a protected binary, so wrapping the helper in
     /usr/bin/time or /usr/bin/env silently breaks the dlopen.
     """
     env = dict(os.environ)
-    env["DYLD_LIBRARY_PATH"] = base_lib
+    env.update(tc.env)
     for key, sub in (("TUIKIT_CONFIG_DIR", "config"), ("TMPDIR", "tmp")):
         d = os.path.join(WORK, "slot%d" % slot, sub)
         os.makedirs(d, exist_ok=True)
@@ -423,18 +577,27 @@ def child_env(base_lib, slot):
     return env
 
 
-def helper_cmd(helper, bundle, filt, xunit=None, events=None, serial=False):
-    cmd = [helper, "--test-bundle-path", bundle, bundle,
-           "--testing-library", "swift-testing"]
+def test_cmd(tc, binary, filt, xunit=None, events=None, serial=False, extra=()):
+    """One swift-testing invocation, spelt as `swift test` spells it.
+
+    macOS: `swiftpm-testing-helper --test-bundle-path <bin> <bin> …`. Linux:
+    `<bin> … --testing-library swift-testing` — the flag is what tells the
+    product's entry point to run swift-testing rather than XCTest, and SwiftPM
+    puts it last there. The macOS order predates this and is kept as it was.
+    """
+    args = list(extra)
     if filt:
-        cmd += ["--filter", filt]
+        args += ["--filter", filt]
     if xunit:
-        cmd += ["--xunit-output", xunit]
+        args += ["--xunit-output", xunit]
     if events:
-        cmd += ["--event-stream-output-path", events, "--event-stream-version", "0"]
+        args += ["--event-stream-output-path", events, "--event-stream-version", "0"]
     if serial:
-        cmd += ["--no-parallel"]
-    return cmd
+        args += ["--no-parallel"]
+    if tc.helper:
+        return [tc.helper, "--test-bundle-path", binary, binary,
+                "--testing-library", "swift-testing"] + args
+    return [binary] + args + ["--testing-library", "swift-testing"]
 
 
 def select_ids(ids, pattern):
@@ -452,46 +615,127 @@ def select_ids(ids, pattern):
     return [i for i in ids if rx.search(i)]
 
 
-def list_tests(helper, bundle, lib):
-    cmd = helper_cmd(helper, bundle, None) + ["--list-tests"]
-    out = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO,
-                         env=child_env(lib, 0))
-    ids = [l.strip() for l in out.stdout.splitlines() if l.strip() and "/" in l]
-    if not ids:
-        sys.exit("parallel-test: --list-tests returned nothing\n" + out.stderr[:2000])
-    return sorted(set(ids))
+def list_tests(tc, binaries):
+    """-> {test id: name of the binary that holds it}, over every binary.
+
+    Each test target is its own module and a test ID starts with its module,
+    so no ID can be in two binaries; if one ever is, the partition could not
+    say which process runs it, so that is refused rather than guessed."""
+    owner = {}
+    for name, binary in sorted(binaries.items()):
+        cmd = test_cmd(tc, binary, None, extra=["--list-tests"])
+        out = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO,
+                             env=child_env(tc, 0))
+        ids = {l.strip() for l in out.stdout.splitlines() if l.strip() and "/" in l}
+        if not ids:
+            sys.exit("parallel-test: --list-tests returned nothing from %s (exit %d)\n%s"
+                     % (binary, out.returncode, (out.stderr or out.stdout)[:2000]))
+        for i in ids:
+            if i in owner:
+                sys.exit("parallel-test: %s is listed by both %s and %s"
+                         % (i, owner[i], name))
+            owner[i] = name
+    return owner
 
 
-def run_processes(cmds, lib, tags):
-    """Spawn every process at once and reap in EXIT order.
+def plan_invocations(patterns, owner, binaries):
+    """Each group's work, per binary: [{group, binary, pattern, selected}].
 
-    Each child writes to its own FILE. Never a pipe the parent drains in order:
+    With one binary this is one invocation per group, exactly as before. With
+    several (swift-build), a group whose tests span K binaries becomes K
+    invocations that its slot runs ONE AFTER ANOTHER, so there are still never
+    more than `-j` processes at once. An invocation that would select nothing
+    is not made: swift-testing treats a filter matching nothing as its own
+    outcome, and there is nothing to run.
+    """
+    by_binary = defaultdict(list)
+    for tid, name in owner.items():
+        by_binary[name].append(tid)
+    plan = []
+    for gi, pat in enumerate(patterns):
+        rx = re.compile(pat)
+        for name in sorted(binaries):
+            n = sum(1 for t in by_binary.get(name, ()) if rx.search(t))
+            if n:
+                tag = "g%d" % gi if len(binaries) == 1 else "g%d-%s" % (gi, name)
+                plan.append({"group": gi, "binary": name, "path": binaries[name],
+                             "pattern": pat, "selected": n, "tag": tag})
+    return plan
+
+
+def run_processes(invocations, tc, slot_of):
+    """Run every slot at once, each slot's invocations in turn; reap in EXIT order.
+
+    `invocations` carry "cmd" and "tag"; `slot_of(inv)` names the slot. Each
+    child writes to its own FILE. Never a pipe the parent drains in order:
     with N children and a 64 KiB pipe buffer, the parent blocks on the first
     child while the others block writing, and the run fabricates a perfect
     serialisation staircase that looks like a real finding.
     """
-    procs = []
+    queues = defaultdict(list)
+    for inv in invocations:
+        queues[slot_of(inv)].append(inv)
+    running = {}
     t0 = time.time()
-    for slot, (cmd, tag) in enumerate(zip(cmds, tags)):
-        log = os.path.join(WORK, "out", tag + ".log")
-        os.makedirs(os.path.dirname(log), exist_ok=True)
-        fh = open(log, "wb")
+
+    def start(slot):
+        r = queues[slot].pop(0)
+        r["log"] = os.path.join(WORK, "out", r["tag"] + ".log")
+        os.makedirs(os.path.dirname(r["log"]), exist_ok=True)
+        r["fh"] = open(r["log"], "wb")
+        r["t0"] = time.time()
         # cwd MUST be the repo root: the localization-parity tests resolve
         # Sources/Example/Localization/Generated/ relative to it.
-        p = subprocess.Popen(cmd, stdout=fh, stderr=subprocess.STDOUT,
-                             cwd=REPO, env=child_env(lib, slot))
-        procs.append({"p": p, "fh": fh, "t0": time.time(), "tag": tag, "log": log})
-    by_pid = {r["p"].pid: r for r in procs}
-    for _ in procs:
+        r["p"] = subprocess.Popen(r["cmd"], stdout=r["fh"], stderr=subprocess.STDOUT,
+                                  cwd=REPO, env=child_env(tc, slot))
+        running[r["p"].pid] = (slot, r)
+
+    for slot in sorted(queues):
+        start(slot)
+    done = []
+    while running:
         pid, status, ru = os.wait4(-1, 0)
-        r = by_pid[pid]
+        if pid not in running:
+            continue
+        slot, r = running.pop(pid)
         r["wall"] = time.time() - r["t0"]
         r["rc"] = os.waitstatus_to_exitcode(status)
         r["cpu"] = ru.ru_utime + ru.ru_stime
-        r["maxrss"] = ru.ru_maxrss
+        # ru_maxrss is bytes on macOS and KiB on Linux; report bytes.
+        r["maxrss"] = ru.ru_maxrss * (1 if sys.platform == "darwin" else 1024)
         r["fh"].close()
         r["p"].returncode = r["rc"]
-    return procs, time.time() - t0
+        done.append(r)
+        if queues[slot]:
+            start(slot)
+    return done, time.time() - t0
+
+
+# The lines of a group's log that explain a failure, for the job log. An issue
+# line is followed by its details — `↳ …` or indented on Linux, `<symbol>  …`
+# and indented on macOS — until the next event line, which is a symbol and then
+# `Test`/`Suite`/`Test run`. Known issues are expected and are left out.
+ISSUE_RE = re.compile(r" recorded an issue\b")
+EVENT_LINE_RE = re.compile("^(?![↳\U00100135])\\S+\\s+(Test|Suite)\\b")
+
+
+def failure_excerpt(text, max_lines_per_issue=40, max_issues=20):
+    """-> the issue blocks in a swift-testing console log, or [] if none."""
+    lines = text.splitlines()
+    out, issues, i = [], 0, 0
+    while i < len(lines) and issues < max_issues:
+        if ISSUE_RE.search(lines[i]):
+            issues += 1
+            block = [lines[i]]
+            i += 1
+            while i < len(lines) and not EVENT_LINE_RE.match(lines[i]) \
+                    and len(block) < max_lines_per_issue:
+                block.append(lines[i])
+                i += 1
+            out += block
+        else:
+            i += 1
+    return out
 
 
 # ------------------------------------------------------------------- weights
@@ -580,6 +824,53 @@ def plural(n, word):
     return "%d %s%s" % (n, word, "" if n == 1 else "s")
 
 
+
+
+def on_github_actions(environ=None):
+    environ = os.environ if environ is None else environ
+    return environ.get("GITHUB_ACTIONS") == "true"
+
+
+def report_failing_logs(procs, failed_by_tag, full_logs, out=None):
+    """Put what failed INTO the output, not only a path under .build.
+
+    On CI the path is useless: `.build` is gone with the runner. So each
+    invocation that failed, crashed or could not be reconciled gets its issue
+    blocks printed here; one with no issue lines to show (a crash, a process
+    killed by a signal, one that ran nothing) gets its last lines instead.
+    `full_logs` also prints the whole log, folded into a collapsible group on
+    GitHub Actions."""
+    out = sys.stdout if out is None else out
+    gh = on_github_actions()
+    for r in procs:
+        s = r["summary"]
+        bad = (r["rc"] != 0 or s is None or not s["passed"]
+               or failed_by_tag.get(r["tag"]) or r.get("problem"))
+        if not bad:
+            continue
+        with open(r["log"], errors="replace") as fh:
+            text = fh.read()
+        how = ("killed by signal %d" % -r["rc"]) if r["rc"] < 0 else ("exit %d" % r["rc"])
+        print("", file=out)
+        print("── %s (%s, %s) ──" % (r["tag"], r["binary"], how), file=out)
+        excerpt = failure_excerpt(text)
+        if excerpt:
+            for line in excerpt:
+                print("  " + line, file=out)
+        else:
+            tail = text.splitlines()[-40:]
+            print("  no issue lines; the log's last %d lines:" % len(tail), file=out)
+            for line in tail:
+                print("  " + line, file=out)
+        if full_logs:
+            print(("::group::full log of %s" if gh else "── full log of %s ──")
+                  % r["tag"], file=out)
+            print(text, file=out)
+            if gh:
+                print("::endgroup::", file=out)
+    out.flush()
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Run the test suite across N processes, with reconciliation.")
@@ -595,8 +886,18 @@ def main():
                     help="skip `swift build --build-tests`")
     ap.add_argument("--expect-known-issues", type=int, default=None,
                     help="fail unless the known-issue total equals this")
+    ap.add_argument("--full-failing-logs", action="store_true",
+                    help="also print the whole log of every failing process "
+                         "(CI: the logs under .build do not outlive the runner)")
     ap.add_argument("--json", default=None, help="write the full result as JSON")
     args = ap.parse_args()
+
+    # A pipe (CI's log) would otherwise hold this output back in a block
+    # buffer, behind the build's.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except AttributeError:
+        pass
 
     # Before the build, which is half of what two runs at once would fight over.
     lock = None if args.plan_only else machine_lock()  # noqa: F841 — held until exit
@@ -606,21 +907,28 @@ def main():
     if args.calibrate:
         jobs = 1
 
-    helper, lib = toolchain()
+    swift = swift_command()
+    tc = toolchain(swift)
 
     if not args.no_build:
         # The ONLY place the SwiftPM build database is touched. Everything
         # after this is the helper, which never opens it.
-        rc = subprocess.run(["swift", "build", "--build-tests"], cwd=REPO).returncode
+        rc = subprocess.run(swift + ["build", "--build-tests"], cwd=REPO).returncode
         if rc != 0:
             return 2
-    bin_dir = subprocess.run(["swift", "build", "--show-bin-path"], cwd=REPO,
+    bin_dir = subprocess.run(swift + ["build", "--show-bin-path"], cwd=REPO,
                              capture_output=True, text=True, check=True).stdout.strip()
-    bundle = bundle_path(bin_dir)
+    binaries = test_binaries(bin_dir, tc.darwin)
+    if len(binaries) > 1 or os.environ.get("SWIFT") or not tc.darwin:
+        print("parallel-test: `%s`, %d test binar%s, swift-testing from %s"
+              % (" ".join(swift), len(binaries), "y" if len(binaries) == 1 else "ies",
+                 tc.where if tc.darwin else "the test binaries (%s)" % tc.where))
 
-    ids = select_ids(list_tests(helper, bundle, lib), args.filter)
+    owner = list_tests(tc, binaries)
+    ids = select_ids(sorted(owner), args.filter)
     if not ids:
         sys.exit("parallel-test: --filter %r matched no tests" % args.filter)
+    owner = {t: owner[t] for t in ids}
     print("parallel-test: %s in %s, %d process%s"
           % (plural(len(ids), "test"),
              plural(len({suite_of(i) for i in ids}), "suite"),
@@ -673,31 +981,34 @@ def main():
 
     shutil.rmtree(os.path.join(WORK, "out"), ignore_errors=True)
     os.makedirs(os.path.join(WORK, "out"), exist_ok=True)
-    tags = ["g%d" % i for i in range(jobs)]
-    cmds = [helper_cmd(helper, bundle, pat,
-                       xunit=os.path.join(WORK, "out", "%s.xml" % t),
-                       events=os.path.join(WORK, "out", "%s.jsonl" % t),
-                       serial=args.calibrate)
-            for pat, t in zip(patterns, tags)]
-    procs, wall = run_processes(cmds, lib, tags)
+    plan = plan_invocations(patterns, owner, binaries)
+    for inv in plan:
+        inv["cmd"] = test_cmd(tc, inv["path"], inv["pattern"],
+                              xunit=os.path.join(WORK, "out", "%s.xml" % inv["tag"]),
+                              events=os.path.join(WORK, "out", "%s.jsonl" % inv["tag"]),
+                              serial=args.calibrate)
+    procs, wall = run_processes(plan, tc, lambda inv: inv["group"])
+    procs.sort(key=lambda r: (r["group"], r["binary"]))
 
     # ------------------------------------------------------------ reconcile
     union, failed, counted, known = set(), set(), 0, 0
+    failed_by_tag = {}
     problems = []
-    for i, r in enumerate(procs):
-        gi = tags.index(r["tag"])
+    for r in procs:
         xml = os.path.join(WORK, "out", "%s.xml" % r["tag"])
         try:
             gids, gfailed, n = parse_xunit(xml)
         except XunitError as exc:
             gids, gfailed, n = set(), set(), 0
             problems.append("group %s: %s" % (r["tag"], exc))
+            r["problem"] = True
         with open(r["log"], errors="replace") as fh:
             summary = parse_summary_text(fh.read())
-        r["summary"], r["selected"], r["ran"] = summary, proof["counts"][gi], n
+        r["summary"], r["ran"] = summary, n
         counted += n
         union |= gids
         failed |= gfailed
+        failed_by_tag[r["tag"]] = gfailed
         if summary is None:
             problems.append("group %s produced no summary line (see %s)"
                             % (r["tag"], r["log"]))
@@ -710,6 +1021,7 @@ def main():
                 problems.append(
                     "group %s ran %d tests, the partition predicted %d"
                     % (r["tag"], summary["tests"], r["selected"]))
+                r["problem"] = True
         # A group can report a failure that xunit never names. An issue
         # recorded with no test in the task-local context is attributed to
         # «unknown» and produces no <failure> element, so `gfailed` is empty
@@ -736,15 +1048,18 @@ def main():
 
     suites = {suite_of(t) for t in union}
     cpu = sum(r["cpu"] for r in procs)
+    ok = not problems and not failed
+    if not ok:
+        report_failing_logs(procs, failed_by_tag, args.full_failing_logs)
+
     print()
-    for i, r in enumerate(procs):
+    for r in procs:
         s = r["summary"]
         print("  group %s: %5d tests  %6.2fs wall  %6.1fs cpu  %s"
               % (r["tag"], r["ran"], r["wall"], r["cpu"],
                  "ok" if s and s["passed"] else "FAILED"))
     print()
 
-    ok = not problems and not failed
     print("parallel-test: %s in %s %s in %.2fs across %d process%s "
           "(%.2fs end to end, %.1f cpu-s, %.1fx cores) with %s"
           % (plural(len(union), "test"), plural(len(suites), "suite"),
@@ -752,10 +1067,17 @@ def main():
              time.time() - started, cpu, cpu / wall if wall else 0,
              plural(known, "known issue")))
 
+    # On GitHub Actions each failure is also an annotation, so it is on the
+    # run's summary page and not only somewhere in a long job log.
+    gh = on_github_actions()
     for t in sorted(failed):
         print("  FAILED: %s" % t)
+        if gh:
+            print("::error title=Test failed::%s" % t)
     for p in problems:
         print("  RECONCILIATION: %s" % p)
+        if gh:
+            print("::error title=parallel-test reconciliation::%s" % p)
     for t in missing[:10]:
         print("    never ran: %s" % t)
     for t in extra[:10]:
@@ -770,16 +1092,21 @@ def main():
     # here because running this suite serially currently fails a handful of
     # tests outright — they depend on the interleaving a parallel run happens
     # to give them. What a calibration will not do is trust a run that was not
-    # really serial, or one that failed to time every test.
+    # really serial, or one that failed to time every test. With several test
+    # binaries the one slot ran them one after another, so every stream must
+    # be serial on its own and together they must time every test.
     if args.calibrate and not args.filter:
-        ev = os.path.join(WORK, "out", "%s.jsonl" % procs[0]["tag"])
-        peak = peak_concurrency(ev) if os.path.exists(ev) else 0
+        measured, peak = {}, 0
+        for r in procs:
+            ev = os.path.join(WORK, "out", "%s.jsonl" % r["tag"])
+            if os.path.exists(ev):
+                peak = max(peak, peak_concurrency(ev))
+                measured.update(durations_from_event_stream(ev))
         if peak != 1:
             print("parallel-test: NOT writing weights — the calibration ran %d "
                   "tests at once, so its durations are queueing times, not "
                   "costs (is --no-parallel still honoured?)" % peak)
             return 2
-        measured = durations_from_event_stream(ev)
         if len(measured) != len(ids):
             print("parallel-test: NOT writing weights — timed %d of %d tests"
                   % (len(measured), len(ids)))
@@ -794,9 +1121,9 @@ def main():
                        "tests": len(union), "suites": len(suites),
                        "known": known, "failed": sorted(failed),
                        "problems": problems,
-                       "groups": [{"tag": r["tag"], "wall": r["wall"],
-                                   "cpu": r["cpu"], "ran": r["ran"],
-                                   "predicted": r["selected"],
+                       "groups": [{"tag": r["tag"], "binary": r["binary"],
+                                   "wall": r["wall"], "cpu": r["cpu"],
+                                   "ran": r["ran"], "predicted": r["selected"],
                                    "maxrss": r["maxrss"]} for r in procs]}, fh, indent=1)
 
     return 0 if ok else 1

@@ -91,7 +91,13 @@ suite repeatedly. It differs in three ways worth knowing:
 | `--filter REGEX` | restrict to matching test IDs (`Module.Suite/test()`) |
 | `--no-build` | skip `swift build --build-tests` |
 | `--expect-known-issues N` | fail unless the known-issue total is exactly N |
+| `--full-failing-logs` | print the whole log of every failing process, not only its issues |
 | `--json PATH` | write the full result, per group, as JSON |
+
+| environment | meaning |
+|---|---|
+| `SWIFT` | the `swift` to build, list and run with, e.g. `xcrun --toolchain org.swift.640202609131a swift`; default `swift` from `PATH` |
+| `TUIKIT_PARALLEL_TEST_LOCK` | the run lock's path (see below) |
 
 `--calibrate` writes `.build/parallel-test/weights.json`. It is worth re-running
 when the suite has grown a lot, but it is not required for correctness: the
@@ -360,13 +366,87 @@ processes. That includes `AppState.shared` (`DismissActionTests` requests an
 exit through it), `LocalizationService.shared` (one test redirects its
 persistence) and the process environment.
 
-## Portability
+## Toolchains and platforms
 
-Written for macOS, which is where the speedup was measured. The toolchain is
-discovered from the `swift` on `PATH` rather than assumed, and Linux and Windows
-testing-library paths are tried, but neither has been exercised. On a 2–4 core
-CI runner the win would shrink toward the core count, which is another reason CI
-keeps running plain `swift test`.
+The harness launches swift-testing the way `swift test` does, on each
+toolchain, so a run here is the same program in the same environment. What
+follows is transcribed from SwiftPM's own sources — `TestRunner.args(forTestAt:)`
+in `SwiftTestCommand.swift`, `TestingSupport.constructTestEnvironment`,
+`UserToolchain.deriveSwiftTestingPath`, `SwiftSDK.sdkPlatformPaths` and
+`BuildParameters.binaryRelativePath` — at `release/6.2`, `release/6.3` and
+`swift-6.4.0-RELEASE`.
+
+**Which `swift`.** `$SWIFT` if set, else `swift` from `PATH`. CI's macOS lanes
+export `SWIFT="xcrun --toolchain <bundle id> swift"` for a swift.org toolchain
+and `SWIFT=swift` under Xcode; locally it is usually unset, which means
+swiftly's default. The build, `--show-bin-path` and `-print-target-info` all go
+through it, so the tests run on the toolchain that built them. (`xcrun
+--toolchain` needs Xcode as the developer directory: under the Command Line
+Tools it silently runs their own `swift`, 6.2.4 on this machine, whatever
+toolchain it is given.)
+
+**macOS** runs the toolchain's `swiftpm-testing-helper`
+(`<usr>/libexec/swift/pm/`) with `--test-bundle-path <bin> <bin>`, and the
+environment `constructTestEnvironment` builds. The testing library is in one of
+three places, looked for in SwiftPM's order, and only the first found is used:
+
+| toolchain | swift-testing | variables |
+|---|---|---|
+| Command Line Tools | `<toolchain>/Library/Developer/Frameworks/Testing.framework` | that directory on `DYLD_FRAMEWORK_PATH`; `<toolchain>/Library/Developer/usr/lib` on `DYLD_LIBRARY_PATH` (6.4 adds this; harmless where it does not exist) |
+| swift.org (swiftly, CI's swift.org lanes) | `<usr>/lib/swift/macosx/testing` | that directory on `DYLD_LIBRARY_PATH` |
+| Xcode | neither: it is in the macOS **platform** | — |
+
+Then, for every toolchain, the macOS platform
+(`xcrun --sdk macosx --show-sdk-platform-path`, or
+`$SWIFTPM_PLATFORM_PATH_macosx`) when there is one:
+`<platform>/Developer/Library/{Frameworks,PrivateFrameworks}` on
+`DYLD_FRAMEWORK_PATH` and `<platform>/Developer/usr/lib` on
+`DYLD_LIBRARY_PATH`. They are appended — after anything already set, and after
+the toolchain's own — so a swift.org toolchain run with Xcode selected still
+loads its own swift-testing, not Xcode's. Under the Command Line Tools there is
+no platform and xcrun fails, so for swiftly's toolchains here the environment is
+exactly what this harness always set, one `DYLD_LIBRARY_PATH`. Under Xcode 26.3
+without the platform directories the helper cannot load the bundle at all
+(`Library not loaded: @rpath/Testing.framework/Versions/A/Testing`); with them,
+the processes report `Testing Library Version: 1501`, which is what `swift test`
+reports under the same Xcode. Not mirrored: `NO_COLOR` (SwiftPM sets it when
+its output is not a terminal; this suite does not read it),
+`SWIFT_TESTING_XCTEST_INTEROP_MODE` (6.4 sets it only for tools version 6.4 or
+later; this package is 6.2), and the coverage and sanitizer variables.
+
+**Linux** has no helper. The test product is an executable, and SwiftPM runs it
+directly — `<bin> <arguments…> --testing-library swift-testing`, the last flag
+being what tells the product's entry point to run swift-testing rather than
+XCTest — with the environment untouched. The harness does the same. This is
+the one path that cannot be run on the machine this was written on; its
+evidence is the SwiftPM source above and CI.
+
+**One test binary or several.** SwiftPM's native build system makes one test
+product for the package (`TUIkitPackageTests`). swift-build — the default from
+6.4 (`swift build --help`: "default: swiftbuild"), so on CI's 6.4 and trunk
+lanes — makes one per test TARGET: six here. On macOS each is
+`<name>.xctest/Contents/MacOS/<name>`, as before; on Linux, native builds
+produce `<name>.xctest` as an executable file and swift-build a
+`<name>-test-runner` launcher beside `<name>.so` (CI's 6.4 build log links
+`TUIkitViewTests-test-runner` and five siblings, and runs six test runs). The
+harness lists every binary, maps each test ID to the binary that listed it
+(each test target is its own module, so an ID in two binaries is refused), and
+proves the partition over the union as before. A group whose tests span
+several binaries becomes one invocation per binary, run **one after another in
+that group's slot**, so there are still never more than `-j` processes at once;
+each invocation's count is checked against the proof on its own.
+
+**When something fails**, the lines that explain it go to the output, not only
+to a file under `.build`: every failing process's issue blocks (the `recorded
+an issue` line and its details; known issues are left out), or, for a process
+that crashed or ran nothing, its last 40 lines and the signal that killed it.
+`--full-failing-logs` adds the whole log, and on GitHub Actions
+(`GITHUB_ACTIONS=true`) folds it into a collapsible group and makes each failed
+test an `::error` annotation.
+
+**Windows** is not supported and has never been run: there is no `flock`, the
+binary discovery does not know `.exe`, and SwiftPM's Windows `PATH` additions
+are not mirrored. CI's Windows lanes keep running `swift test`.
 
 ## Tests
 
@@ -374,11 +454,18 @@ keeps running plain `swift test`.
 python3 Tools/ParallelTest/test_parallel_test.py
 ```
 
-40 tests covering the parts that can be tested without running the suite: ID
+68 tests covering the parts that can be tested without running the suite: ID
 escaping and pattern anchoring, the partition proof rejecting a gap or an
 overlap, bin packing, both weight paths, all eight shapes of the summary line
 in both their singular and plural wordings, the malformed-xunit recovery, the
-event-stream duration join, and the run lock making a second run wait.
+event-stream duration join, and the run lock making a second run wait. And,
+for the toolchains: `$SWIFT` parsing; the macOS environment for each of the
+three layouts in "Toolchains and platforms" (a mutation that lets the platform
+come before a swift.org toolchain's own swift-testing, or puts two copies on the
+path, fails them); test-binary discovery for native and swift-build output on
+both platforms; the helper and direct command lines; the per-binary plan; a
+slot running its invocations in turn while slots run at once; and the failure
+excerpt on real Linux (CI) and macOS (probe) output.
 
 Two of those are a negative control on the summary parser and are the reason
 to run it after touching `SUMMARY_RE`: a log with no run summary in it — empty,
