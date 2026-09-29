@@ -93,6 +93,13 @@ enum ProcessWideState {
         get { TerminalClient.simulated }
         set { if mayWrite("TerminalClient.simulated") { TerminalClient.simulated = newValue } }
     }
+
+    /// `TerminalClient.simulatedQuirks`, which republishes the width traits
+    /// its switches imply.
+    @MainActor static var simulatedQuirks: TerminalQuirks? {
+        get { TerminalClient.simulatedQuirks }
+        set { if mayWrite("TerminalClient.simulatedQuirks") { TerminalClient.simulatedQuirks = newValue } }
+    }
 }
 
 /// The door's own check.
