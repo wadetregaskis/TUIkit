@@ -101,7 +101,9 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
         // row is still the one the keys will reach when it comes back, and hiding it
         // read as the focus having been lost. That rule is the palette's, asked by
         // every highlighted row, so a menu's row and a list's cursor row agree.
-        let emphasis = palette.highlightedRowFill(appearsActive: context.environment.appearsActive)
+        // A breath with reverse video in it (16 colours, where the palette's picks run
+        // out; without colour, by weight) is drawn as a list's cursor row draws it.
+        let emphasis = palette.highlightedRowFill(appearsActive: context.environment.appearsActive, reversing: true)
 
         // Squared off first: the bar spans the row, and a short line would
         // otherwise be painted only as far as it happens to reach, leaving the
@@ -116,7 +118,12 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
             ANSIRenderer.applyPersistentBackground(line, color: color) + ANSIRenderer.reset
         }
 
-        // A reversing breath is a list or table row's alone (`HighlightFill.stillFill`).
+        if let ends = RowBackground.reversingEnds(of: emphasis) {
+            let cycle = context.environment.selectionEmphasis.cycle(true)
+            if cycle.isAnimating {
+                return Self.reversingBar(under: buffer, lines: plain, ends: ends, cycle: cycle, context: context)
+            }
+        }
         switch emphasis.stillFill {
         case .reversed(let ink, let field):
             // Steady: a reversal has no phase to advance, so the row is drawn once and
@@ -173,11 +180,7 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
             // what they said about alpha stays behind, after the label's own regions
             // (§69.4), and the render they would have caused at their next step is
             // asked for on their behalf.
-            let dropped = buffer.animatedCells.filter(\.isAnimating)
-            buffer.opacityRegions += dropped.flatMap(\.alphaLeftBehind)
-            context.requestWake(
-                token: "menu-row-dropped-run-\(context.identity.path)",
-                forNextStepOf: dropped.map { ($0.clock, $0.frameTicks) })
+            Self.dropLabelRuns(of: &buffer, context: context)
             // Each colour of the breath is a bar the label's fades are spent
             // against, once per colour, where the label has any — the colour drawn
             // above already, and every other its lines alone: these runs keep only
@@ -196,6 +199,52 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
                     return lines[index]
                 }
             }
+        }
+        return buffer
+    }
+
+    /// The label's runs, dropped for as long as the bar breathes over them — what they
+    /// said about alpha left behind, and the render they would have caused at their
+    /// next step asked for on their behalf (see the breath in `renderToBuffer`).
+    private static func dropLabelRuns(of buffer: inout FrameBuffer, context: RenderContext) {
+        let dropped = buffer.animatedCells.filter(\.isAnimating)
+        buffer.opacityRegions += dropped.flatMap(\.alphaLeftBehind)
+        context.requestWake(
+            token: "menu-row-dropped-run-\(context.identity.path)",
+            forNextStepOf: dropped.map { ($0.clock, $0.frameTicks) })
+    }
+
+    /// `label` on a bar that breathes between a fill and reverse video, or between
+    /// reverse video and reverse video in bold: the frames a list's cursor row draws
+    /// (`RowBackground.reversingEnds(of:)`). A reversed frame is the whole row in the
+    /// text's colour with the label in the page's; a fill is the bar, as a colour
+    /// breath draws it.
+    @MainActor
+    private static func reversingBar(
+        under label: FrameBuffer, lines: [String], ends: (dim: RowBackground.Paint, bright: RowBackground.Paint),
+        cycle: SelectionEmphasisCycle, context: RenderContext
+    ) -> FrameBuffer {
+        let palette = context.environment.palette
+        let brightFrames = cycle.brightFrames()
+        let now = brightFrames[cycle.step % max(1, brightFrames.count)] ? ends.bright : ends.dim
+        func drawn(_ paint: RowBackground.Paint, buildingRuns: Bool) -> FrameBuffer {
+            switch paint {
+            case .fill(let colour):
+                return bar(under: label, lines: lines, in: colour, palette: palette, buildingRuns: buildingRuns)
+            case .reversed:
+                var reversed = label
+                reversed.lines = lines.map(paint.painting)
+                if buildingRuns { reversed.paintRunGrounds { _, ground in paint.painting(ground) } }
+                return reversed
+            }
+        }
+        var buffer = drawn(now, buildingRuns: true)
+        guard !context.isMeasuring else { return buffer }
+        dropLabelRuns(of: &buffer, context: context)
+        let dim = drawn(ends.dim, buildingRuns: false).lines
+        let bright = drawn(ends.bright, buildingRuns: false).lines
+        buffer.animatedCells = lines.indices.compactMap { index in
+            cycle.run(drawn: brightFrames.map { ($0 ? bright : dim)[index] }, offsetX: 0, offsetY: index)
         }
         return buffer
     }

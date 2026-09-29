@@ -141,26 +141,31 @@ enum RowBackground {
     /// cycle, and anything else still.
     @MainActor
     private static func breathing(_ highlight: HighlightFill, in context: RenderContext) -> Self {
+        let cycle = context.environment.selectionEmphasis.cycle(true)
+        if let ends = reversingEnds(of: highlight) {
+            guard cycle.isAnimating else { return still(highlight) }
+            return .pulsingReversal(cycle, dim: ends.dim, bright: ends.bright)
+        }
+        guard case .pulse(let dim, let bright) = highlight else { return still(highlight) }
+        return .pulsing(cycle, dim: dim, bright: bright)
+    }
+
+    /// The two ends of a breath with reverse video in it, or `nil` for any other
+    /// highlight: a 16-colour breath with one end reversed (`RowFills`), or, without
+    /// colour, a reversal that breathes by its weight — bold at the bright end — where
+    /// the terminal draws bold (``TerminalClient/drawsBold``; every one TUIkit has
+    /// measured does). The one answer a list's or table's cursor row, a menu's bar and a
+    /// drop-down's highlighted row all draw from.
+    @MainActor
+    static func reversingEnds(of highlight: HighlightFill) -> (dim: Paint, bright: Paint)? {
         switch highlight {
-        case .pulse(let dim, let bright):
-            return .pulsing(context.environment.selectionEmphasis.cycle(true), dim: dim, bright: bright)
         case .reversingPulse(let dim, let bright, let ink, let field):
-            let cycle = context.environment.selectionEmphasis.cycle(true)
-            guard cycle.isAnimating else { return bright.map(Self.fixed) ?? .reversed(ink: ink, field: field) }
             let reversal = Paint.reversed(ink: ink, field: field)
-            return .pulsingReversal(cycle, dim: dim.map(Paint.fill) ?? reversal, bright: bright.map(Paint.fill) ?? reversal)
-        case .reversed(let ink, let field):
-            // Without colour a cursor row is reversed, and breathes by its weight where
-            // the terminal draws bold — every one TUIkit has measured does. Elsewhere it
-            // holds still.
-            let cycle = context.environment.selectionEmphasis.cycle(true)
-            guard ColorDepth.current == .noColor, cycle.isAnimating, TerminalClient.drawsBold else {
-                return still(highlight)
-            }
-            return .pulsingReversal(
-                cycle, dim: .reversed(ink: ink, field: field), bright: .reversed(ink: ink, field: field, bold: true))
-        case .fill:
-            return still(highlight)
+            return (dim.map(Paint.fill) ?? reversal, bright.map(Paint.fill) ?? reversal)
+        case .reversed(let ink, let field) where ColorDepth.current == .noColor && TerminalClient.drawsBold:
+            return (.reversed(ink: ink, field: field), .reversed(ink: ink, field: field, bold: true))
+        case .fill, .pulse, .reversed:
+            return nil
         }
     }
 

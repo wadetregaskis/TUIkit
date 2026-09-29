@@ -2598,7 +2598,9 @@ palette's own ink and page, with every colour the row's content states dropped
 first, so the whole row is the text's colour and everything on it — text,
 secondary text, the ●, a badge — the page's. The other frames are an ordinary slot
 fill. Of the shipped palettes: Violet on Apple's table, White and Red Sands on
-xterm's. A menu's bar and a `DatePicker` cell hold the fill end still instead.
+xterm's. A menu's bar and a drop-down's highlighted row breathe the same way (the
+selected cursor row's breath, which on Red Sands reverses); a `DatePicker` cell and
+a split view's divider hold the fill end still instead.
 What a host paints for it is what the card's rows A, B and D ask: UNMEASURED.
 
 The trigger is those colours and never the terminal's silence: a palette of
@@ -2607,8 +2609,9 @@ trigger is a terminal that draws no colour at all (`ColorDepth.noColor`, e.g.
 `TERM=dumb`), where a fill is nothing: there a list's or table's cursor row, a
 menu's or drop-down's bar, a date field's active component and a split view's
 divider reverse (since 2026-09-29; before, a cursor row there looked like every
-other row). A list's or table's cursor row there breathes by weight — reversed on
-every frame, bold on the bright ones — on every host TUIkit identifies, since each
+other row). A list's or table's cursor row, a menu's bar and a drop-down's
+highlighted row there breathe by weight — reversed on every frame, bold on the
+bright ones — on every host TUIkit identifies, since each
 draws bold visibly (the bold/bright card above: iTerm2 brightens, Apple Terminal,
 Ghostty and Warp thicken, tmux passes it through). On an unidentified host it holds
 still, reversed. How a host paints bold under reverse video WITHOUT colour is

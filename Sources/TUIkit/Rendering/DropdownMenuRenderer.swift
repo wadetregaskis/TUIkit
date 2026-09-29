@@ -473,12 +473,26 @@ enum DropdownMenu {
     /// FORCE, which after a reset are the terminal's own rather than the palette's —
     /// see `ANSIRenderer.applyPersistentReverse(_:ink:field:)`. Both sides are stated
     /// opaque, as every reversal is, so a reversed row claims nothing of its own.
-    private static func paint(_ content: String, with highlight: HighlightFill) -> String {
+    private static func paint(_ content: String, with highlight: HighlightFill, _ reversal: Reversal) -> String {
         guard case .reversed(let ink, let field) = highlight else {
             return content.withPersistentBackground(fillColor(highlight))
         }
-        return ANSIRenderer.applyPersistentReverse(
-            content, ink: ink.opaqueSpelling, field: field.opaqueSpelling)
+        switch reversal {
+        case .exchanging:
+            return ANSIRenderer.applyPersistentReverse(content, ink: ink.opaqueSpelling, field: field.opaqueSpelling)
+        case .pageColoured(let bold):
+            return ANSIRenderer.applyReversedPair(content, ink: ink.opaqueSpelling, field: field.opaqueSpelling, bold: bold)
+        }
+    }
+
+    /// How a reversed highlight treats the row's own colours: exchanged cell by cell
+    /// (a still reversal, where the tint cannot be measured), or dropped, the whole row
+    /// the text's colour with its content in the page's — a frame of a breath that runs
+    /// into reverse video, bold where it breathes by weight
+    /// (`RowBackground.reversingEnds(of:)`), as a list's cursor row draws it.
+    private enum Reversal: Equatable {
+        case exchanging
+        case pageColoured(bold: Bool)
     }
 
     /// Draws the bordered popup lines for the visible window, at one point of
@@ -503,6 +517,7 @@ enum DropdownMenu {
         innerWidth: Int,
         barCells: [String]?,
         highlight: HighlightFill,
+        reversal: Reversal = .exchanging,
         borderColor: Color,
         context: RenderContext
     ) -> [String] {
@@ -547,7 +562,7 @@ enum DropdownMenu {
                 let fill = index == highlightedRow ? highlight : nil
                 if let barCells {
                     let fitted = fit(content, to: contentInner)
-                    let styled = fill.map { paint(fitted, with: $0) } ?? fitted
+                    let styled = fill.map { paint(fitted, with: $0, reversal) } ?? fitted
                     let cell = local < barCells.count ? barCells[local] : " "
                     lines.append(
                         verticalBorder + styled + ANSIRenderer.reset + cell + verticalBorder)
@@ -558,7 +573,7 @@ enum DropdownMenu {
                     // and reversed here, and the helper only frames what it is handed.
                     lines.append(
                         BorderRenderer.standardContentLine(
-                            content: paint(fit(content, to: innerWidth), with: highlight),
+                            content: paint(fit(content, to: innerWidth), with: highlight, reversal),
                             innerWidth: innerWidth,
                             style: borderStyle,
                             color: borderColor))
@@ -595,11 +610,11 @@ enum DropdownMenu {
         barCells: [String]?,
         context: RenderContext
     ) -> (lines: [String], runs: [AnimatedCellRun], borderColor: Color) {
-        func draw(_ highlight: HighlightFill, _ border: Color) -> [String] {
+        func draw(_ highlight: (fill: HighlightFill, reversal: Reversal), _ border: Color) -> [String] {
             lines(
                 rows: rows, highlightedRow: highlightedRow, visibleRange: visibleRange,
                 innerWidth: innerWidth, barCells: barCells,
-                highlight: highlight, borderColor: border, context: context)
+                highlight: highlight.fill, reversal: highlight.reversal, borderColor: border, context: context)
         }
         // The cycle, not the live phase: reading the phase marks the frame as
         // having consulted the clock, and an open menu would then re-render the
@@ -618,13 +633,25 @@ enum DropdownMenu {
         // selection it does not hold the keys for: the row is still the one Return will
         // choose when the window comes back, so it stays, and it stops breathing. The
         // rule is the palette's, so a `Menu`'s rows and a list's cursor row agree.
-        let emphasis = palette.highlightedRowFill(appearsActive: context.environment.appearsActive)
-        let highlights: [HighlightFill] =
-            if case .pulse = emphasis {
+        //
+        // A breath with reverse video in it — at 16 colours where the palette's picks
+        // run out, and without colour, by weight — takes its frames from the one answer
+        // a list's cursor row draws from.
+        let emphasis = palette.highlightedRowFill(appearsActive: context.environment.appearsActive, reversing: true)
+        func frame(_ paint: RowBackground.Paint) -> (fill: HighlightFill, reversal: Reversal) {
+            switch paint {
+            case .fill(let colour): (.fill(colour), .exchanging)
+            case .reversed(let ink, let field, let bold): (.reversed(ink: ink, field: field), .pageColoured(bold: bold))
+            }
+        }
+        let highlights: [(fill: HighlightFill, reversal: Reversal)] =
+            if let reversing = RowBackground.reversingEnds(of: emphasis), cycle.isAnimating {
+                cycle.brightFrames().map { frame($0 ? reversing.bright : reversing.dim) }
+            } else if case .pulse = emphasis {
                 cycle.colors(dim: ends.highlight.dim, bright: ends.highlight.bright)
-                    .map(HighlightFill.fill)
+                    .map { (.fill($0), .exchanging) }
             } else {
-                Array(repeating: emphasis, count: cycle.frames.count)
+                Array(repeating: (emphasis.stillFill, .exchanging), count: cycle.frames.count)
             }
         let borders = cycle.colors(dim: ends.border.dim, bright: ends.border.bright)
         // One alpha in every frame, or the chrome's claim — taken from the frame drawn —

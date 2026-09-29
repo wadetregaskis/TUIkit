@@ -510,7 +510,7 @@ public struct SelectionEmphasisCycle: Sendable, Equatable {
     /// The tail every `run` overload shares: the finished cells become a run,
     /// measured from what was actually drawn.
     @MainActor
-    private func run(drawn: [String], offsetX: Int, offsetY: Int) -> AnimatedCellRun? {
+    func run(drawn: [String], offsetX: Int, offsetY: Int) -> AnimatedCellRun? {
         guard let first = drawn.first else { return nil }
         return AnimatedCellRun(
             offsetX: offsetX,

@@ -392,4 +392,74 @@ struct ReversedMenuHighlightTests {
         let after = try #require(reported.1).lines.map(\.stripped)
         #expect(before == after, "\(fixture): the drop-down's glyphs moved")
     }
+
+    // MARK: - A breath with reverse video in it
+
+    /// Per frame of `run`: whether every one of its cells (or the interior's, in a
+    /// drop-down) is reversed, whether any is bold, and the fills of the rest.
+    private func frames(
+        of run: AnimatedCellRun, depth: ColorDepth, interiorOnly: Bool = false
+    ) -> (reversed: [Int], bold: [Int], fills: Set<String>) {
+        ColorDepth.withCurrent(depth) {
+            let states = run.frames.map { frame in (interiorOnly ? interior(frame) : cells(frame)).map(\.state) }
+            let reversed = states.indices.filter { !states[$0].isEmpty && states[$0].allSatisfy(\.reversesVideo) }
+            let bold = states.indices.filter { states[$0].contains(where: \.isBold) }
+            let fills = Set(states.indices.filter { !reversed.contains($0) }.flatMap { states[$0].map(field) })
+            return (reversed, bold, fills)
+        }
+    }
+
+    /// Red Sands on xterm's sixteen: the selected cursor row's breath is (reverse
+    /// video, blue), which a menu's bar and a drop-down's highlighted row share.
+    private static var redSands: any Palette { PaletteRegistry.palette(withName: "Red Sands")! }
+
+    @Test("On 16 colours a menu row's bar breathes into reverse video on its dim frames, as a list's cursor row does")
+    func menuRowBreathesIntoReverseVideo() throws {
+        try TerminalColors.withCurrent(.unknown) {
+            let drawn = menuRow(palette: Self.redSands, depth: .basic16)
+            let run = try #require(drawn.animatedCells.first, "the bar does not breathe")
+            let (reversed, _, fills) = frames(of: run, depth: .basic16)
+            #expect(reversed == Array(5...11))
+            #expect(fills.count == 1, "the other frames fill with B's one slot: \(fills)")
+        }
+    }
+
+    @Test("Without colour a menu row's bar breathes by weight, reversed throughout")
+    func menuRowBreathesByWeight() throws {
+        try TerminalColors.withCurrent(.unknown) {
+            try TerminalClient.$drawsBoldPin.withValue(true) {
+                let drawn = menuRow(palette: PaletteRegistry.all[0], depth: .noColor)
+                let run = try #require(drawn.animatedCells.first, "the bar does not breathe")
+                let (reversed, bold, _) = frames(of: run, depth: .noColor)
+                #expect(reversed == Array(0..<16))
+                #expect(bold == [0, 1, 2, 3, 4, 12, 13, 14, 15])
+            }
+        }
+    }
+
+    @Test("On 16 colours a drop-down's highlighted row breathes into reverse video on its dim frames")
+    func dropdownBreathesIntoReverseVideo() throws {
+        try TerminalColors.withCurrent(.unknown) {
+            let popup = try dropdown(palette: Self.redSands, depth: .basic16)
+            let row = try #require(popup.lines.firstIndex { $0.stripped.contains("Option 0") })
+            let run = try #require(popup.animatedCells.first { $0.offsetY == row }, "the row does not breathe")
+            let (reversed, _, fills) = frames(of: run, depth: .basic16, interiorOnly: true)
+            #expect(reversed == Array(5...11))
+            #expect(!fills.isEmpty)
+        }
+    }
+
+    @Test("Without colour a drop-down's highlighted row breathes by weight, reversed throughout")
+    func dropdownBreathesByWeight() throws {
+        try TerminalColors.withCurrent(.unknown) {
+            try TerminalClient.$drawsBoldPin.withValue(true) {
+                let popup = try dropdown(palette: PaletteRegistry.all[0], depth: .noColor)
+                let row = try #require(popup.lines.firstIndex { $0.stripped.contains("Option 0") })
+                let run = try #require(popup.animatedCells.first { $0.offsetY == row }, "the row does not breathe")
+                let (reversed, bold, _) = frames(of: run, depth: .noColor, interiorOnly: true)
+                #expect(reversed == Array(0..<16))
+                #expect(bold == [0, 1, 2, 3, 4, 12, 13, 14, 15])
+            }
+        }
+    }
 }
