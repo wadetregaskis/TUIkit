@@ -109,10 +109,13 @@ extension RowFillRule {
                 greys.append(entry)
             }
         }
+        // In typed steps: as one chain it took seconds to type-check.
         func ordered(_ swatches: [Swatch]) -> [Swatch] {
-            swatches.map { (lift: lift($0), swatch: $0) }.sorted { lhs, rhs in
+            let lifted: [(lift: Double, swatch: Swatch)] = swatches.map { (lift($0), $0) }
+            let sorted = lifted.sorted { lhs, rhs in
                 lhs.lift != rhs.lift ? lhs.lift < rhs.lift : lhs.swatch.packed < rhs.swatch.packed
-            }.map(\.swatch)
+            }
+            return sorted.map(\.swatch)
         }
         return (ordered(entries), ordered(greys))
     }

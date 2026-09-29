@@ -93,9 +93,12 @@ extension RowFills {
     /// one.
     static func entry(page: UInt32, text: UInt32, secondary: UInt32, accent: UInt32) -> Entry? {
         func near(_ first: UInt32, _ second: UInt32) -> Bool {
-            stride(from: 0, through: 16, by: 8).allSatisfy { shift in
-                abs(Int((first >> UInt32(shift)) & 0xFF) - Int((second >> UInt32(shift)) & 0xFF)) <= 2
+            for shift: UInt32 in [0, 8, 16] {
+                let one = Int((first >> shift) & 0xFF)
+                let two = Int((second >> shift) & 0xFF)
+                if abs(one - two) > 2 { return false }
             }
+            return true
         }
         return shipped.first { entry in
             near(entry.key.0, page) && near(entry.key.1, text) && near(entry.key.2, secondary)

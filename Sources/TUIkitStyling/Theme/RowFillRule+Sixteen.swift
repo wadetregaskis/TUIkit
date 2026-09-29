@@ -46,11 +46,18 @@ extension RowFillRule {
         let secondary = nearest(self.secondary)
         let dot = nearest(accent)
         let fadedDot = nearest(mix(accent, self.page, 1 - 0.6))
+        // Every other slot once, most legible first (ties by RGB). In typed steps: as
+        // one chain, the 6.2 compilers on Linux, Windows and WebAssembly gave up on it.
         var seen: Set<UInt32> = []
-        let others = table.filter { $0 != page && $0 != text && seen.insert($0.packed).inserted }
-            .map { (contrast: contrast(text, $0), swatch: $0) }
-            .sorted { $0.contrast != $1.contrast ? $0.contrast > $1.contrast : $0.swatch.packed < $1.swatch.packed }
-            .map(\.swatch)
+        var distinct: [Swatch] = []
+        for slot in table where slot != page && slot != text && seen.insert(slot.packed).inserted {
+            distinct.append(slot)
+        }
+        let legibility: [(contrast: Double, swatch: Swatch)] = distinct.map { (contrast(text, $0), $0) }
+        let ordered = legibility.sorted { lhs, rhs in
+            lhs.contrast != rhs.contrast ? lhs.contrast > rhs.contrast : lhs.swatch.packed < rhs.swatch.packed
+        }
+        let others: [Swatch] = ordered.map(\.swatch)
         let legible = others.filter { contrast(text, $0) >= 2 }
         let reversal = text
         let brightFrames = Self.phases.map { Color.breathStep(atPhase: $0, of: 2) == 1 }
