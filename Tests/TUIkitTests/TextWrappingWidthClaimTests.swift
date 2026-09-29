@@ -22,11 +22,14 @@ import Testing
 /// `#require` is what stops a claim pair that happens to agree about this text
 /// from passing vacuously.
 ///
-/// `.serialized` and `@MainActor` because every test moves the PROCESS traits,
-/// which other suites' width reads see, and restores them — the treatment
-/// `TerminalWidthTraitsProcessTests` gets. The moved claim is in force for
-/// exactly one measure.
-@Suite("Text wrapping follows the width claim", .serialized)
+/// Every test moves the PROCESS traits — a pin would not do, because a pin does
+/// not move the generation the memos compare, which is the subject — so each
+/// runs in an exit test, whose child no other test shares. See
+/// `ProcessWideState`. They used to move and restore the traits here,
+/// `.serialized` and on the main actor, which kept other main-actor tests out
+/// and nothing else: a nonisolated suite measuring a skin-tone cluster on
+/// another thread during the moved measure got the moved claim.
+@Suite("Text wrapping follows the width claim")
 @MainActor
 struct TextWrappingWidthClaimTests {
 
@@ -60,13 +63,13 @@ struct TextWrappingWidthClaimTests {
 
     /// Measures once under a moved claim, switches the process back, then
     /// measures twice more: once as the memo serves it, once cold.
-    private func acrossAHostSwitch(_ measure: () -> TextWrapping.Wrapped) -> AcrossASwitch {
+    private static func acrossAHostSwitch(_ measure: () -> TextWrapping.Wrapped) -> AcrossASwitch {
         let saved = TerminalWidthTraits.current
         TextWrapping.clearWrapCache()
 
-        TerminalWidthTraits.current = Self.movedClaim(from: saved)
+        ProcessWideState.widthTraits = Self.movedClaim(from: saved)
         let underOldHost = measure()
-        TerminalWidthTraits.current = saved
+        ProcessWideState.widthTraits = saved
 
         let served = measure()
         TextWrapping.clearWrapCache()
@@ -74,7 +77,14 @@ struct TextWrappingWidthClaimTests {
     }
 
     @Test("A wrap memoized under one host's claim is not served under another's")
-    func wrapFollowsTheClaim() throws {
+    func wrapFollowsTheClaim() async {
+        await #expect(processExitsWith: .success) {
+            try await MainActor.run { try Self.wrapAcrossAHostSwitch() }
+        }
+    }
+
+    /// `wrapFollowsTheClaim`'s body, run in the exit test's child.
+    private static func wrapAcrossAHostSwitch() throws {
         let measured = acrossAHostSwitch {
             TextWrapping.wrapMeasured(Self.text, width: Self.width)
         }
@@ -89,7 +99,14 @@ struct TextWrappingWidthClaimTests {
     }
 
     @Test("A line-limited fit memoized under one host's claim is not served under another's")
-    func fitFollowsTheClaim() throws {
+    func fitFollowsTheClaim() async {
+        await #expect(processExitsWith: .success) {
+            try await MainActor.run { try Self.fitAcrossAHostSwitch() }
+        }
+    }
+
+    /// `fitFollowsTheClaim`'s body, run in the exit test's child.
+    private static func fitAcrossAHostSwitch() throws {
         let measured = acrossAHostSwitch {
             TextWrapping.fitMeasured(Self.text, width: Self.width, maxLines: 1)
         }

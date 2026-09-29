@@ -603,30 +603,40 @@ struct TerminalWidthTraitsTests {
     }
 }
 
-/// These mutate the PROCESS-wide traits, which every other suite's width
-/// reads would see, so they are serialized — the same treatment
-/// `TerminalClientSimulationTests` gets for mutating `TerminalClient.simulated`.
-@Suite("Terminal width traits — process-wide", .serialized)
+/// The PROCESS-wide traits: read here, written only in a process of their own
+/// — see `ProcessWideState`.
+///
+/// The two writers used to run here, `.serialized` and on the main actor, and
+/// put the traits back. That ordered this suite's own tests and kept other
+/// main-actor tests out, and nothing else: every nonisolated suite of every
+/// test target reads the same traits from other threads meanwhile. On
+/// 2026-09-28 `ANSIPrefixKnownWidthTests/fuzzMatchesExactWalk()`, in
+/// `TUIkitCoreTests`, failed a full run beside this suite: it compares two
+/// width walks of each line, and a skin-tone or ZWJ cluster measured under the
+/// kept-joiner traits in one and the composing traits in the other. With these
+/// two tests looping on the main actor while that fuzz runs on a pool thread,
+/// it diverges in 10 runs of 10, about 2,000 comparisons each; alone, in none.
+@Suite("Terminal width traits — process-wide")
 struct TerminalWidthTraitsProcessTests {
 
     private static let keptJoiners = TerminalWidthTraits(
         zwjSequences: .decomposedKeepingJoiners, skinTone: .detached)
 
+    /// An exit test, because assigning the process traits is the subject.
     @Test("Changing the process traits bumps the generation; a no-op change does not")
-    @MainActor
-    func generationTracksRealChanges() {
-        let before = TerminalWidthTraits.generation
-        let saved = TerminalWidthTraits.current
-        defer { TerminalWidthTraits.current = saved }
+    func generationTracksRealChanges() async {
+        await #expect(processExitsWith: .success) {
+            let before = TerminalWidthTraits.generation
 
-        TerminalWidthTraits.current = Self.keptJoiners
-        let afterChange = TerminalWidthTraits.generation
-        #expect(afterChange > before, "a real change must bump the generation")
+            ProcessWideState.widthTraits = Self.keptJoiners
+            let afterChange = TerminalWidthTraits.generation
+            #expect(afterChange > before, "a real change must bump the generation")
 
-        TerminalWidthTraits.current = Self.keptJoiners
-        #expect(
-            TerminalWidthTraits.generation == afterChange,
-            "assigning the same value must not invalidate every cache in the process")
+            ProcessWideState.widthTraits = Self.keptJoiners
+            #expect(
+                TerminalWidthTraits.generation == afterChange,
+                "assigning the same value must not invalidate every cache in the process")
+        }
     }
 
     @Test("A scoped pin does NOT bump the generation")
@@ -640,24 +650,22 @@ struct TerminalWidthTraitsProcessTests {
         #expect(TerminalWidthTraits.generation == before)
     }
 
+    /// An exit test, because republishing the process traits is the subject.
     @Test("Simulating another client republishes its traits")
-    @MainActor
-    func simulatingRepublishesTraits() {
-        let savedSimulated = TerminalClient.simulated
-        let savedTraits = TerminalWidthTraits.current
-        defer {
-            TerminalClient.simulated = savedSimulated
-            TerminalWidthTraits.current = savedTraits
+    func simulatingRepublishesTraits() async {
+        await #expect(processExitsWith: .success) {
+            await MainActor.run {
+                ProcessWideState.simulated = .warp
+                #expect(TerminalWidthTraits.current.zwjSequences == .decomposedDroppingJoiners,
+                        "the picker must move the claim, not just the compensation")
+                // The overhang set rides along, which is the point of it being a
+                // trait: simulating a host has to move every claim that host
+                // carries, not just the cluster ones.
+                #expect(TerminalWidthTraits.current.chromeOverhang == .keyboardSymbols)
+                ProcessWideState.simulated = .ghostty
+                #expect(TerminalWidthTraits.current == TerminalClient.widthTraits(of: .ghostty))
+                #expect(TerminalWidthTraits.current.chromeOverhang == .returnArrow)
+            }
         }
-        TerminalClient.simulated = .warp
-        #expect(TerminalWidthTraits.current.zwjSequences == .decomposedDroppingJoiners,
-                "the picker must move the claim, not just the compensation")
-        // The overhang set rides along, which is the point of it being a
-        // trait: simulating a host has to move every claim that host carries,
-        // not just the cluster ones.
-        #expect(TerminalWidthTraits.current.chromeOverhang == .keyboardSymbols)
-        TerminalClient.simulated = .ghostty
-        #expect(TerminalWidthTraits.current == TerminalClient.widthTraits(of: .ghostty))
-        #expect(TerminalWidthTraits.current.chromeOverhang == .returnArrow)
     }
 }

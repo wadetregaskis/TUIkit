@@ -7,6 +7,7 @@
 import Testing
 
 @testable import TUIkit
+@testable import TUIkitCore
 
 /// The one place a test may change what every test in the process reads — and
 /// only from inside an exit test.
@@ -75,6 +76,22 @@ enum ProcessWideState {
     static var colours: TerminalColors {
         get { TerminalColors.current }
         set { if mayWrite("TerminalColors.current") { TerminalColors.current = newValue } }
+    }
+
+    /// `TerminalWidthTraits.current`, the width the host claims for the
+    /// clusters it draws wide: read by every width measurement in the process,
+    /// on every thread, and its setter moves the generation the render cache
+    /// and `TextWrapping`'s memos drop themselves on.
+    static var widthTraits: TerminalWidthTraits {
+        get { TerminalWidthTraits.current }
+        set { if mayWrite("TerminalWidthTraits.current") { TerminalWidthTraits.current = newValue } }
+    }
+
+    /// `TerminalClient.simulated`. Main-actor state, but setting it republishes
+    /// the width traits and link support process-wide, which is its point.
+    @MainActor static var simulated: TerminalClient.Program? {
+        get { TerminalClient.simulated }
+        set { if mayWrite("TerminalClient.simulated") { TerminalClient.simulated = newValue } }
     }
 }
 
