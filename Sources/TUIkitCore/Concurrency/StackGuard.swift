@@ -155,6 +155,26 @@ public enum StackGuard {
     /// frame. A handful of retries distinguishes the two.
     static let maxDerivationFailures = 4
 
+    /// The address of a local: the stack pointer, near enough — what the
+    /// guard compares against its floor.
+    ///
+    /// NOT `@MainActor`, and that is the point of it being a function of its
+    /// own. Written inline in a `@MainActor` function, the closure that
+    /// `withUnsafeMutablePointer` takes is isolated to the main actor too, and
+    /// Swift 6 checks the executor on entry to such a closure when it is
+    /// handed to a function of a module not built in Swift 6 mode — the
+    /// standard library's (SE-0423): `swift_task_isCurrentExecutor`, through
+    /// `Actor.unownedExecutor` and `MainActor.shared`, on every guard call —
+    /// every measure and every render. A nonisolated function's closure is
+    /// nonisolated, and inlined into an isolated caller it stays so: no check
+    /// (6.2.4, -O, read in the assembly). Inlined, so the local is in the
+    /// caller's frame as it was.
+    @inline(__always)
+    package static func currentStackPointer() -> UInt {
+        var probe: UInt = 0
+        return withUnsafeMutablePointer(to: &probe) { UInt(bitPattern: $0) }
+    }
+
     /// Whether there is enough stack left to safely recurse another level.
     ///
     /// The hot path is a stack-pointer read and two compares against adjacent
@@ -164,8 +184,7 @@ public enum StackGuard {
     @inline(__always)
     @MainActor
     public static func hasHeadroom() -> Bool {
-        var probe: UInt = 0
-        let stackPointer = withUnsafeMutablePointer(to: &probe) { UInt(bitPattern: $0) }
+        let stackPointer = currentStackPointer()
         let extent = cachedExtent
         // The stack grows DOWN: more recursion → lower addresses. Headroom
         // remains while the pointer is still above the reserved floor AND
@@ -184,8 +203,7 @@ public enum StackGuard {
     @inline(__always)
     @MainActor
     package static func hasHeadroomUncounted() -> Bool {
-        var probe: UInt = 0
-        let stackPointer = withUnsafeMutablePointer(to: &probe) { UInt(bitPattern: $0) }
+        let stackPointer = currentStackPointer()
         let extent = cachedExtent
         if stackPointer > extent.floor && stackPointer < extent.high { return true }
         return headroomSlowPath(stackPointer: stackPointer, countsTruncation: false)
