@@ -131,10 +131,12 @@ package struct ValueHashPlan {
 /// - **`Optional`**: whole bytes where every value's are all written, measured
 ///   (2026-09-28) — a payload with no spare values, so `nil` has a tag byte of
 ///   its own and the payload is zero-filled, over a payload that is itself
-///   dense (`Int?`, `Date?`); or a payload that is ONE builtin, reference or
+///   dense (`Int?`, `Date?`); or a payload that is ONE builtin, reference,
+///   existential metatype of one word (`Any.Type`: no witness tables) or
 ///   one-byte enum, whose spare values `nil` writes whole (`Bool?`, a class
-///   reference's, `[Int]?`). Otherwise a typed step: `== nil`, then the
-///   payload's own plan (`String?`, a closure's, `Color?`).
+///   reference's, `[Int]?`). `OptionalWholeBytesTests` measures both in the
+///   suite. Otherwise a typed step: `== nil`, then the payload's own plan
+///   (`String?`, a closure's, `Color?`).
 /// - **``_ValueHashing``** (`ConditionalView`, `AnyView`): a typed step.
 /// - **An opaque existential** (`any P`, `Any`): a typed step that loads it as
 ///   its static type and opens it — see ``ExistentialField``. Never its
@@ -159,6 +161,10 @@ struct ValueHashPlanBuilder {
         /// A builtin: an integer, a float, a pointer, a buffer's reference.
         case builtin
         case reference
+        /// An existential metatype of one word (`Any.Type`,
+        /// `AnyObject.Type`): a pointer to a type's metadata, and nothing
+        /// else. Never a metatype of one type (`Int.Type`), which bypasses.
+        case metatype
         /// An enum of one byte or none.
         case smallEnum
         /// Anything else, including several leaves read together.
@@ -168,10 +174,11 @@ struct ValueHashPlanBuilder {
         /// values it writes whole, where it is a word or less (the builder
         /// checks the size: a builtin can be wider). Not a
         /// closure's (`nil` writes its first word, not its context), not an
-        /// existential metatype's (its witness tables).
+        /// existential metatype's with witness tables (`nil` writes its
+        /// metadata word, not them).
         var nilWritesItWhole: Bool {
             switch self {
-            case .builtin, .reference, .smallEnum: true
+            case .builtin, .reference, .metatype, .smallEnum: true
             case .other: false
             }
         }
@@ -274,6 +281,10 @@ struct ValueHashPlanBuilder {
         case .metatype:
             throw Bypass(
                 reason: "\(path()): a metatype, \(type), which a struct may store in no bytes", layoutUnknown: true)
+        case .existentialMetatype where size == MemoryLayout<UnsafeRawPointer>.size:
+            // `Any.Type`, `AnyObject.Type`: a metatype with no witness tables,
+            // one pointer — and so a metatype for the optional rule.
+            items.append(.bytes(offset: base, count: size, leaf: .metatype))
         case .existentialMetatype, .function:
             items.append(.bytes(offset: base, count: size, leaf: .other))
         case .opaque:
