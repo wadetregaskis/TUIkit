@@ -86,7 +86,7 @@ struct BodyMutationDiagnosticTests {
             await MainActor.run {
                 // An inherited TUIKIT_DIAGNOSTICS_FILE would send the report to
                 // that file instead, and this test would read nothing.
-                unsetenv("TUIKIT_DIAGNOSTICS_FILE")
+                ProcessWideState.setEnvironment("TUIKIT_DIAGNOSTICS_FILE", to: nil)
                 let (context, diagnostic) = makeContextWithDiagnostic()
                 diagnostic.beginTraversal()
                 _ = renderToBuffer(MutatingProbe(), context: context)

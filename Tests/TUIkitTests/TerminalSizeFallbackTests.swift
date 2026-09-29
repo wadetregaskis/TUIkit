@@ -34,18 +34,13 @@ struct TerminalSizeFallbackTests {
             (" 40", nil),        // Int(" 40") is nil — no silent trimming
         ] as [(String, Int?)])
     func onlyPositiveValuesAreSizes(raw: String, expected: Int?) {
-        let name = "TUIKIT_TEST_DIMENSION"
-        setenv(name, raw, 1)
-        defer { unsetenv(name) }
         let terminal = Terminal()
-        #expect(terminal.terminalDimension(fromEnvironment: name) == expected)
+        #expect(terminal.terminalDimension(fromEnvironment: "LINES", in: ["LINES": raw]) == expected)
     }
 
     @Test("An unset variable is not a size")
     func unsetIsNil() {
-        let name = "TUIKIT_TEST_DIMENSION_UNSET"
-        unsetenv(name)
         let terminal = Terminal()
-        #expect(terminal.terminalDimension(fromEnvironment: name) == nil)
+        #expect(terminal.terminalDimension(fromEnvironment: "LINES", in: ["COLUMNS": "40"]) == nil)
     }
 }
