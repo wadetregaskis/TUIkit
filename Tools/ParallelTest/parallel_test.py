@@ -412,6 +412,35 @@ def append_path(env, environ, key, value):
     env[key] = old + ":" + value if old else value
 
 
+def compiler_version(info):
+    """(major, minor) of the compiler `-print-target-info` describes, or None.
+
+    SwiftPM ships in the same toolchain as the compiler, so this is also the
+    version of the `swift test` being mirrored. Spellings seen: "Apple Swift
+    version 6.2.4 (swift-6.2.4-RELEASE)" (swift.org, macOS), "Apple Swift
+    version 6.2.3 (swiftlang-6.2.3.3.21 …)" (Xcode), "Swift version 6.4
+    (swift-6.4-RELEASE)" (Linux), "Swift version 6.5-dev (…)" (trunk)."""
+    m = re.search(r"Swift version (\d+)\.(\d+)", info.get("compilerVersion", ""))
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def product_library_dirs(version, bin_dir):
+    """The directories `swift test` puts on the library path for the products.
+
+    From 6.4, `constructTestEnvironment` appends each test product's parent
+    directory to `.libraryPath` — DYLD_LIBRARY_PATH on macOS, LD_LIBRARY_PATH
+    on Linux — "so that test runner executables are able to find the
+    corresponding test libraries, even if local rpaths were disabled in the
+    build" (TestingSupport.swift:279-284 at swift-6.4.0-RELEASE and on main;
+    absent from release/6.3). That is the swift-build `<name>-test-runner`
+    finding the `<name>.so` beside it. Every product here is in `bin_dir`, so
+    it is `[bin_dir]` — once: SwiftPM appends it per product, six copies of
+    one directory, which search no differently from one. 6.2 and 6.3 add
+    nothing. An unreadable version is taken to be a new one.
+    """
+    return [bin_dir] if version is None or version >= (6, 4) else []
+
+
 def sdk_platform_path(environ, run=subprocess.run):
     """`SwiftSDK.sdkPlatformPaths(for: .macOS)`'s platform directory, or None.
 
@@ -431,10 +460,14 @@ def sdk_platform_path(environ, run=subprocess.run):
     return path if out.returncode == 0 and path else None
 
 
-def darwin_test_env(resource_dir, environ, platform_path, exists=os.path.exists):
+def darwin_test_env(resource_dir, environ, platform_path, exists=os.path.exists,
+                    product_dirs=()):
     """The DYLD_* variables `swift test` gives swift-testing on macOS.
 
-    Three layouts put the testing library in three places, and SwiftPM finds
+    First `product_dirs` (`product_library_dirs`: the build directory from
+    6.4, nothing before) on DYLD_LIBRARY_PATH, as `constructTestEnvironment`
+    appends them before any toolchain path. Then the testing library. Three
+    layouts put the testing library in three places, and SwiftPM finds
     each in turn:
 
     * Command Line Tools: `Testing.framework` in `<toolchain>/Library/
@@ -453,13 +486,16 @@ def darwin_test_env(resource_dir, environ, platform_path, exists=os.path.exists)
     own, so a swift.org toolchain run with Xcode selected (CI's swift.org
     lanes) still loads its own swift-testing.
 
-    Not mirrored: `SWIFT_TESTING_XCTEST_INTEROP_MODE`, which 6.4 sets only for
-    packages whose tools version is 6.4 or later (this one's is 6.2), and the
-    sanitizer / code-coverage variables, which `swift test` sets only when asked.
+    Not mirrored: `NO_COLOR` (see `toolchain`), `SWIFT_TESTING_XCTEST_INTEROP_MODE`,
+    which 6.4 sets only for packages whose tools version is 6.4 or later (this
+    one's is 6.2), and the sanitizer / code-coverage variables, which `swift
+    test` sets only when asked.
 
     -> (env dict, [where the testing library was found]).
     """
     env, found = {}, []
+    for d in product_dirs:
+        append_path(env, environ, "DYLD_LIBRARY_PATH", d)
     usr = os.path.dirname(os.path.dirname(resource_dir))
     root = os.path.dirname(usr)
     frameworks = os.path.join(root, "Library", "Developer", "Frameworks")
@@ -484,12 +520,30 @@ def darwin_test_env(resource_dir, environ, platform_path, exists=os.path.exists)
     return env, found
 
 
-def toolchain(swift):
+def linux_test_env(environ, product_dirs):
+    """The variables `swift test` gives a Linux test executable: only
+    `product_dirs` on LD_LIBRARY_PATH (6.4 on; none before), after the
+    user's own."""
+    env = {}
+    for d in product_dirs:
+        append_path(env, environ, "LD_LIBRARY_PATH", d)
+    return env
+
+
+def toolchain(swift, bin_dir):
     """Locate the helper (macOS) and the environment the tests need.
 
     Derived from the toolchain `swift` names rather than assumed, so swiftly's
     default, an Xcode toolchain and a CI one each resolve to their own helper
-    and their own swift-testing.
+    and their own swift-testing. `bin_dir` is where the test products are
+    (`swift build --show-bin-path`), for `product_library_dirs`.
+
+    Not mirrored anywhere: `NO_COLOR=1`, which every `swift test` here (6.2
+    to 6.4, macOS and Linux) sets when its own stdout or stderr is not a
+    terminal — so always on CI. Nothing in this suite reads it, the children
+    write to log files, which carry no colour escapes without it, and the
+    issue lines `failure_excerpt` picks out of those logs keep the spelling
+    they were checked in.
     """
     info = json.loads(subprocess.run(
         swift + ["-print-target-info"], capture_output=True, text=True,
@@ -497,17 +551,22 @@ def toolchain(swift):
     triple = info.get("target", {}).get("triple", "")
     res = os.path.realpath(info.get("paths", info)["runtimeResourcePath"])  # <usr>/lib/swift
     darwin = "-apple-" in triple if triple else sys.platform == "darwin"
+    product_dirs = product_library_dirs(compiler_version(info), bin_dir)
     if not darwin:
         # Linux (and Windows): no helper. The test product is an executable,
-        # and `swift test` runs it directly with nothing added to the
-        # environment (`constructTestEnvironment` returns early off macOS,
-        # bar a PATH tweak on Windows this harness does not support).
-        return Toolchain(None, {}, False, triple or sys.platform)
+        # and `swift test` runs it directly. `constructTestEnvironment` adds
+        # NO_COLOR (not mirrored, above) and, from 6.4, the products'
+        # directory on LD_LIBRARY_PATH, then returns before the macOS-only
+        # testing-library paths (bar a PATH tweak on Windows, which this
+        # harness does not support).
+        return Toolchain(None, linux_test_env(os.environ, product_dirs), False,
+                         triple or sys.platform)
     usr = os.path.dirname(os.path.dirname(res))               # <usr>
     helper = os.path.join(usr, "libexec", "swift", "pm", "swiftpm-testing-helper")
     if not os.path.exists(helper):
         sys.exit("parallel-test: no swiftpm-testing-helper at %s" % helper)
-    env, found = darwin_test_env(res, os.environ, sdk_platform_path(os.environ))
+    env, found = darwin_test_env(res, os.environ, sdk_platform_path(os.environ),
+                                 product_dirs=product_dirs)
     if not found:
         sys.exit("parallel-test: no swift-testing library for the toolchain at %s "
                  "(looked for Library/Developer/Frameworks/Testing.framework, "
@@ -909,7 +968,11 @@ def main():
         jobs = 1
 
     swift = swift_command()
-    tc = toolchain(swift)
+    # Before the build (it only names the directory), because the test
+    # environment needs it and the toolchain is checked before a long build.
+    bin_dir = subprocess.run(swift + ["build", "--show-bin-path"], cwd=REPO,
+                             capture_output=True, text=True, check=True).stdout.strip()
+    tc = toolchain(swift, bin_dir)
 
     if not args.no_build:
         # The ONLY place the SwiftPM build database is touched. Everything
@@ -917,8 +980,6 @@ def main():
         rc = subprocess.run(swift + ["build", "--build-tests"], cwd=REPO).returncode
         if rc != 0:
             return 2
-    bin_dir = subprocess.run(swift + ["build", "--show-bin-path"], cwd=REPO,
-                             capture_output=True, text=True, check=True).stdout.strip()
     binaries = test_binaries(bin_dir, tc.darwin)
     if len(binaries) > 1 or os.environ.get("SWIFT") or not tc.darwin:
         print("parallel-test: `%s`, %d test binar%s, swift-testing from %s"

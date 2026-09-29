@@ -510,6 +510,46 @@ class TestDarwinTestEnv(unittest.TestCase):
         self.assertEqual(found, [])
 
 
+class TestProductLibraryPath(unittest.TestCase):
+    """6.4's `constructTestEnvironment` appends the products' directory to
+    the library path before anything else; 6.2 and 6.3 do not."""
+
+    BIN = "/r/.build/arm64-apple-macosx/debug"
+    SWIFTORG = TestDarwinTestEnv.SWIFTORG
+
+    def test_compiler_version_spellings(self):
+        for text, want in (
+                ("Apple Swift version 6.2.4 (swift-6.2.4-RELEASE)", (6, 2)),
+                ("Apple Swift version 6.2.3 (swiftlang-6.2.3.3.21 clang-1700.6.3.2)", (6, 2)),
+                ("Swift version 6.4 (swift-6.4-RELEASE)", (6, 4)),
+                ("Swift version 6.5-dev (LLVM 0123, Swift 4567)", (6, 5)),
+                ("", None), ("something else", None)):
+            self.assertEqual(pt.compiler_version({"compilerVersion": text}), want, text)
+        self.assertIsNone(pt.compiler_version({}))
+
+    def test_only_6_4_and_later_add_the_build_directory(self):
+        self.assertEqual(pt.product_library_dirs((6, 2), self.BIN), [])
+        self.assertEqual(pt.product_library_dirs((6, 3), self.BIN), [])
+        self.assertEqual(pt.product_library_dirs((6, 4), self.BIN), [self.BIN])
+        self.assertEqual(pt.product_library_dirs((7, 0), self.BIN), [self.BIN])
+        self.assertEqual(pt.product_library_dirs(None, self.BIN), [self.BIN])
+
+    def test_linux_gets_it_on_ld_library_path_after_the_users_own(self):
+        self.assertEqual(pt.linux_test_env({}, []), {})
+        self.assertEqual(pt.linux_test_env({}, [self.BIN]), {"LD_LIBRARY_PATH": self.BIN})
+        self.assertEqual(pt.linux_test_env({"LD_LIBRARY_PATH": "/mine"}, [self.BIN]),
+                         {"LD_LIBRARY_PATH": "/mine:" + self.BIN})
+
+    def test_macos_gets_it_before_the_toolchains_testing_library(self):
+        lib = self.SWIFTORG + "/usr/lib/swift/macosx/testing"
+        env, found = pt.darwin_test_env(
+            self.SWIFTORG + "/usr/lib/swift", {"DYLD_LIBRARY_PATH": "/mine"},
+            TestDarwinTestEnv.PLATFORM, lambda p: p == lib, product_dirs=[self.BIN])
+        self.assertEqual(env["DYLD_LIBRARY_PATH"], ":".join(
+            ["/mine", self.BIN, lib, TestDarwinTestEnv.PLATFORM + "/Developer/usr/lib"]))
+        self.assertEqual(found, [lib])
+
+
 class TestSdkPlatformPath(unittest.TestCase):
     class Out(object):
         def __init__(self, rc, stdout):

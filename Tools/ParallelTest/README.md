@@ -426,21 +426,39 @@ Then, for every toolchain, the macOS platform
 `DYLD_LIBRARY_PATH`. They are appended — after anything already set, and after
 the toolchain's own — so a swift.org toolchain run with Xcode selected still
 loads its own swift-testing, not Xcode's. Under the Command Line Tools there is
-no platform and xcrun fails, so for swiftly's toolchains here the environment is
-exactly what this harness always set, one `DYLD_LIBRARY_PATH`. Under Xcode 26.3
-without the platform directories the helper cannot load the bundle at all
-(`Library not loaded: @rpath/Testing.framework/Versions/A/Testing`); with them,
-the processes report `Testing Library Version: 1501`, which is what `swift test`
-reports under the same Xcode. Not mirrored: `NO_COLOR` (SwiftPM sets it when
-its output is not a terminal; this suite does not read it),
+no platform and xcrun fails, so for swiftly's 6.2 and 6.3 toolchains here the
+environment is exactly what this harness always set, one `DYLD_LIBRARY_PATH`.
+Under Xcode 26.3 without the platform directories the helper cannot load the
+bundle at all (`Library not loaded: @rpath/Testing.framework/Versions/A/Testing`);
+with them, the processes report `Testing Library Version: 1501`, which is what
+`swift test` reports under the same Xcode.
+
+**Every platform, from 6.4:** before any of that, `constructTestEnvironment`
+appends each test product's directory to the library path —
+`DYLD_LIBRARY_PATH` on macOS, `LD_LIBRARY_PATH` on Linux — so that a
+swift-build `<name>-test-runner` finds the `<name>.so` beside it "even if
+local rpaths were disabled" (`TestingSupport.swift`:279–284 at
+`swift-6.4.0-RELEASE`, and on `main`; not in `release/6.3`). Every product
+here is in the build directory, so the harness appends that once (SwiftPM
+appends it once per product: six copies of one directory). It decides by the
+toolchain's own version, from `-print-target-info`'s `compilerVersion`, since
+SwiftPM ships with the compiler; an unreadable version counts as new.
+
+**Not mirrored:** `NO_COLOR=1`, which `swift test` sets on every platform and
+version here whenever its own stdout or stderr is not a terminal, so always on
+CI. Nothing in this suite reads it; the children write to log files, which
+carry no colour escapes without it; and the issue lines picked out of those
+logs for the CI summary keep the spelling they were checked in. Also
 `SWIFT_TESTING_XCTEST_INTEROP_MODE` (6.4 sets it only for tools version 6.4 or
 later; this package is 6.2), and the coverage and sanitizer variables.
 
 **Linux** has no helper. The test product is an executable, and SwiftPM runs it
 directly — `<bin> <arguments…> --testing-library swift-testing`, the last flag
 being what tells the product's entry point to run swift-testing rather than
-XCTest — with the environment untouched. The harness does the same. This is
-the one path that cannot be run on the machine this was written on; its
+XCTest — with only `NO_COLOR` and, from 6.4, the `LD_LIBRARY_PATH` entry above
+added to the environment; the macOS testing-library paths are skipped
+(`#if !os(macOS) return env`). The harness does the same, bar `NO_COLOR`. This
+is the one path that cannot be run on the machine this was written on; its
 evidence is the SwiftPM source above and CI.
 
 **One test binary or several.** SwiftPM's native build system makes one test
