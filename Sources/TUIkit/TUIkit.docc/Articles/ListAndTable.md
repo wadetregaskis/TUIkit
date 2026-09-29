@@ -99,10 +99,15 @@ The cursor row of a control that has the keys breathes, selected or
 not: motion is what says where the keys go, on a list as on every other
 focused control. Selected, it breathes the accent; not selected, the neutral
 focus wash, from `focusBackground` up to twice its distance from the page
-(``Palette/focusWashPulse()``). The ● is what tells the two apart: most
-palettes' wash shares the accent's hue. A control drawn with
-`.rowSelectionIndicator(.hidden)` has no ●, and its cursor row breathes all the
-same, selected or not: the focus indicator always visibly breathes. A control that does not have the keys draws no
+(``Palette/focusWashPulse()``). The shipped palettes breathe fills chosen
+for them at coding time instead, at truecolour and 256 colours: each breath's
+dim end sits a little above what it extends — the page, or the selected-row
+tint — and a selected cursor row peaks brighter than either an unselected one
+or a selected row. A custom palette, a `.tint` subtree and 16 colours keep the
+rule. The ● is what tells the two apart: most palettes' wash shares the
+accent's hue. A control drawn with `.rowSelectionIndicator(.hidden)` has no ●,
+and its cursor row breathes all the same, selected or not: the focus indicator
+always visibly breathes. A control that does not have the keys draws no
 breath: unfocused, it has no cursor row; focused in a window that has lost the
 terminal's focus, its cursor row holds still — the subtle accent on a selected
 row, the plain wash on one that is not (see <doc:FocusSystem>).

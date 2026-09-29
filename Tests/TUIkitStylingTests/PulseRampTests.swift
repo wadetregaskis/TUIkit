@@ -77,10 +77,12 @@ struct PulseRampTests {
     /// row that did not breathe on a 256-colour terminal. The black is the colour
     /// the breath was asked for, and the dim end that DOES lose its hue
     /// (`noGreyFrames` above) is still dropped.
+    ///
+    /// Red Sands' rows now read constants (`RowFills`), so the fade is spelled
+    /// out: it is the rule's, and still what a custom palette like it gets.
     @Test("A fade whose visible end is black keeps that end")
-    func achromaticBrightEndIsKept() throws {
-        let redSands = try #require(PaletteRegistry.palette(withName: "Red Sands"))
-        let (dim, bright) = redSands.focusWashPulse()
+    func achromaticBrightEndIsKept() {
+        let (dim, bright) = (Color.rgb(0x3D, 0x19, 0x16), Color.rgb(0x00, 0x00, 0x05))
         #expect(
             bright.rendered(at: .palette256).isAchromatic,
             "the premise: the far end renders black, \(bright.rendered(at: .palette256))")

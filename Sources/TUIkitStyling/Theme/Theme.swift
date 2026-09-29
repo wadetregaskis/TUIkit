@@ -100,6 +100,10 @@ public protocol Palette: Cyclable {
     /// Background color for the cursor row of a focused list or table, on a row
     /// the selection does not include.
     ///
+    /// Not for the shipped palettes' own rows: those draw the fills chosen for
+    /// them at coding time (`RowFills`), whatever this says. It is what a custom
+    /// palette's rows use.
+    ///
     /// Where the list has the keys the row breathes up from this colour
     /// (``focusWashPulse()``); where it does not — its window has lost the
     /// terminal's focus — the row holds still in it.
@@ -1002,6 +1006,9 @@ extension Palette {
     /// - Parameter surface: What the fill sits on, when that is not the page.
     public func accentFillPulse(over surface: Color? = nil) -> (dim: Color, bright: Color) {
         let ground = surface ?? background
+        // A shipped palette's B, chosen at coding time over its page (see
+        // `RowFills`). Over any other surface the rule below still runs.
+        if ground == background, let fills = rowFills() { return (fills.emphasisDim, fills.emphasisBright) }
         // `Color.breathEnds(dimmedTo:over:)`'s rule for a side with no RGB, applied to
         // this pair's own bright end, which stops short of the accent.
         guard accent.rgbComponents != nil, ground.rgbComponents != nil else {
@@ -1050,6 +1057,10 @@ extension Palette {
     /// Where the wash or the page has no RGB, both ends are the wash: there is no
     /// distance to double, and a breath between two equal ends is still.
     public func focusWashPulse() -> (dim: Color, bright: Color) {
+        // A shipped palette's F, chosen at coding time (see `RowFills`), whatever
+        // `focusBackground` it states: every shipped palette states one, and the
+        // wash is what left Amber's cursor row all but still.
+        if let fills = rowFills() { return (fills.focusDim, fills.focusBright) }
         let dim = focusBackground.spendingAlpha(over: background)
         guard let wash = dim.rgbComponents, let page = background.rgbComponents else {
             return (dim, dim)

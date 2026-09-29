@@ -215,8 +215,8 @@ struct CursorRowBreathTests {
         let inactive = try frame(loop, timer)
         #expect(
             try #require(sgrState(of: "row 0", in: inactive.lines)).renderedBackground
-                == renderedBackground(of: CursorRowBreathApp.palette.focusBackground),
-            "the inactive cursor row should hold the plain focus wash")
+                == renderedBackground(of: CursorRowBreathApp.palette.focusWashPulse().dim),
+            "the inactive cursor row should hold the still wash, its breath's dim end")
         #expect(inactive.runs.isEmpty, "\(inactive.runs.count) runs left breathing in an inactive window")
 
         runner.terminalFocusChanged(isFocused: true, cursorTimer: timer, renderer: loop)

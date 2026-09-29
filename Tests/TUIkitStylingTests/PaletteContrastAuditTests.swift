@@ -15,6 +15,25 @@ import Testing
 
 @testable import TUIkitStyling
 
+/// A shipped palette's colours with its accent moved out of `RowFills`' reach,
+/// so its rows are drawn by the rule a custom palette gets, not the constants.
+private struct RuleDrawnPalette: Palette {
+    let source: any Palette
+    var id: String { "rule-\(source.id)" }
+    var name: String { source.name }
+    var background: Color { source.background }
+    var foreground: Color { source.foreground }
+    var foregroundSecondary: Color { source.foregroundSecondary }
+    var foregroundTertiary: Color { source.foregroundTertiary }
+    var focusBackground: Color { source.focusBackground }
+    var accent: Color { source.accent.rgbComponents.map { .rgb($0.red, $0.green, $0.blue ^ 8) } ?? source.accent }
+    var success: Color { source.success }
+    var warning: Color { source.warning }
+    var error: Color { source.error }
+    var info: Color { source.info }
+    var border: Color { source.border }
+}
+
 @MainActor
 @Suite("Palette contrast audit")
 struct PaletteContrastAuditTests {
@@ -146,16 +165,22 @@ struct PaletteContrastAuditTests {
         // List / Table rows: unfocused-selected fill, alternating stripe, and
         // the focused-row pulse's two endpoints (content keeps its normal
         // foreground over all of them).
-        let selectedRowFill = palette.accent.opacity(ViewConstants.selectedBackground, over: background)
+        // The selected row as drawn: a shipped palette's is the constant chosen for
+        // it (`RowFills`).
+        let selectedRowFill =
+            switch palette.selectedRowFill() {
+            case .fill(let fill): fill
+            default: palette.accent.opacity(ViewConstants.selectedBackground, over: background)
+            }
         let alternatingFill = palette.accent.opacity(
             ViewConstants.alternatingRowBackground, over: background)
         // The breath's ends as `Palette.accentFillPulse(over:)` chooses them: the plain
         // shares, or where those fail on 256 colours, the ones it walked to.
         let (pulseDim, pulseBright) = palette.accentFillPulse()
         // The cursor row on a row the selection does not include breathes the focus
-        // wash; its dim end is `focusBackground`, audited above, and its bright end is
-        // floored for exactly this pair.
-        let washPulseBright = palette.focusWashPulse().bright
+        // wash — a shipped palette's chosen F, not its `focusBackground` — and its
+        // bright end is floored for exactly this pair.
+        let (washPulseDim, washPulseBright) = palette.focusWashPulse()
         return [
             AuditedPair(
                 name: "buttonLabel/buttonFace",
@@ -183,6 +208,9 @@ struct PaletteContrastAuditTests {
                 name: "foreground/focusPulseBright",
                 foreground: palette.foreground, background: pulseBright,
                 minimum: ViewConstants.rowBreathPeakContrastFloor),
+            AuditedPair(
+                name: "foreground/focusWashPulseDim",
+                foreground: palette.foreground, background: washPulseDim, minimum: 3.0),
             AuditedPair(
                 name: "foreground/focusWashPulseBright",
                 foreground: palette.foreground, background: washPulseBright,
@@ -219,12 +247,23 @@ struct PaletteContrastAuditTests {
         for palette in Self.statedPalettes {
             for pair in Self.pairs(for: palette) {
                 let ratio = Self.contrast(pair.foreground, pair.background)
-                #expect(
-                    ratio >= pair.minimum,
-                    "\(palette.name): \(pair.name) contrast \(String(format: "%.2f", ratio)) < \(pair.minimum)")
+                let entry = "\(palette.name): \(pair.name)"
+                withKnownIssue("\(entry) is a known failure") {
+                    #expect(
+                        ratio >= pair.minimum,
+                        "\(entry) contrast \(String(format: "%.2f", ratio)) < \(pair.minimum)")
+                } when: {
+                    Self.knownFloorFailures.contains(entry)
+                }
             }
         }
     }
+
+    /// The pairs under their floor, each as "<palette>: <pair>" — strict, as
+    /// ``knownAccentBreathFailures`` is. The one here is the v5 row-fill
+    /// design's call (2026-09-29): Red Sands' selected cursor row peaks at
+    /// 1.88:1 under its text in truecolour, for a breath of 12.5 L*.
+    private static let knownFloorFailures: Set<String> = ["Red Sands: foreground/focusPulseBright"]
 
     // MARK: - The focus wash has to breathe
 
@@ -239,8 +278,8 @@ struct PaletteContrastAuditTests {
         for palette in Self.statedPalettes {
             let ends = palette.focusWashPulse()
             #expect(
-                ends.dim == palette.focusBackground.spendingAlpha(over: palette.background),
-                "\(palette.name): the breath does not start from the wash")
+                ends.dim == palette.rowFills(at: .truecolor)?.focusDim,
+                "\(palette.name): the breath does not start from its chosen dim end")
             #expect(ends.bright != ends.dim, "\(palette.name): the wash does not breathe")
             let dimFromPage = Self.contrast(ends.dim, palette.background)
             let brightFromPage = Self.contrast(ends.bright, palette.background)
@@ -259,7 +298,8 @@ struct PaletteContrastAuditTests {
             // #D70000 to #FF0000 on its green page, 1.19:1 and 1.13:1 off it by
             // luminance while plainly further from it.
             let page = palette.background.downsampledToPalette256()
-            let shades = Color.pulseRamp(from: ends.dim, to: ends.bright, depth: .palette256)
+            let ends256 = ColorDepth.withCurrent(.palette256) { palette.focusWashPulse() }
+            let shades = Color.pulseRamp(from: ends256.dim, to: ends256.bright, depth: .palette256)
                 .map { $0.downsampledToPalette256() }
             #expect(
                 shades.count >= 2,
@@ -278,7 +318,10 @@ struct PaletteContrastAuditTests {
     /// colours (#0397FF for #27A6FF), and Pro's top came in from #A4A4A4 to #8D8D8D.
     @Test("The wash's breath is floored no harder than the accent's")
     func focusWashFlooredLikeTheAccent() {
-        for palette in Self.statedPalettes {
+        // The rule, over the shipped palettes' colours: their own rows read
+        // constants (`RowFills`).
+        for palette in Self.statedPalettes.map({ RuleDrawnPalette(source: $0) }) {
+            #expect(palette.rowFills(at: .truecolor) == nil, "\(palette.name) still reads its constants")
             let ends = palette.focusWashPulse()
             guard let wash = ends.dim.rgbComponents,
                 let page = palette.background.rgbComponents
@@ -322,8 +365,14 @@ struct PaletteContrastAuditTests {
     /// strict one: a listed failure that no longer happens is an issue of its own
     /// (`withKnownIssue` with no issue recorded), so a fix that forgets to take its
     /// entry out fails here.
+    ///
+    /// The three here are the v5 row-fill design's own calls (2026-09-29), kept
+    /// as the owner approved them: the selected cursor row's peak dips under the
+    /// floor at 256 colours, trading the text for a breath the eye can find
+    /// (Red 1.86:1, Violet 1.96:1, Red Sands 1.93:1). Raising them is a look
+    /// change, made in `Tools/RowFillValues/values.json`.
     private static let knownAccentBreathFailures: Set<String> = [
-        "Red Sands: shades", "Ocean: shades", "Silver Aerogel: mark",
+        "Red: text", "Violet: text", "Red Sands: text",
     ]
 
     /// `body`, whose failure is known where the ledger lists `criterion` for `palette`.
@@ -399,7 +448,9 @@ struct PaletteContrastAuditTests {
     @Test("The accent's breath holds on 256 colours: readable, moving, off its mark and the page")
     func accentBreathHoldsOn256Colours() {
         for palette in Self.statedPalettes {
-            let ends = palette.accentFillPulse()
+            // Asked at 256 colours: a shipped palette's ends there are cube entries
+            // chosen for it, not its truecolour ends moved onto the cube.
+            let ends = ColorDepth.withCurrent(.palette256) { palette.accentFillPulse() }
             let drawn = DrawnBreath(dim: ends.dim, bright: ends.bright, in: palette)
             for criterion in BreathCriterion.allCases {
                 let failure = drawn.failure(criterion)
@@ -422,7 +473,10 @@ struct PaletteContrastAuditTests {
             let drawn = DrawnBreath(dim: dim, bright: bright, in: palette)
             let holds = BreathCriterion.allCases.allSatisfy { drawn.failure($0) == nil }
             guard holds else { continue }
-            let ends = palette.accentFillPulse()
+            // The rule itself: the shipped palettes read constants (`RowFills`), so
+            // it is what the rest of the palettes get.
+            let ends = AccentFillBreath.ends(
+                accent: palette.accent, ground: palette.background, text: palette.foreground)
             #expect(
                 ends.dim == dim && ends.bright == bright,
                 "\(palette.name): moved to \(Self.hex(ends.dim))→\(Self.hex(ends.bright)) from \(Self.hex(dim))→\(Self.hex(bright))")

@@ -94,6 +94,9 @@ extension Palette {
     /// composition §75): it measures, and shows nothing. So where the palette has not
     /// stated a wash of its own, the tier it is built from is asked as well.
     package func focusWashFill() -> HighlightFill {
+        // A shipped palette's cursor row rests on the F dim end chosen for it
+        // (see `RowFills`), not on its `focusBackground`.
+        if let fills = rowFills() { return .fill(fills.focusDim) }
         let fill = focusBackground
         let tint = fill == derivedFocusBackground() ? foregroundTertiary : nil
         return highlightFill(fill, tint: tint)
@@ -114,7 +117,8 @@ extension Palette {
     /// `RowBackground.tint(_:)` for it, which leaves such a row unfilled rather than
     /// reversed.
     package func selectedRowFill() -> HighlightFill {
-        highlightFill(accent.opacity(ViewConstants.selectedBackground, over: background), tint: accent)
+        if let fills = rowFills() { return .fill(fills.selection) }
+        return highlightFill(accent.opacity(ViewConstants.selectedBackground, over: background), tint: accent)
     }
 
     /// What a highlighted row paints — a focused list's or table's cursor row on a
