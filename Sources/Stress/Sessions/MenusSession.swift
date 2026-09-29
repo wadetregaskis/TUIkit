@@ -27,9 +27,6 @@ struct OpenMenu {
     let focusBefore: String?
     /// The highlighted row, as an index into the selectable rows, or `nil`.
     var highlight: Int?
-    /// Whether the session knows ``highlight`` — not for a menu that went from
-    /// the screen and came back.
-    var knowsHighlight = true
     /// Whether it was opened this step, by a press whose release is still to
     /// come — the tail of the opening click, which chooses nothing.
     var awaitingRelease = false
@@ -71,26 +68,12 @@ final class MenusSession: StressSession {
     /// next frame to show it (`FocusManager.endRenderPass`) — so the page's
     /// `@FocusState` reads it one frame late.
     private(set) var focusAfterClose: (focus: String, from: Int)?
-    /// A menu that went from the screen while open — its anchor scrolled out
-    /// of view — and was dismissed with Escape, which it may not have heard.
+    /// A context menu that TUIkit closed because its document went out of the
+    /// list's window — a document inserted above it, the terminal made
+    /// shorter — and so must not come back when the document does.
     private(set) var lost: OpenMenu.Kind?
-    /// Whether a menu has gone out of view with its anchor this run — which
-    /// the checks, not the script, record: see `tagIfAfterALostMenu`.
-    var lostAMenu = false
     /// The step being played.
     private var stepIndex = 0
-    /// A menu left open, its rows nowhere on the screen: its anchor moved out of
-    /// the scroll view it sits in (a document inserted above it), the scroll
-    /// view culled the pop-up with it, and the menu kept the keyboard.
-    static let anchorOutOfView = "menu-anchor-out-of-view"
-
-    var knownIssues: [String: String] {
-        [
-            Self.anchorOutOfView:
-                "an open menu whose anchor scrolls out of its scroll view is culled with it but stays open, "
-                + "holding the keyboard; fixed later in this series"
-        ]
-    }
 
     /// The sizes the session makes the terminal: roomy, short, narrow, both.
     private static let sizes = [(120, 40), (80, 22), (60, 16), (44, 12), (100, 13), (36, 30)]
@@ -120,12 +103,6 @@ final class MenusSession: StressSession {
         // frame late (see `focusAfterClose`), so the first step lets it.
         if index == 0 { return SessionStep(action: "settle") }
         if !pending.isEmpty { return pending.removeFirst()() }
-        if open == nil, let kind = lost, shows(kind) {
-            // A menu that went with its anchor, back with it: open, as far as
-            // anyone looking can tell, with a highlight nobody chose.
-            open = OpenMenu(kind: kind, focusBefore: nil, highlight: nil, knowsHighlight: false)
-            lost = nil
-        }
         if let open { return stepInMenu(open) }
         switch random.pick([
             ("key-open", 16), ("click-open", 12), ("drag-open", 6), ("context", 12), ("suggest", 8),
@@ -148,12 +125,17 @@ final class MenusSession: StressSession {
     /// A step with a menu open: walk it, choose from it, dismiss it, or change
     /// the model or the terminal under it.
     private func stepInMenu(_ menu: OpenMenu) -> SessionStep {
-        // A menu that has gone from the screen is dismissed, as a person who
-        // lost it would: nothing in it can be aimed at.
-        if !shows(menu.kind) {
+        // A context menu whose document left the list's window went with it:
+        // the lazy stack stopped drawing the row that presents it, and TUIkit
+        // closed it and handed the focus back to the page. What the frame
+        // before this step showed is how the session knows.
+        if case .context(let id) = menu.kind, !shows(menu.kind), !showsDocument(id) {
             lost = menu.kind
-            close(restoringFocus: false)
-            return SessionStep(action: "dismiss", keys: [KeyEvent(key: .escape)])
+            // Closed at the end of the pass before this step, so this step's
+            // frame is the one that shows where the focus went.
+            if let focus = menu.focusBefore { focusAfterClose = (focus, stepIndex) }
+            open = nil
+            return SessionStep(action: "settle")
         }
         switch random.pick([
             ("down", 22), ("up", 10), ("end", 3), ("choose", 16), ("click-row", 10), ("escape", 10),

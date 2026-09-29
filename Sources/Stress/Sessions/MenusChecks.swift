@@ -57,6 +57,14 @@ extension MenusSession {
 
     // MARK: Finding things on the screen
 
+    /// Whether document `id` is drawn in the list.
+    func showsDocument(_ id: Int, on screen: [String]? = nil) -> Bool {
+        (screen ?? self.screen).contains { line in
+            guard let range = line.range(of: "#\(id)") else { return false }
+            return range.upperBound == line.endIndex || !line[range.upperBound].isNumber
+        }
+    }
+
     /// Whether some row of the menu `kind` is drawn in a pop-up on the screen —
     /// by its start, since a long label wraps or ends in an ellipsis.
     func shows(_ kind: OpenMenu.Kind, on screen: [String]? = nil) -> Bool {
@@ -114,21 +122,6 @@ extension MenusSession {
     }
 
     func check(_ screen: [String], after index: Int) -> String? {
-        tagIfAfterALostMenu(problems(screen, after: index))
-    }
-
-    /// `problem`, tagged as the known issue when a menu has gone out of view
-    /// with its anchor earlier in the run: that menu stays open unseen, holding
-    /// the keyboard, and every problem after it may be its doing — a Return
-    /// meant for the menu on the screen once ran a row of the unseen one.
-    private func tagIfAfterALostMenu(_ problem: String?) -> String? {
-        guard let problem else { return nil }
-        if problem.hasPrefix("[\(Self.anchorOutOfView)]") { lostAMenu = true }
-        guard lostAMenu, !problem.hasPrefix("[") else { return problem }
-        return "[\(Self.anchorOutOfView)] after a menu went out of view: " + problem
-    }
-
-    private func problems(_ screen: [String], after index: Int) -> String? {
         if desk.applied != expectedApplied {
             return "\(desk.applied) commands ran where the session chose \(expectedApplied)"
         }
@@ -149,8 +142,7 @@ extension MenusSession {
     /// back to where it was before the last one opened.
     private func closedProblems(_ screen: [String], after index: Int) -> String? {
         if let lost, shows(lost, on: screen) {
-            return "[\(Self.anchorOutOfView)] \(describe(lost)) went from the screen with its anchor, "
-                + "was dismissed, and is back"
+            return "\(describe(lost)) closed when its document left the list, and is back"
         }
         // The status line repeats the last command and the tag; it is the one
         // line allowed a menu's words.
@@ -160,9 +152,11 @@ extension MenusSession {
             }
         }
         // Not to a document the command itself took off the list — a promotion
-        // out of the filter, a deletion: there is nowhere to go back to.
+        // out of the filter, a deletion: there is nowhere to go back to. Nor
+        // from nowhere: with no focus to go back to, TUIkit gives it to the
+        // first focus stop, as it does on any page that has none.
         if let (focus, from) = focusAfterClose, index == from, let shown = Self.focus(on: screen), shown != focus,
-            !focus.hasPrefix("row ") || desk.shown.contains(where: { "row \($0.id)" == focus })
+            focus != "none", !focus.hasPrefix("row ") || desk.shown.contains(where: { "row \($0.id)" == focus })
         {
             return "a menu closed, and the focus went to \(shown), not back to \(focus)"
         }
@@ -178,7 +172,10 @@ extension MenusSession {
         // narrow for it, or ends in an ellipsis.
         let drawn = rows.filter { Self.drawnRow($0, on: screen) != nil }
         guard let first = drawn.first, let (x, y) = Self.drawnRow(first, on: screen) else {
-            return "[\(Self.anchorOutOfView)] \(describe(menu.kind)) is open, but none of its rows is on the screen"
+            // Closed with its document, which left the list's window: see
+            // `stepInMenu`, which learns it from this frame.
+            if case .context(let id) = menu.kind, !showsDocument(id, on: screen) { return nil }
+            return "\(describe(menu.kind)) is open, but none of its rows is on the screen"
         }
         guard let box = PopupBox(aroundColumn: x, at: y, on: screen) else {
             return "\(describe(menu.kind)) is open, but the box around \"\(first)\" is not whole on the screen"
@@ -198,15 +195,11 @@ extension MenusSession {
         return nil
     }
 
-    func check(styled screen: [String], after index: Int) -> String? {
-        tagIfAfterALostMenu(highlightProblem(screen))
-    }
-
     /// The open menu's highlight, read from how its rows are painted: the row
     /// the session walked to painted apart from the others, or none apart
     /// when it walked to none.
-    private func highlightProblem(_ screen: [String]) -> String? {
-        guard let menu = open, !menu.awaitingRelease, menu.knowsHighlight else { return nil }
+    func check(styled screen: [String], after index: Int) -> String? {
+        guard let menu = open, !menu.awaitingRelease else { return nil }
         let rows = selectableRows(menu.kind)
         let stripped = screen.map(\.stripped)
         let cells = ScreenCells(screen)

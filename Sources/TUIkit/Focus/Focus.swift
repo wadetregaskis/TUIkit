@@ -148,6 +148,15 @@ public final class FocusManager: @unchecked Sendable {
     /// marks do not exist yet when the question is asked.
     private(set) var previousModalSectionIDs: Set<String> = []
 
+    /// How to close each surface presented this frame, by its section: posted
+    /// every frame the surface is drawn (``notePresentation(id:dismiss:)``).
+    var presentationDismissals: [String: () -> Void] = [:]
+
+    /// ``presentationDismissals`` as the previous frame left them, snapshotted
+    /// by ``beginRenderPass()``: what closes a surface that was presented last
+    /// frame and was not drawn in this one.
+    var previousPresentationDismissals: [String: () -> Void] = [:]
+
     /// Which device drove the most recent input event.
     ///
     /// A control that behaves differently depending on how it was activated —
@@ -1266,6 +1275,7 @@ extension FocusManager {
         // Last frame's modal marks, likewise, before `beginSceneRender` clears
         // them: see ``previousModalSectionIDs``.
         previousModalSectionIDs = modalSectionIDs
+        previousPresentationDismissals = presentationDismissals
         beginSceneRender()
         // A new generation so this pass's @FocusState registrations can be told
         // apart from prior ones (see `pruneFocusRegistry`). The registry itself
@@ -1298,6 +1308,7 @@ extension FocusManager {
         // clearing here means a dismissed modal (which no longer renders, so no
         // longer re-marks) stops grabbing input on the very next frame.
         modalSectionIDs.removeAll()
+        presentationDismissals.removeAll()
         // Re-posted each render by whatever lays the columns out, for the same reason.
         sectionGroups.removeAll()
         optionalFocusSectionIDs.removeAll()
@@ -1329,6 +1340,7 @@ extension FocusManager {
         if let activeID = activeSectionID,
             !sections.contains(where: { $0.id == activeID })
         {
+            closeUndrawnPresentation(id: activeID)
             rememberFocusForActiveSection()
             notifyFocusLost()
             activeSectionID = sections.first?.id

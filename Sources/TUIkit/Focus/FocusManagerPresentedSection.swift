@@ -80,4 +80,28 @@ extension FocusManager {
         }
         activateSection(id: id)
     }
+
+    /// Posts how to close the surface presented in section `id` — asked by a
+    /// presenter every frame it draws the surface, as it marks the section
+    /// modal.
+    ///
+    /// For the frame after one where it was NOT drawn: its presenter went
+    /// undrawn — a row a lazy stack or a list left out of its window, when a
+    /// document arrived above it — so its section vanished and
+    /// ``endRenderPass()`` handed the focus back to the page. The surface has to
+    /// close then, as well. Its open state lives with the presenter, which
+    /// nothing drew to close it, so it came back when the row did, taking the
+    /// keyboard from wherever it had gone.
+    func notePresentation(id: String, dismiss: @escaping () -> Void) {
+        presentationDismissals[id] = dismiss
+    }
+
+    /// Closes the surface presented in section `id` last frame and not drawn
+    /// in this one (see ``notePresentation(id:dismiss:)``). Called by
+    /// ``endRenderPass()`` for the active section it finds gone.
+    func closeUndrawnPresentation(id: String) {
+        guard presentationDismissals[id] == nil, let dismiss = previousPresentationDismissals[id] else { return }
+        previousPresentationDismissals[id] = nil
+        dismiss()
+    }
 }

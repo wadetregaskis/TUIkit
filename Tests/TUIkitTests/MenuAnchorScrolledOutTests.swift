@@ -8,12 +8,12 @@
 //  back when its row did and took it again — a Return meant for one menu ran
 //  a row of another. Found by the Stress `menus` session.
 //
-//  An eager stack draws every row, and the scroll view culls whatever falls
-//  outside its viewport — the open menu's pop-up with its anchor, while the
-//  row that presents it, still drawn, kept the menu's section and its keys.
-//  The pop-up is a window over the page rather than a piece of what the view
-//  scrolls, so it stays on the screen, at the edge its anchor left by, and
-//  works.
+//  What happens depends on whether the anchor's row is still drawn. A lazy
+//  stack draws only its window, so the presenter is not drawn at all: the
+//  menu closes and the focus goes back to the page. An eager stack draws every
+//  row and the scroll view culls what falls outside: there the menu, a window
+//  over the page rather than a piece of what it scrolls, stays on the screen,
+//  at the edge its anchor left by, and works.
 //
 //  Created by Wade Tregaskis
 //  License: MIT
@@ -132,6 +132,23 @@ private final class Harness {
 @MainActor
 @Suite("A menu whose anchor scrolls out of view while it is open")
 struct MenuAnchorScrolledOutTests {
+    @Test("In a lazy stack, the menu of a row pushed out of the window closes, and stays closed")
+    func lazyRowPushedOut() throws {
+        let harness = Harness(lazy: true)
+        let id = try harness.openMenu(onFirstRow: false)
+        harness.documents.ids.insert(contentsOf: 100..<103, at: 0)
+        harness.frame()
+        #expect(!harness.shows("document #\(id)"), "precondition: the anchor left the list")
+        #expect(!harness.shows("Rename #\(id)"), "precondition: the menu is not drawn")
+        harness.chooseFirst()
+        #expect(harness.documents.ran.isEmpty, "keys ran a menu nobody could see: \(harness.documents.ran)")
+        harness.documents.ids.removeFirst(3)
+        harness.frame()
+        harness.frame()
+        #expect(harness.shows("document #\(id)"), "precondition: the anchor is back")
+        #expect(!harness.shows("Rename #"), "the menu came back with its anchor")
+    }
+
     @Test("In an eager stack, the menu of a row pushed below the viewport stays on the screen, and works")
     func eagerRowPushedBelow() throws {
         let harness = Harness(lazy: false)

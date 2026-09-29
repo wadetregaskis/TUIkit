@@ -484,6 +484,8 @@ func presentMenuPopover<Items: View>(
     focusManager?.activatePresentedSection(id: sectionID)
     // Input-grabbing so global chrome hotkeys don't fire behind the menu.
     focusManager?.markSectionModal(id: sectionID)
+    // Closed if a frame goes by without it: see `FocusManager.notePresentation`.
+    focusManager?.notePresentation(id: sectionID, dismiss: dismiss)
     // The section deliberately holds NO focus: a pop-up's rows report to the
     // controller, not to the focus ring. Something may still register in here
     // (a tall menu's own ScrollView does), and without this the end of the
