@@ -256,6 +256,9 @@ enum Headless {
             if let mismatch = report.scriptMismatch { print("      \(mismatch)") }
             for divergence in report.divergences.prefix(3) { print("      " + divergence) }
             for problem in report.brokenExpectations.prefix(3) { print("      " + problem) }
+            for (tag, seen) in report.knownIssues.sorted(by: { $0.key < $1.key }) {
+                print("      known issue [\(tag)] on \(seen.frames) frames")
+            }
             for stale in report.staleServes.prefix(3) { print("      STALE MEMO: " + stale) }
             for stale in report.staleSizes.prefix(3) { print("      STALE SIZE: " + stale) }
         }

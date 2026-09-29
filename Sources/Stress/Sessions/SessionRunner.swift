@@ -89,6 +89,12 @@ enum SessionRunner {
         var brokenSteps: [Int] = []
         /// The first few of those, described.
         var brokenExpectations: [String] = []
+        /// The frames with a problem the session lists as known
+        /// (``StressSession/knownIssues``), by its tag: how many, and the
+        /// first, described.
+        var knownIssues: [String: (frames: Int, first: String)] = [:]
+        /// What each known issue is, by its tag.
+        var knownIssueNotes: [String: String] = [:]
         /// A step whose twin chose a different action: the SCRIPT is not
         /// deterministic, and nothing it found can be trusted.
         var scriptMismatch: String?
@@ -183,7 +189,8 @@ enum SessionRunner {
             let cpu = threadCPUNanoseconds().flatMap { end in cpuStart.map { end &- $0 } } ?? wall
             let bytes = warm.bytesWritten() &- bytesBefore
             if options.trace {
-                let keys = step.keys.map { "\($0.key)" }.joined(separator: " ")
+                let keys = (step.keys.map { "\($0.key)" } + step.mouse.map { "\($0.button) \($0.phase)@\($0.x),\($0.y)" })
+                    .joined(separator: " ")
                 let micros = String(format: "%.1f", Double(cpu) / 1_000)
                 Swift.print(
                     "  step \(index): \(step.action)\(keys.isEmpty ? "" : " [\(keys)]") — \(micros) µs, \(bytes) bytes")
@@ -325,7 +332,13 @@ enum SessionRunner {
     private static func checkFrame(
         of session: DrivenSession, after index: Int, action: String, into report: inout Report
     ) {
-        guard let problem = session.check(session.screen().map(\.stripped), index) else { return }
+        guard let problem = session.check(session.screen(), index) else { return }
+        if let tag = session.knownIssues.keys.first(where: { problem.hasPrefix("[\($0)]") }) {
+            report.knownIssueNotes[tag] = session.knownIssues[tag]
+            let seen = report.knownIssues[tag]
+            report.knownIssues[tag] = ((seen?.frames ?? 0) + 1, seen?.first ?? "step \(index) (\(action)): \(problem)")
+            return
+        }
         report.brokenSteps.append(index)
         if report.brokenExpectations.count < 5 {
             report.brokenExpectations.append("step \(index) (\(action)): \(problem)")
@@ -429,6 +442,10 @@ enum SessionRunner {
             armed: report.sizesVerified, findings: report.staleSizes, steps: report.staleSizeSteps,
             clean: "sizes-verified: every served size matched a fresh measure",
             failure: "served sizes differed from a fresh measure")
+        for (tag, seen) in report.knownIssues.sorted(by: { $0.key < $1.key }) {
+            Swift.print("  known issue [\(tag)] on \(seen.frames) frames — \(report.knownIssueNotes[tag] ?? "")")
+            Swift.print("    first: " + seen.first)
+        }
         if options.checks {
             if report.brokenSteps.isEmpty {
                 Swift.print("  checked: every frame showed what the session expected")

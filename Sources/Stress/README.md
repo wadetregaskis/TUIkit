@@ -220,6 +220,23 @@ bottom-anchored lazy stack of unequal rows opened on blank lines, a log lost
 its end on a burst of wrapping lines, and a view following its end let go of
 it when the terminal shrank.
 
+Some of what a frame must show is in how it is PAINTED, not in its text: which
+row of an open menu is highlighted, whether a label keeps its contrast. A
+session says that in `check(styled:after:)`, which is handed the frame as the
+diff writer built it; `ScreenCells` takes it apart into cells, each with the
+ink and field the SGR in force there paints (reverse video swapped out), and
+records the richest colour spelling the frame used. The `menus` session reads
+its highlight that way — the row it walked to painted apart from the others —
+and its first run found a check of its own that matched "Reopen #5" on the row
+"Reopen #52", which is why its rows are found by whole labels.
+
+A check that finds a bug before the fix lands tags its problem with a known
+issue's name, `"[name] …"`, and the session lists the name in `knownIssues`
+with what it is. The runner reports those frames apart, as
+`known issue [name] on N frames`, and fails nothing on them, so a session can
+land ahead of the fix of what it found — a test's `withKnownIssue`, for a
+session. The fix takes the entry out.
+
 Under `TUIKIT_VERIFY_RENDER_MEMO=1` a session run also reports what the
 render-memo verifier found — every served buffer re-rendered and compared, and
 the registrations it replays with the ones a fresh render makes — and fails on
@@ -233,8 +250,8 @@ too.
 `--bench --scenario session/<id>` plays one step per iteration and prints the
 lines `ab_bench.py` reads, so a session is A/B'd exactly as a scenario is.
 
-Writing one, `--trace` prints each step as it is played — its action and keys,
-what its frame cost and how many bytes it wrote — and `--show` the last frame
+Writing one, `--trace` prints each step as it is played — its action, keys and
+mouse events (button, phase and cell), what its frame cost and how many bytes it wrote — and `--show` the last frame
 with its styling stripped, which is how you find out that the keys you meant
 for the list went into the search field that held the focus. The trace is also
 where a cost that follows no action shows itself: every `chat` frame cost 6 ms,
@@ -263,6 +280,7 @@ memos at the end of every frame.
 | `log-captures` | `log` whose rows carry a tap handler capturing the parent's growing list through `self`: today one copy of the list is alive at a time; a memo that serves rows keeps each drawn row's handler, and the list it captured when drawn |
 | `image-rows` | a `List` of rows each holding a decoded 64×32 picture (8 KB of pixels) that arrive, leave and are replaced: the resident size of what a memo keeps of a row's VALUE |
 | `accumulate` | a clock moving every step over four readers of an `@Observable` property nothing writes until the end — a drawn body, a body only measured (`ViewThatFits`' unchosen candidate), a custom `ButtonStyle`'s `makeBody` and a `@Bindable`-bound `Toggle`. Every body evaluated under observation arms a registration on what it read, freed when that is written, when the model it read is deinitialized, or when the observation lease it was armed under retires — once nothing the render cache keeps depends on it — so what is alive stays flat however long the run; under `TUIKIT_OBSERVATION_RETIREMENT=never`, the cache as it was before leases, a reader drawn every frame of a property nobody writes adds one a frame for as long as the model lives. Reports resident size every 9,000 steps (a quarter of an hour at 10 Hz) and, at the end, how long the first write took: every registration still armed runs inside it. Play it without `--verify` for its numbers — the twin's registrations are in the same process |
+| `menus` | a document manager run from its menus: pop-up `Menu`s in the four corners (File top-left, View top-right, Export bottom-left, Help bottom-right), a `Picker(.menu)` status filter, a `.contextMenu` on every document, an inline `Menu` beside the list and a `TextField` whose `.textInputSuggestions` offer tags. Each is opened by the keyboard (Return, Shift+F10 on a document, Down in the field), by a click that leaves it up, and by a press dragged onto a row; walked with the arrows and End, chosen from with Return or a click, dismissed with Escape or a click elsewhere — while documents arrive, leave, are renamed and promoted under an open menu, the File menu's own recent items change while it is up, and the terminal is made short and narrow around it (six sizes, 36 to 120 wide, 12 to 40 tall). The page's `@FocusState` is on its status line, so the checks can say, from the model and the session's own moves: the open menu's box is whole inside the content and draws every row or a way to reach the rest; the row the session walked to is the one painted apart (read from the styled frame), or none after a pointer opened a pop-up menu; every command chosen ran exactly once, and was the one chosen (`MenuDesk.last`, not only a count, which a click that runs the row beside it would pass), and the filter holds the option chosen; no label of a closed menu is left on the screen; and the focus is back where it was once the frame after a close has settled — TUIkit hands it back at the end of the pass that closes the menu, so the page reads it one frame late. Type-select is not played: TUIkit's menus have none. Its first runs found that a click under an app header landed that many rows lower in `HeadlessApp` and opened a menu as the keyboard does, and that an open menu whose anchor scrolls out of its scroll view is culled but stays open, holding the keyboard |
 
 Adding one: a `StressSession` — a page built once over a model the session
 owns, a `step(_:)` that makes that step's data changes on the model and

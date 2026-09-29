@@ -77,6 +77,23 @@ protocol StressSession: AnyObject {
     /// see that is wrong?
     func check(_ screen: [String], after index: Int) -> String?
 
+    /// What is wrong with how `screen` is PAINTED — the same frame as
+    /// ``check(_:after:)``'s, its styling left in (``ScreenCells`` takes it
+    /// apart) — or `nil` when it is painted as it should be. Asked only when
+    /// that check found nothing. For what the text cannot show: which row of an
+    /// open menu is highlighted, whether a label keeps the contrast TUIkit
+    /// promises it, whether a colour of the palette before a switch is still
+    /// drawn.
+    func check(styled screen: [String], after index: Int) -> String?
+
+    /// The problems the session's checks can report that are KNOWN — a bug found
+    /// and not yet fixed — by the tag a problem carries in brackets (`"[tag]
+    /// …"`), each with what it is and where it is being fixed. A frame with a
+    /// known problem is reported apart and fails nothing, so a session can land
+    /// before the fix of what it found; the fix takes its entry out. A test's
+    /// `withKnownIssue`, for a session.
+    var knownIssues: [String: String] { get }
+
     /// Every how many steps the runner reports the run so far — its resident
     /// size — for a session whose cost is what builds up over a long run, or
     /// `nil` for the usual end-of-run report alone.
@@ -91,6 +108,8 @@ protocol StressSession: AnyObject {
 
 extension StressSession {
     func check(_ screen: [String], after index: Int) -> String? { nil }
+    func check(styled screen: [String], after index: Int) -> String? { nil }
+    var knownIssues: [String: String] { [:] }
     var looksBeforeEachStep: Bool { false }
     func look(at screen: [String]) {}
     var checkpointEvery: Int? { nil }
@@ -127,7 +146,11 @@ final class DrivenSession {
     let frame: (_ nanos: Int64) -> Void
     let screen: () -> [String]
     let bytesWritten: () -> Int
+    /// The session's checks of a frame, given as drawn: ``StressSession/check(_:after:)``
+    /// on its lines stripped, then ``StressSession/check(styled:after:)``.
     let check: (_ screen: [String], _ index: Int) -> String?
+    /// The session's ``StressSession/knownIssues``.
+    let knownIssues: [String: String]
     /// The session's ``StressSession/checkpointEvery``.
     let checkpointEvery: Int?
     /// The session's ``StressSession/finish()``.
@@ -184,7 +207,10 @@ final class DrivenSession {
         frame = { app.frame(atNanos: $0, date: Self.date(atNanos: $0)) }
         screen = { app.screen }
         bytesWritten = { app.bytesWritten }
-        check = { session.check($0, after: $1) }
+        check = { screen, index in
+            session.check(screen.map(\.stripped), after: index) ?? session.check(styled: screen, after: index)
+        }
+        knownIssues = session.knownIssues
         checkpointEvery = session.checkpointEvery
         finish = { session.finish() }
         installCensus = { app.renderCache.observationCensus = ObservationCensus() }
@@ -232,6 +258,7 @@ enum Sessions {
         + [
             AccumulateSession.descriptor,
             ImageRowsSession.descriptor,
+            MenusSession.descriptor,
         ]
 
     @MainActor
