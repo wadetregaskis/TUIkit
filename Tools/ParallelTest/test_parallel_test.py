@@ -731,6 +731,17 @@ class TestFailureExcerpt(unittest.TestCase):
         self.assertEqual(pt.failure_excerpt("✔ Test a() passed after 0.1 seconds.\n"), [])
 
 
+class TestAnnotationMessage(unittest.TestCase):
+    def test_percent_and_line_breaks_are_escaped(self):
+        self.assertEqual(pt.gh_annotation_message("Suite/test(\"50%\")"),
+                         "Suite/test(\"50%25\")")
+        self.assertEqual(pt.gh_annotation_message("a\r\nb%0A"), "a%0D%0Ab%250A")
+
+    def test_ordinary_text_is_unchanged(self):
+        t = "TUIkitTests.ListTests/rowsScroll()"
+        self.assertEqual(pt.gh_annotation_message(t), t)
+
+
 class TestReportFailingLogs(unittest.TestCase):
     def proc(self, d, tag, text, rc, summary):
         log = os.path.join(d, tag + ".log")

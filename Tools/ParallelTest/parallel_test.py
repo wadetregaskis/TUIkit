@@ -891,6 +891,14 @@ def on_github_actions(environ=None):
     return environ.get("GITHUB_ACTIONS") == "true"
 
 
+def gh_annotation_message(text):
+    """`text` as a workflow command's message: GitHub reads `%25`, `%0D` and
+    `%0A` there as `%`, CR and LF (actions/toolkit `escapeData`), so a bare
+    `%` in a test ID or a problem would be read as the start of an escape,
+    and a newline would end the command early."""
+    return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
 def report_failing_logs(procs, failed_by_tag, full_logs, out=None):
     """Put what failed INTO the output, not only a path under .build.
 
@@ -1135,11 +1143,11 @@ def main():
     for t in sorted(failed):
         print("  FAILED: %s" % t)
         if gh:
-            print("::error title=Test failed::%s" % t)
+            print("::error title=Test failed::%s" % gh_annotation_message(t))
     for p in problems:
         print("  RECONCILIATION: %s" % p)
         if gh:
-            print("::error title=parallel-test reconciliation::%s" % p)
+            print("::error title=parallel-test reconciliation::%s" % gh_annotation_message(p))
     for t in missing[:10]:
         print("    never ran: %s" % t)
     for t in extra[:10]:
