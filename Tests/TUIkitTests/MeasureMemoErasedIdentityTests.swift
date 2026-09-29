@@ -10,12 +10,14 @@ import Testing
 @testable import TUIkitCore
 @testable import TUIkitView
 
-/// The measure memo's key holds the view's VALUE BYTES, and for an ``AnyView``
+/// The measure memo's key held the view's VALUE BYTES, and for an ``AnyView``
 /// those bytes are a pointer to a heap box. A pointer names a value only while
 /// that value is alive: free the box and allocate another, and the second is
-/// handed the first's address by an allocator doing exactly its job. The key is
-/// then identical for two different views, and the memo answers the second
-/// question with the first's answer.
+/// handed the first's address by an allocator doing exactly its job. The key was
+/// then identical for two different views, and the memo answered the second
+/// question with the first's answer. The value hash opens an erased view now —
+/// its content's type, then the content — and never hashes the box's address,
+/// in an `AnyView` or in a view that stores one; these keep it that way.
 @MainActor
 @Suite("An erased view is keyed by an address it does not own")
 struct MeasureMemoErasedIdentityTests {

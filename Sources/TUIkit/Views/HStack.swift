@@ -68,7 +68,8 @@ public struct HStack<Content: View>: View {
 struct _HStackCore<Content: View>: View, Renderable, Layoutable {
     // The one-byte `overflow` after the content, not before it: before, it
     // left seven undefined bytes ahead of the word-aligned content, which the
-    // per-pass memos' raw-byte key read (`ContainerLayoutPaddingTests`).
+    // per-pass memos' value hash read then and must skip now; with none, the
+    // core is hashed as plain words (`ContainerLayoutPaddingTests`).
     let alignment: VerticalAlignment
     let spacing: Int
     let content: Content

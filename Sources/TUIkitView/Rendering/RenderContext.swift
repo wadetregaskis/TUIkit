@@ -172,8 +172,8 @@ public struct RenderContext {
     /// measure memo's only handle on an environment change.
     ///
     /// ``RenderCache/MeasureKey`` deliberately carries no environment: it keys
-    /// on the identity, the two widths, the view's type and a hash of the view
-    /// value's raw bytes, and nothing else. That is sound for the case it was
+    /// on the identity, the two widths, the view's type and a hash of the view's
+    /// value, and nothing else. That is sound for the case it was
     /// built for, where the environment is fixed for the pass. It is NOT sound
     /// for a container that ASSIGNS an environment value directly —
     /// `context.environment.foo = x`, which several of them do — between two

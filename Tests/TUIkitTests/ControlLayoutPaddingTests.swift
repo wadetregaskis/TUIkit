@@ -9,8 +9,8 @@ import Testing
 @testable import TUIkit
 
 /// Two controls whose stored properties left padding — bytes the per-pass
-/// memos' raw-byte key read undefined — declared now so their common shapes
-/// have none, and are smaller for it. A generic field can still leave a gap
+/// memos' value hash read undefined then, and skips now — declared so their
+/// common shapes have none, and are smaller (and plain words to the hash) for it. A generic field can still leave a gap
 /// for other type arguments, which the value hash itself must skip.
 @MainActor
 @Suite("Toggle and ProgressView leave no bytes undefined in their common shapes")

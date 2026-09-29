@@ -38,8 +38,8 @@ public struct Text: View, Equatable {
     public typealias TruncationMode = TUIkit.TruncationMode
 
     // Declared so there is no padding between them for the per-pass memos'
-    // raw-byte key to read (see the note on `TextStyle`'s properties): the two
-    // 8-byte-aligned fields first, then `style`, whose 33 bytes end on a byte
+    // value hash to skip (see the note on `TextStyle`'s properties): the two
+    // 8-byte-aligned fields first, then `style`, whose 31 bytes end on a byte
     // boundary. Style between them left 7 undefined bytes before `runs`.
 
     /// The text to display.

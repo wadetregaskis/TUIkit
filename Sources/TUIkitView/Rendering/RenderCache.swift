@@ -351,6 +351,30 @@ public final class RenderCache: @unchecked Sendable {
     /// help.
     public private(set) var childViewsMemoTotals: (hits: Int, misses: Int) = (0, 0)
 
+    /// Cumulative measures the measure memo neither looked up nor kept because
+    /// the view's value could not be hashed (the value-hash plan's `bypass` shape) —
+    /// counted beside ``measureMemoTotals``, where they are neither a hit nor a
+    /// miss.
+    public private(set) var measureMemoBypasses = 0
+
+    /// Cumulative resolutions the child-views memo neither looked up nor kept
+    /// because the content's value could not be hashed — the twin of
+    /// ``measureMemoBypasses``.
+    public private(set) var childViewsMemoBypasses = 0
+
+    /// The value-hash plans this cache's memos key views by: which bytes of a
+    /// type's values the hash may read, and what it reads through typed Swift
+    /// instead — see ``ValueHashPlans``.
+    ///
+    /// Handed in by whoever makes the cache, and not the cache's to empty: a
+    /// plan is a fact about a TYPE, the same in every pass, for every value and
+    /// under every cache, so a table outlives any one of them. `TUIContext`
+    /// makes one per context; `Stress --bench --cold`, which makes a cache
+    /// every frame so that every frame misses every memo, keeps one table for
+    /// all of them, so a cold frame is all-miss and not also the first sight
+    /// of every type. A cache made bare (``init()``) gets a table of its own.
+    package let valueHashPlans: ValueHashPlans
+
     /// This pass's ``VolatileReadTracker``, mirrored here from the environment by
     /// ``EnvironmentValues/installVolatileReadTracker(_:)``.
     ///
@@ -596,7 +620,15 @@ public final class RenderCache: @unchecked Sendable {
     }()
 
     /// Creates an empty render cache.
-    public init() {
+    public convenience init() {
+        self.init(valueHashPlans: ValueHashPlans())
+    }
+
+    /// Creates an empty render cache whose memos key views by `valueHashPlans`
+    /// — a table its maker keeps, and may hand to the caches it makes after
+    /// this one (see ``valueHashPlans``).
+    package init(valueHashPlans: ValueHashPlans) {
+        self.valueHashPlans = valueHashPlans
         link.attach(self)
         link.setDiagnostic(bodyMutationDiagnostic)
     }
@@ -1068,6 +1100,17 @@ extension RenderCache {
         {
             measureEntries[key] = previous
         }
+    }
+
+    /// Counts a measure the memo could not key: see ``measureMemoBypasses``.
+    func noteMeasureMemoBypass() {
+        measureMemoBypasses += 1
+    }
+
+    /// Counts a resolution the memo could not key: see
+    /// ``childViewsMemoBypasses``.
+    func noteChildViewsMemoBypass() {
+        childViewsMemoBypasses += 1
     }
 
     /// The children a stack resolved earlier this pass for the same content

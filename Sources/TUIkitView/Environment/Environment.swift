@@ -18,7 +18,8 @@ import TUIkitStyling
 /// All actual work happens in `renderToBuffer(context:)`.
 public struct EnvironmentModifier<Content: View, V>: View {
     // The key path, the content, then the value: the per-pass memos key a
-    // view by its raw bytes, and padding is whatever the memory held before.
+    // view by a hash of its bytes, and padding is whatever the memory held
+    // before — skipped by the hash, where a type with none is plain words.
     // The content first left a gap before the word-aligned key path whatever
     // its size; here only a word-aligned value after an odd-sized content can
     // leave one, and most environment values are byte-aligned (flags, colours,
@@ -181,7 +182,7 @@ public struct TransformEnvironmentModifier<Content: View, V>: View {
     // The two word-sized fields, then the content last, so nothing follows it
     // whatever its size: the content first left seven undefined bytes before
     // the key path over a scroll view (`ContainerLayoutPaddingTests`), which
-    // the per-pass memos' raw-byte key read.
+    // the per-pass memos' value hash read then and must skip now.
 
     /// The key path to transform.
     public let keyPath: WritableKeyPath<EnvironmentValues, V>

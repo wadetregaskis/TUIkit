@@ -18,7 +18,8 @@ private struct OddContent: View {
 
 /// The stack cores and the environment modifiers wrap almost everything, and
 /// each had padding around its generic content — bytes the per-pass memos'
-/// raw-byte key read undefined. On Linux CI a lazy stack under a scroll view
+/// value hash read undefined then (it skips them now, and hashes a type with
+/// none as plain words). On Linux CI a lazy stack under a scroll view
 /// missed the measure memo from run to run through exactly these: seven bytes
 /// after a stack core's one-byte overflow flag, and seven after a
 /// `TransformEnvironmentModifier`'s content. The content goes after the

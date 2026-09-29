@@ -76,9 +76,16 @@ enum Headless {
     /// Builds a render environment. Each call is independent (fresh state +
     /// cache) so `--bench --cold` can reset between frames to measure the cold
     /// measure+render cost rather than the cache-warm steady state.
+    ///
+    /// Except for `valueHashPlans`, which the caller keeps and hands to every
+    /// cache it makes, as a `TUIContext` keeps one for its own: a plan is a
+    /// fact about a type, not a memo (`RenderCache.valueHashPlans`), so a
+    /// `--cold` frame is one that misses every memo, not also one that sees
+    /// every type for the first time — which an app does once per type, not
+    /// once a frame.
     @MainActor
     private static func makeContext(
-        cols: Int, rows: Int, channels: HeadlessInputChannels
+        cols: Int, rows: Int, channels: HeadlessInputChannels, valueHashPlans: ValueHashPlans
     ) -> RenderContext {
         var environment = EnvironmentValues()
         // The per-walk input registries the app wires: a key dispatcher, a
@@ -92,7 +99,7 @@ enum Headless {
         // does.
         channels.install(into: &environment)
         environment.stateStorage = StateStorage()
-        environment.renderCache = RenderCache()
+        environment.renderCache = RenderCache(valueHashPlans: valueHashPlans)
         // Route through a real `TUIContext` so EVERY service the render pass
         // may reach is wired, not just the two the scenarios happened to need.
         // `.preference` force-unwraps its storage, so the `preferences`
@@ -186,10 +193,11 @@ enum Headless {
         let clock = StressClock()
         var failures = 0
         let cases = selfcheckCases(config)
+        let valueHashPlans = ValueHashPlans.tuikit()
         print("selfcheck — scale \(config.scale) seed \(config.seed) @ 120x40")
         for scenario in cases {
             let channels = HeadlessInputChannels()
-            let context = makeContext(cols: 120, rows: 40, channels: channels)
+            let context = makeContext(cols: 120, rows: 40, channels: channels, valueHashPlans: valueHashPlans)
             // A driven case's model moves between the two renders, so the
             // second — the one the verifier reads — follows a write.
             let driven = scenario.drive?()
@@ -334,7 +342,8 @@ enum Headless {
 
         // Warm up (build lazy state, prime caches) outside the timed region.
         let channels = HeadlessInputChannels()
-        var warm = makeContext(cols: cols, rows: rows, channels: channels)
+        let valueHashPlans = ValueHashPlans.tuikit()
+        var warm = makeContext(cols: cols, rows: rows, channels: channels, valueHashPlans: valueHashPlans)
         stampFrameDate(warm)
         _ = renderToBuffer(view, context: warm)
 
@@ -367,7 +376,9 @@ enum Headless {
             requested: countsObservation, cold: cold, cache: warm.renderCache)
         for iteration in 0..<iterations {
             if iteration.isMultiple(of: 64) { memory.sample() }
-            if cold { warm = makeContext(cols: cols, rows: rows, channels: channels) }
+            if cold {
+                warm = makeContext(cols: cols, rows: rows, channels: channels, valueHashPlans: valueHashPlans)
+            }
             clock.tick &+= 1
             // A driven scenario's write, outside the timed region; what it
             // invalidates is paid in the frame, where an app pays it.
@@ -442,6 +453,7 @@ enum Headless {
         }
         printMemoTotals(warm.renderCache, channels: channels, frames: iterations)
         print(memoCounts.report(frames: iterations))
+        MemoCounts.printValueHashCensus(of: warm.renderCache)
         observation?.report(frames: iterations)
         // `TUIKIT_VERIFY_MEASURE_MEMO=1` re-measures every memo hit and reports
         // any the fresh measurement disagrees with — the direct check on the

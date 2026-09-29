@@ -298,8 +298,9 @@ extension View {
 /// focus stops, so a toggle in one is the ordinary control.
 public struct Toggle<Label: View>: View {
     // Declared so a toggle titled with a string has no padding: the per-pass
-    // memos key a view by its raw bytes, and padding is whatever the memory
-    // held before. The two word-sized fields, then the label, then the flag —
+    // memos key a view by a hash of its bytes, and padding is whatever the
+    // memory held before — skipped by the hash, where a type with none is
+    // plain words. The two word-sized fields, then the label, then the flag —
     // which fills the byte a `Text` label ends one short of — and the 106-byte
     // binding last: none over a `Text` (208 → 194 bytes;
     // `ControlLayoutPaddingTests`). Another label's size can still leave a

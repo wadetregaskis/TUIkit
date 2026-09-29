@@ -4799,3 +4799,245 @@ memo. Giving it one needs `Value: Equatable` (`Table` requires only `Identifiabl
 takes the captured-data hole on a row's whole LINE rather than on a width, where a stale
 answer is a visibly wrong cell. That is a design decision, not an oversight to fix in
 passing.
+
+## 62. The value hash read bytes nothing wrote (2026-09-28)
+
+§60 left the per-pass memos keyed, below identity, type and widths, by a hash of the view's
+bytes — every byte of the struct. Some of those bytes are written by nobody: a struct's
+padding; the inactive payload of a generic enum (`ConditionalView`'s other branch); the
+half of an optional whose `nil` is spelled in its payload's spare values (`String?` leaves
+its first word, a closure's `nil` its context, `Color?` four bytes); the words of an
+existential's buffer its payload does not fill. Each holds whatever the memory held before.
+Two equal values then hashed apart and missed each other — differently by platform and run:
+a lazy stack under a scroll view missed on Linux where macOS hit (`fb4c1506`) — and reading
+them at all was reading uninitialised memory, which the owner ruled out outright.
+
+Reordering fields (`TextLayoutPaddingTests`, `ContainerLayoutPaddingTests`,
+`ControlLayoutPaddingTests`, the frame wrapper) removed the padding from the hottest types
+and shrank them; it cannot reach app types, generic wrappers whose gaps depend on their
+arguments, or the bytes enums and existentials leave by design. Zeroing at construction
+does not survive a copy (measured by the design's probes), and no compiler flag zeroes
+padding.
+
+### What the hash reads now
+
+A **plan** per type, built once from the type alone by walking `RuntimeFields`
+(`ValueHashPlanBuilder`), kept in an open-addressing table (`ValueHashPlans`) that
+whoever makes a `RenderCache` hands it and keeps — a plan is a fact about a type, not a
+memo, so `TUIContext` keeps one per context and `Stress` one for every cache a `--cold`
+run makes:
+- struct and tuple fields at their offsets, flattened; a gap is skipped only when it is
+  exactly the next field's alignment padding, and anything else the metadata does not
+  explain bypasses. A field of no size is skipped wherever the runtime reports it (offset 0,
+  under the fields before it, where the layout is fixed at compile time). In a struct
+  imported from C any gap bypasses: the importer's field list leaves out bitfields, so a
+  gap shaped like padding can be a bitfield's byte;
+- builtins, references, existential metatypes and closures as their bytes (x87's
+  `Float80`: the ten bytes a store writes, of sixteen);
+- a **metatype** bypasses, and so does an optional or a tuple holding one. Swift stores a
+  metatype that has one value in no bytes (`Int.Type`: none; `Int.Type?`: one tag byte) and
+  one that may hold more — a class's, a type parameter's — as a pointer; the runtime reports
+  every one as the pointer, and nothing typed tells them apart. Read by the runtime's
+  layout, a view holding `Int.Type?` then an `Int` read seven bytes of padding, and one
+  holding `(UInt8, Int.Type?)` then a 16-aligned field never read the stored tag byte at
+  offset 1, so `(1, Int.self)` and `(1, nil)` hashed EQUAL — a wrong answer, caught in
+  review before this landed. A tuple that bypasses for ANY reason counts as holding one:
+  the walk stops at the first element it cannot read, which may lie before a metatype it
+  never reached, and an optional around the tuple then fell back to asking `== nil` of the
+  tuple as the runtime lays it out — `(AppChoice, Int.Type)?`, an app's payload enum first,
+  spells `nil` in the enum's tag byte as stored and in the metatype's word, which is
+  padding, as the runtime has it; `.some` and `nil` hashed EQUAL over zeroed padding, again
+  caught in review. `navigationDestination` keeps its type as an `ObjectIdentifier` for
+  this;
+- an optional whole where every byte of every value is written — a tag byte of its own over
+  a dense payload, or one pointer-or-byte scalar whose spare values `nil` writes whole (a
+  word or less: a wider builtin, an executor's two words, is not measured, and steps),
+  measured in the suite on every platform CI runs (`OptionalWholeBytesTests`, calling
+  `Optional`'s own inject witness on memory filled two ways) — and otherwise by `== nil`,
+  then its payload's plan;
+- `ConditionalView` by a `switch`; `AnyView` and every existential field by loading it as
+  its static type and letting Swift open it — its payload's type, then the payload; never
+  the container's words or a box's address. A static type this module can name (`Any`,
+  `any View`, `any Equatable`, `any Hashable`, `any Palette`) is opened directly, and so is
+  one the table was given a `ValueHashOpener` for — TUIkit's style protocols and
+  `AnyLayout`'s box (`ValueHashOpener.tuikit`); any other by a cast, boxing it in an `Any`
+  for `type(of:)`, which mixes the same words and costs an allocation (2.2% of a `menus`
+  profile when the styles went that way). Opening one is the one place the hash recurses
+  as deep as a VALUE goes rather than as a type is written, so it asks the stack guard
+  first and gives a value too deep for the stack up unhashed: an `AnyView` chain 2,000
+  deep overflowed the stack there (a debug build), where the measure asking would have
+  truncated it. The measure descends anyway, under its own guard, so a hash given up is not
+  counted as a truncation (`StackGuard.uncountedFloor()`, read once at the hash's entry:
+  the steps run off the main actor, below). Counted, `Stress --bench` on `deep` at scale 12
+  (release, where the guard cuts the tree) said the guard stopped 456 descents; uncounted,
+  404 — the difference is the 26 measures a frame the hash left unkeyed, over 2 frames
+  (with the steps off the main actor, measured 2026-09-29: 402 stopped, 25 unkeyed);
+- an enum only when it opts in: whole bytes for a trivial non-generic enum built only where
+  its layout is known (`_AllBytesDefined` — the builder refuses the marker on anything
+  else, a generic enum included — pinned by `AllBytesDefinedTests`, which stores
+  every case in place into memory filled two ways and checks every byte came out written —
+  in place, because a value built in a temporary and copied in carries the temporary's
+  junk, the same both times, and reads as written), or a `switch` of its own
+  (`_ValueHashing`);
+- anything else **bypasses**: the memo measures the view, looks nothing up and keeps
+  nothing — a lost hit, never a wrong answer.
+
+A type with no padding and nothing to read through typed Swift is **dense**, and is hashed
+by exactly the word loop the hash ran before, behind one table lookup in place of §60's
+`_valueIsBoxed` witness (which is gone, with `AnyView.erasedValueHash`). Everything else
+leaves the function for `hashByPlan`.
+
+**Nothing on the path is isolated to the main actor** but the entry, and the entry hands
+no closure anywhere. That is what made the hash's first wiring slow: a closure written in
+a `@MainActor` function is isolated, and Swift 6 checks the executor on entry to one
+handed to a module not built in Swift 6 mode — the standard library's `withUnsafeBytes`
+and `_openExistential` (SE-0423). The hash handed two or three per existential it opened,
+and the check's leaves (`swift_task_isCurrentExecutor`, `Actor.unownedExecutor`,
+`MainActor.shared`, the metadata accessors under them) were about 238 ms of the 422 ms
+under `viewValueHash` in a 10 s `fanout` profile — more than half of it. The old byte hash
+paid it too, once per hash, and so did the stack guard's own probe on every measure and
+render (`StackGuard.currentStackPointer()` is nonisolated now).
+
+**Rows are dense.** A `ForEach`/`List` row is keyed by its element as its own type,
+`_MemoizedRow<Int, Int, Row>`, not by an `AnyEquatableBox` (the §30 "still open" item 3),
+so the dominant stepped type of the first wiring — 168,000 steps in 21 frames of
+`fanout` — is plain words.
+
+The framework's own types were brought onto the cheap paths first: `Color`'s value and
+`LineLimit` (`@frozen`, whole), `AnimationCurve` and `Animation.Repeat` (whole),
+`TrackStyle`, `SegmentColoring`, `TrackConfiguration.Background`, `StyleScope`,
+`KeyboardShortcut.Trigger`, `AnimatedColor.Storage` (a switch each); `Text` stores its
+optional line limit, colours and font as enums of its own module, so a `Text` is dense;
+and `@Environment` keeps its lookup as two one-pointer optionals rather than a generic enum,
+so a view holding one no longer bypasses.
+
+### Counts
+
+`memos/frame` from `Stress --bench`, 120x40, 20 frames after one warm-up — the same in a
+debug and a release build, and identical before and after the wiring on all eight
+scenarios, and to the tenth on seven of them run to run. `churn`'s hits are not
+deterministic since rows stopped being keyed by a box — 1,241.5, 1,261.8 and 1,247.3 in
+three runs, before and after the wiring alike, where it read 1,197.0 on every run before:
+more, never fewer, all on `Text` (a local count by type), a `Text` rebuilt within a pass
+with an equal string whose buffer the allocator handed back at the old address. The
+"Addresses" item below; the table gives one run:
+
+| scenario | measure lookups | hits | misses | stores | unkeyed | child views (lookups/hits) |
+|---|---|---|---|---|---|---|
+| menus | 53.0 | 0.0 | 53.0 | 53.0 | 0.0 | 0.0 / 0.0 |
+| fanout | 8,011.0 | 4,000.0 | 4,011.0 | 4,011.0 | 0.0 | 4.0 / 3.0 |
+| deep | 9,810.0 | 902.0 | 8,908.0 | 8,908.0 | 0.0 | 0.0 / 0.0 |
+| churn | 5,111.0 | 1,241.5 | 3,869.5 | 3,869.5 | 0.0 | 4.0 / 3.0 |
+| anyview | 2,011.0 | 750.0 | 1,261.0 | 1,261.0 | 0.0 | 4.0 / 3.0 |
+| modifiers | 1,611.0 | 0.0 | 1,611.0 | 1,611.0 | 0.0 | 4.0 / 3.0 |
+| textwall | 1,211.0 | 600.0 | 611.0 | 611.0 | 0.0 | 4.0 / 3.0 |
+| customlayout | 127.0 | 100.0 | 27.0 | 27.0 | 0.0 | 2.0 / 1.0 |
+
+No hit was lost, and none gained but `churn`'s, which come from address reuse, as above —
+not from padding: on macOS the padding junk happened to agree with itself, which is how the
+Linux misses went unseen. What the change buys there is
+determinism — Linux CI is the check — and no read of a byte the plans' rules know a value
+may leave undefined. Those rules are the claim, and review has twice found a layout they
+missed (a thin metatype; one hidden behind a payload enum in an optional tuple) and once a
+field list that omits bytes (a C struct's bitfields): each is a rule now, with a test that
+fills the bytes in question three ways.
+
+The census (`-DTUIKIT_VALUE_HASH_CENSUS`: every hash by the shape of the plan that answered
+it, warm-up included, 21 frames):
+
+| scenario | dense | runs | steps | bypass | the stepped types that dominate |
+|---|---|---|---|---|---|
+| menus | 582 | 216 | 2,076 | 0 | `Button` / `_ButtonCore` (300 each), `EnvironmentModifier<Button, ButtonStyle>` (210) |
+| fanout | 186,021 | 8,000 | 294 | 0 | the `ForEach` and its stacks (84, 63, 63) |
+| deep | 58,065 | 55,440 | 92,505 | 0 | `ConditionalView` ×2, `ContainerView`, `AnyView` (18,480 each) |
+| churn | 81,921 | 25,200 | 294 | 0 | the `ForEach` and its stacks |
+| anyview | 44,021 | 2,250 | 3,544 | 0 | `AnyView` (1,750) |
+| modifiers | 35,221 | 3,200 | 19,494 | 0 | `AnyView` (3,200), the `.border()` chain (1,600 each) |
+| textwall | 27,021 | 1,200 | 294 | 0 | the `ForEach` and its stacks |
+| customlayout | 2,561 | 0 | 168 | 0 | the `ForEach` (42) |
+
+— where the first wiring's, rows keyed by a box, read fanout 18,021 / 8,000 / 168,294,
+anyview 2,021 / 2,250 / 45,544 and modifiers 1,621 / 3,200 / 53,094. No existential in any
+scenario is opened by a cast (the census lists them; `menus` had 630 `ButtonStyle`, 90
+`Palette` and 6 `MenuStyle` before the openers, `customlayout` 105 of `AnyLayout`'s box).
+
+Over all 30 scenarios, 3 frames each, in two runs: 137,369 and 137,348 dense, 47,153 and
+47,119 runs, 47,260 and 47,253 steps, **0 bypass** (the first wiring: 79,306 and 79,362
+dense, 47,277 and 47,333 runs, 105,485 steps; before the framework's enums, `Text` and
+`@Environment` were brought in, `Color`, `TrackStyle`, `StyleScope`, `LookupStrategy`,
+`AnimationCurve`, `KeyboardShortcut.Trigger` and `AnimatedColor.Storage` were every static
+bypass there was, and `Text` was the most frequently stepped type). The totals move by a few
+dozen from run to run — in `dashboard` and `kitchensink`, whose content moves with the
+clock; the eight scenarios above repeat exactly.
+`TUIKIT_VERIFY_MEASURE_MEMO=1 TUIKIT_VERIFY_RENDER_MEMO=1 Stress --selfcheck`: all 89 cases
+(30 scenarios) and 19 sessions clean.
+
+### Not measured here, and still open
+
+- **Time.** The first wiring measured slow on a quiet box (warm, against the unwired
+  hash: `fanout` +8.8%, `anyview` +8.1%, `modifiers` +8.4%, `textwall` +7.0%, `deep`
+  +4.7%, `menus` +4.6%, `customlayout` +3.5%; `--cold` `menus` +56.7%, `customlayout`
+  +54.5%). Profiled, not timed, since: the executor checks, the boxed rows and the cast
+  styles above were most of it, and each is gone. With all of it in, the share of a
+  10 s Time Profiler trace spent under the hash (`analyze_timeprofile.py --within`,
+  release): `fanout` 1.7% (the unwired hash 3.3%, the first wiring 9.5%), `anyview` 1.3%
+  (2.7%, 7.8%), `menus` 1.3% (1.4%), `modifiers` 1.4% (2.8%), `deep` 3.4% (3.5%) — shares
+  of the whole, and the unwired hash's included its own executor checks, about half of it.
+  `deep` is what is left: a generic `ConditionalView`'s `switch` asks the runtime for the
+  enum's metadata each time (`swift_getGenericMetadata`, about 0.7% of a `deep` profile)
+  and copies the value to read its case, and an `AnyView`'s content is copied out of its
+  existential to open it. The quiet-box A/B decides. Tried and dropped, measured worse:
+  always-inlining the generic layers of an opening, and indexing the plan's buffers.
+  The memo counters the bench prints (`measureMemoStores`, the child-views hits and
+  misses) are always on, an increment per store and per child-views lookup, landed a
+  commit before the plans — an A/B of the wiring alone does not see them.
+- **Cold.** `--cold` makes a render cache every frame; the table outlives it, so a cold
+  frame is one that misses every memo, not also one that plans every type — which an app
+  does once per type, per `TUIContext`. First sight of a type is a plan build: a walk of
+  its fields, and the qualified name of each padded struct once, to ask whether it came
+  from C. What is still dearer cold than warm is what an all-miss frame measures and so
+  hashes: `modifiers --cold` spends 6.8% of its profile under the hash (inclusive, 4.3% in
+  `ConditionalView`'s step and 3.2% opening `AnyView`s, one inside the other), because every
+  level of a `.border()` chain measures, and each hashes the erased subtree below it —
+  "Erased depth", below.
+- **Addresses.** A class reference, a closure, a `@State` or `@Environment` box — and a
+  `String`'s heap buffer — are read as the addresses they are: equal views built apart
+  still miss, and a freed address handed straight back can still name a different value —
+  only an erased view's box, the one §60 found, is never hashed now. `churn` shows the
+  mechanism live since rows shrank: its extra, run-to-run hits are `Text`s rebuilt within
+  a pass whose buffers came back at the old address — equal text, so the size served is
+  right (the memo verifiers find nothing), but nothing but luck makes it equal.
+- **Enums not yet opted in** bypass — the grep finds about thirty payload enums in the
+  framework, most never stored in a view; the census names the ones a scenario meets, and
+  for a lookup that bypasses through a step, the part inside that stopped it. So do views
+  an app writes that hold its own payload enums, and the rows of a `ForEach` over such
+  values (a `_MemoizedRow` holds the value it builds its row from) — each row's per-pass
+  measure goes unkeyed; no Stress scenario has either. The Example app, walked through all
+  35 of its pages by `Tools/Smoke/tui_walk.py` in a census build (2026-09-29; a local
+  patch wrote the census to a file as it went): 672,000 lookups, 8,431 bypassing (1.25%;
+  a second walk, 8,569 of 675,000) — and every one on a FRAMEWORK enum not yet opted in,
+  none on the app's own: `IndeterminateStyle` 2,907, `SpinnerStyle` 2,495,
+  `ScrollFollowMargin.Value` 961, `PopoverAttachmentAnchor` 702, `ASCIICharacterSet` 630,
+  `Image.Content` 270, `ScrollAnchor<AnyHashable>` 204, `NavigationLink.Target` 192,
+  `ImageSource` 40, `PresentationDetent` 30 (each counted at every view holding it, as a
+  bypass reaches every ancestor that stores the view). Opting those ten in, as the
+  framework's enums above were, is the follow-up.
+- **Metatypes** bypass, whatever their kind — the price of not being able to tell a thin
+  one from a pointer. A view that stores `ObjectIdentifier` or `Any.Type` instead is read
+  as words.
+- **Erased depth.** An erased subtree is hashed whole at every level that measures it, so
+  a chain of `AnyView`s costs O(depth) to hash at each level — quadratic over the chain —
+  where §60's box address cost one word. The pathological case, an `AnyView` chain 50,000
+  deep (a test, debug build): main measures it to the stack guard in 0.02 s (1,879
+  measures, every one a miss); with the first wiring of these plans the hash walked to the
+  guard from every level, 1,361 measures went unkeyed and 453 missed, in 0.8 s — not
+  re-measured since, and the hash still walks an erased chain at every level. Views built as SwiftUI builds them keep their
+  subtrees in bodies, not in stored values, and hash small; the step-heavy A/B above is the
+  check on realistic trees. The follow-up if it shows: an `AnyView` that kept its content
+  in a box of TUIkit's own could remember the content's hash once asked — the content never
+  changes — without ever using the box's address as a key (§60). Not done here: it changes
+  what `AnyView` IS to everything else that reads its type — `TypeWalk` refuses a row
+  holding an existential and treats a class as a leaf, so a boxed `AnyView` would silently
+  change which rows are re-checked by value.
+- **32-bit targets.** `String` is laid out around an internal payload enum there, so it
+  would bypass; wasm32 is a compile-only lane today.

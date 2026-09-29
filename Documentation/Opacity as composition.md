@@ -23,9 +23,10 @@ worth recording here because it is not what §1 predicted:
   destination's field and sequential blends against one backdrop multiply
   exactly. The ink channel's two backdrops differ, and multiplying them into one
   blend is what put a `Table` row's translucent text on the wrong colour.
-- **`Color` stores a `UInt8` alpha**, not a `Double`: `viewValueHash` hashes the
-  raw bytes of every view struct and a `Double` would introduce undefined padding,
-  making the render memo's key non-deterministic. Every `Color` → `Color`
+- **`Color` stores a `UInt8` alpha**, not a `Double`: a `Double` would make it
+  sixteen bytes with undefined padding, which the per-pass memos' value hash
+  would have to skip, where a colour with none — and everything holding one, a
+  `Text` above all — is read as plain words. Every `Color` → `Color`
   derivation carries it, checked by a table test rather than one test per
   function.
 - **Three sites write it**, and they are the three that know the rectangle they

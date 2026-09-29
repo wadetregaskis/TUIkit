@@ -12,7 +12,8 @@ import TUIkitView
 extension ValueHashPlans {
     /// A plan table that opens the existentials of TUIkit's own protocols a
     /// view holds directly (``ValueHashOpener/tuikit``) — what an app's render
-    /// caches are to be made with.
+    /// caches are made with. Whoever makes one keeps it for every cache it
+    /// makes: a plan is a fact about a type (see `RenderCache.valueHashPlans`).
     package static func tuikit() -> ValueHashPlans {
         ValueHashPlans(openers: ValueHashOpener.tuikit)
     }

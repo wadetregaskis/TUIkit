@@ -124,21 +124,6 @@ public struct AnyView: View {
     }
 }
 
-// MARK: - AnyView's Value
-
-extension AnyView {
-    /// `AnyView`'s whole job is to put its content somewhere else and hold the
-    /// address, so its own bytes are that address — see ``View/_valueIsBoxed``.
-    public static var _valueIsBoxed: Bool { true }
-
-    /// A hash of the CONTENT, for the per-pass memo keys.
-    ///
-    /// `AnyView`'s whole job is to put its content somewhere else and hold the
-    /// address, so its own bytes are that address — and an address names a
-    /// value only while that value is alive. `viewValueHash` asks this instead.
-    var erasedValueHash: Int { erasedViewValueHash(view) }
-}
-
 // MARK: - ConditionalView's Value
 
 extension ConditionalView: _ValueHashing {

@@ -4,6 +4,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import CTestSupport
 import Testing
 
 @testable import TUIkit
@@ -52,6 +53,25 @@ private enum AppChoice {
     case word(String)
 }
 
+/// A view holding one.
+private struct HoldsAppChoice: View {
+    let choice: AppChoice
+    var body: some View { Text(label) }
+
+    private var label: String {
+        switch choice {
+        case .number(let number): "\(number)"
+        case .word(let word): word
+        }
+    }
+}
+
+/// ``HoldsAppChoice``'s control: the same body, over a value the hash reads.
+private struct HoldsLabel: View {
+    let label: String
+    var body: some View { Text(label) }
+}
+
 /// A view holding an existential: `AnyEquatableBox` is `ForEach`'s row key.
 private struct BoxHolder: View {
     let box: AnyEquatableBox
@@ -98,16 +118,33 @@ private struct MetatypeBehindAnEnumRow: View {
     }
 }
 
+/// A view holding a struct imported from C whose bitfields the runtime's
+/// field list leaves out, and drawn as wide as one of them says.
+private struct BitfieldRow: View {
+    let bits: CTestBitfields
+
+    init(lo: UInt8) {
+        var bits = CTestBitfields()
+        bits.c = 1
+        bits.lo = lo
+        bits.x = 7
+        self.bits = bits
+    }
+
+    var body: some View { Text(String(repeating: "x", count: Int(bits.lo))) }
+}
+
 // MARK: - Tests
 
-/// The per-pass memos key a view by a hash of its value, and until now that
-/// hash read the value's bytes, all of them — including bytes no field
-/// covers, whose contents are whatever the memory held before: struct
-/// padding, the inactive payload of a generic enum, the unused words of an
-/// existential's buffer, the unwritten half of an optional's `nil`. Two equal
-/// values then hash apart, and the memo misses; which it does differs by
-/// platform and run (Linux missed where macOS hit), and reading those bytes
-/// at all is reading uninitialised memory.
+/// The per-pass memos key a view by a hash of its value, and that hash read
+/// the value's bytes, all of them — including bytes no field covers, whose
+/// contents are whatever the memory held before: struct padding, the inactive
+/// payload of a generic enum, the unused words of an existential's buffer, the
+/// unwritten half of an optional's `nil`. Two equal values then hashed apart,
+/// and the memo missed; which it did differed by platform and run (Linux
+/// missed where macOS hit), and reading those bytes at all was reading
+/// uninitialised memory. The hash reads a type by its `ValueHashPlan` now,
+/// which never loads such a byte.
 ///
 /// Each test here builds a value in memory of its own, writes three
 /// different fills into bytes the value leaves undefined — the value is the
@@ -157,9 +194,7 @@ struct ValueHashUndefinedBytesTests {
         let gaps = interiorPadding(of: type(of: wrapped))
         try #require(!gaps.isEmpty, "the probe must have padding to fill")
         let result = hashes(of: wrapped, filling: gaps)
-        withKnownIssue("the hash reads struct padding") {
-            #expect(Set(result.hashes).count == 1, "\(result.hashes)")
-        }
+        #expect(Set(result.hashes).count == 1 && result.hashes[0] != nil, "\(result.hashes)")
     }
 
     @Test("A conditional's inactive payload is not read")
@@ -173,9 +208,7 @@ struct ValueHashUndefinedBytesTests {
             filling: [0..<MemoryLayout<Text>.size],
             check: { if case .falseContent = $0 { true } else { false } })
         #expect(result.valueUnchanged)
-        withKnownIssue("the hash reads the inactive payload") {
-            #expect(Set(result.hashes).count == 1, "\(result.hashes)")
-        }
+        #expect(Set(result.hashes).count == 1 && result.hashes[0] != nil, "\(result.hashes)")
     }
 
     #if _pointerBitWidth(_64)
@@ -186,9 +219,7 @@ struct ValueHashUndefinedBytesTests {
         try #require(MemoryLayout<String?>.size == 16)
         let result = hashes(of: OptionalLabel(label: nil), filling: [0..<8], check: { $0.label == nil })
         #expect(result.valueUnchanged)
-        withKnownIssue("the hash reads the word nil leaves unwritten") {
-            #expect(Set(result.hashes).count == 1, "\(result.hashes)")
-        }
+        #expect(Set(result.hashes).count == 1 && result.hashes[0] != nil, "\(result.hashes)")
     }
 
     @Test("An existential holding a word hashes the same whatever its unused buffer words hold")
@@ -200,11 +231,12 @@ struct ValueHashUndefinedBytesTests {
             of: BoxHolder(box: AnyEquatableBox(5)), filling: [8..<24],
             check: { $0.box == AnyEquatableBox(5) })
         #expect(result.valueUnchanged)
-        withKnownIssue("the hash reads an existential's unused buffer words") {
-            #expect(Set(result.hashes).count == 1, "\(result.hashes)")
-        }
+        #expect(Set(result.hashes).count == 1 && result.hashes[0] != nil, "\(result.hashes)")
     }
 
+    /// The hash cannot tell a metatype stored thin from one stored as a
+    /// pointer, so it does not hash a view holding one: all three answers are
+    /// "no hash", which is the same answer.
     @Test("A view holding a metatype's optional hashes the same whatever the padding after it holds")
     func metatypeOptionalPadding() throws {
         try #require(MemoryLayout<MetatypeOptionalRow>.size == 16)
@@ -212,9 +244,7 @@ struct ValueHashUndefinedBytesTests {
             of: MetatypeOptionalRow(kind: Int.self, count: 7), filling: [1..<8],
             check: { $0.kind == Int.self && $0.count == 7 })
         #expect(result.valueUnchanged)
-        withKnownIssue("the hash reads the padding after a metatype's optional, stored in one byte") {
-            #expect(Set(result.hashes).count == 1, "\(result.hashes)")
-        }
+        #expect(Set(result.hashes).count == 1, "\(result.hashes)")
     }
     #endif
 
@@ -228,9 +258,7 @@ struct ValueHashUndefinedBytesTests {
         let result = hashes(
             of: MetatypeBehindAnEnumRow(pair: nil, wide: .zero), filling: [padding], check: { $0.pair == nil })
         #expect(result.valueUnchanged)
-        withKnownIssue("the hash reads the padding after an optional tuple holding a thin metatype") {
-            #expect(Set(result.hashes).count == 1, "\(result.hashes)")
-        }
+        #expect(Set(result.hashes).count == 1, "\(result.hashes)")
     }
 
     /// End to end: the memo, not the hash. The content of an `AnyView` lives
@@ -266,12 +294,79 @@ struct ValueHashUndefinedBytesTests {
         let second = measureChild(erased, proposal: unspecified, context: context)
 
         #expect(second == first)
-        withKnownIssue("the hash reads the boxed content's padding, so the second measure misses") {
-            #expect(cache.measureMemoTotals.hits == before.hits + 1)
-            #expect(cache.measureMemoTotals.misses == before.misses)
-        }
+        #expect(cache.measureMemoTotals.hits == before.hits + 1)
+        #expect(cache.measureMemoTotals.misses == before.misses)
     }
     #endif
+
+    // MARK: A value the hash cannot read
+
+    /// A payload enum an app declares cannot be read without reading bytes one
+    /// of its values may leave undefined, so a view holding one has no hash:
+    /// the memo measures it every time, looks nothing up and keeps nothing —
+    /// a lost hit, never a wrong answer. Its body's own views are keyed as
+    /// ever.
+    @Test("A view the hash cannot read is measured every time and kept nowhere")
+    func unhashableViewIsMeasuredNotKept() throws {
+        let context = memoisedContext()
+        let cache = try #require(context.renderCache)
+        let view = HoldsAppChoice(choice: .word("four"))
+        #expect(hash(view, cache: cache) == nil)
+        let unspecified = ProposedSize(width: nil, height: nil)
+        let bypassesBefore = cache.measureMemoBypasses
+        let entriesBefore = cache.measureEntryCount
+        let first = measureChild(view, proposal: unspecified, context: context)
+        // Kept: the body's `Text`, and not the view around it.
+        let keptByTheView = cache.measureEntryCount - entriesBefore
+        let second = measureChild(view, proposal: unspecified, context: context)
+        #expect(first == second)
+        #expect(first.width == 4)
+        #expect(cache.measureMemoBypasses == bypassesBefore + 2)
+        // The control, the same body over a value the hash reads, keeps one
+        // entry more: its own.
+        let controlBefore = cache.measureEntryCount
+        _ = measureChild(HoldsLabel(label: "five"), proposal: unspecified, context: context)
+        #expect(cache.measureEntryCount - controlBefore == keptByTheView + 1)
+    }
+
+    /// Two values of a struct imported from C that differ only in a bitfield,
+    /// at one identity in one pass — the shape of a form's labels measured
+    /// twice (Performance-profile §60). Taking the gap the bitfields sit in
+    /// for padding, the plan
+    /// read the rest and keyed both alike, and the second was served the
+    /// first's size.
+    @Test("Values that differ only in a C bitfield are never served each other's size")
+    func importedBitfieldsAreNotServedAcross() throws {
+        let context = memoisedContext()
+        let cache = try #require(context.renderCache)
+        let unspecified = ProposedSize(width: nil, height: nil)
+        let bypassesBefore = cache.measureMemoBypasses
+        let one = measureChild(BitfieldRow(lo: 1), proposal: unspecified, context: context)
+        let two = measureChild(BitfieldRow(lo: 2), proposal: unspecified, context: context)
+        #expect(one.width == 1)
+        #expect(two.width == 2)
+        #expect(cache.measureMemoBypasses == bypassesBefore + 2)
+    }
+
+    /// An `AnyView` of a stack holding an `AnyView` …, far deeper than any
+    /// stack. The measure guards its own descent and truncates the chain, but
+    /// hashes each level before it descends, and a level's hash covers every
+    /// level below it: the hash overflowed the stack there (a debug build,
+    /// from a chain 2,000 deep), where the key it replaced — the box's
+    /// address — had nothing to walk. The hash stops when the stack runs low
+    /// now, and a level too deep to hash is measured unkeyed.
+    @Test("An erased chain deeper than the stack is measured and truncated, not overflowed in the hash")
+    func erasedChainDeeperThanTheStack() throws {
+        let context = memoisedContext()
+        let cache = try #require(context.renderCache)
+        var levels = erasedChain(depth: 50_000)
+        defer { releaseFromTheTop(&levels) }
+        let bypassesBefore = cache.measureMemoBypasses
+        let size = measureChild(
+            levels[levels.count - 1], proposal: ProposedSize(width: nil, height: nil), context: context)
+        #expect(size.height > 0)
+        #expect(cache.measureMemoBypasses > bypassesBefore)
+    }
 
     // MARK: Different values stay apart
 

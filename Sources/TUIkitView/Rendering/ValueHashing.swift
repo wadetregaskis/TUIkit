@@ -189,7 +189,12 @@ enum ExistentialField: CustomStringConvertible {
 ///
 /// `package`, for a ``ValueHashOpener`` of a module above this one.
 package func mixOpened<Payload>(_ value: Payload, into hash: inout UInt64, plans: ValueHashPlans) -> Bool {
-    guard plans.hasStackHeadroom else { return false }
+    guard plans.hasStackHeadroom else {
+        #if TUIKIT_VALUE_HASH_CENSUS
+        plans.census.noteStepBypass("too deep to hash: the stack ran low at \(Payload.self)")
+        #endif
+        return false
+    }
     hash = mixHashWord(hash, UInt64(UInt(bitPattern: ObjectIdentifier(Payload.self))))
     return plans.mixValue(value, into: &hash)
 }
@@ -239,6 +244,9 @@ private func mixOpenedAny(_ value: Any, into hash: inout UInt64, plans: ValueHas
 private func mixExistential(
     at pointer: UnsafeRawPointer, staticType: Any.Type, into hash: inout UInt64, plans: ValueHashPlans
 ) -> Bool {
+    #if TUIKIT_VALUE_HASH_CENSUS
+    plans.census.noteCastOpen(staticType)
+    #endif
     func loaded<Existential>(_: Existential.Type) -> Bool {
         mixDynamic(pointer.assumingMemoryBound(to: Existential.self).pointee, into: &hash, plans: plans)
     }
@@ -251,7 +259,12 @@ private func mixExistential(
 /// type again, not its payload's.)
 private func mixDynamic<Existential>(_ value: Existential, into hash: inout UInt64, plans: ValueHashPlans) -> Bool {
     func cast<Payload>(_: Payload.Type) -> Bool {
-        guard let payload = value as? Payload else { return false }
+        guard let payload = value as? Payload else {
+            #if TUIKIT_VALUE_HASH_CENSUS
+            plans.census.noteStepBypass("an existential whose payload did not cast to \(Payload.self)")
+            #endif
+            return false
+        }
         return mixOpened(payload, into: &hash, plans: plans)
     }
     return _openExistential(type(of: value as Any), do: cast)

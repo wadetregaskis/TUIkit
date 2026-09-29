@@ -39,8 +39,8 @@ private struct HintedLeaf: View, Renderable, Layoutable, Equatable {
     }
 }
 
-/// The measure memo is keyed on a view's identity, its type, its raw bytes and
-/// two widths — and deliberately not on the environment. So a container that
+/// The measure memo is keyed on a view's identity, its type, a hash of its value
+/// and two widths — and deliberately not on the environment. So a container that
 /// ASSIGNS an environment value between two measurements of one subtree asks two
 /// questions the key cannot tell apart, and the second is answered by the first.
 ///

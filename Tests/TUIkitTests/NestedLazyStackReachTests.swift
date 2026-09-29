@@ -487,7 +487,8 @@ struct NestedLazyStackReachTests {
         // Twenty groups, 6,190 rows, on the frame after a write: the nested
         // measure ran 182 times and built 50,882 rows before; 102 and 26,122
         // now. Counted by measure as well as by row built, because a row's
-        // measure-memo key carries heap addresses (`viewValueHash`), and a
+        // measure-memo key carries heap addresses (the value hash reads a
+        // closure's and a class reference's as they are), and a
         // freed row's address handed straight back can serve a measure the
         // count would otherwise show.
         let builds = RowBuilds()

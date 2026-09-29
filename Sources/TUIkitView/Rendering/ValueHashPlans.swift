@@ -9,18 +9,20 @@
 
 import TUIkitCore
 
-/// Every ``ValueHashPlan`` one render cache has built, keyed by type.
+/// Every ``ValueHashPlan`` a table has built, keyed by type.
 ///
 /// Looked up once per measured view, so it is shaped for that: open addressing
 /// on the metadata address, linear probing, a power-of-two table kept at most a
 /// quarter full, and inserts only. A plan is allocated on its own and never
 /// moves, so a pointer to one stays good while the table grows under a build.
-/// Built on first sight of a type and kept for the life of the cache: a plan is
-/// a fact about the type, the same in every pass and for every value.
+/// Built on first sight of a type and kept for the life of the table: a plan
+/// is a fact about the type, the same in every pass, for every value and under
+/// every cache.
 ///
-/// Owned by ``RenderCache`` — a table per cache rather than one per process,
-/// so nothing here is shared state. A cache's first frame builds the plans for
-/// the types it meets, a few microseconds each.
+/// So a table is handed to a ``RenderCache`` by whoever makes the cache, and
+/// kept by them — `TUIContext` one per context, `Stress` one for every cache a
+/// `--cold` run makes — rather than one per process: nothing here is shared
+/// state. First sight of a type builds its plan, a few microseconds.
 ///
 /// The table's state is reached through a pointer the class holds as a
 /// constant, so a lookup is loads from memory nothing else aliases — not
@@ -64,6 +66,11 @@ package final class ValueHashPlans {
     private let table: UnsafeMutablePointer<Table>
     private let running: UnsafeMutablePointer<Running>
     private let builder: ValueHashPlanBuilder
+
+    #if TUIKIT_VALUE_HASH_CENSUS
+    /// What the hash did with these plans — see ``ValueHashCensus``.
+    package var census = ValueHashCensus()
+    #endif
 
     /// A table to start with: enough for the few hundred types a large app's
     /// frames measure before it first grows.
@@ -120,7 +127,7 @@ package final class ValueHashPlans {
         }
     }
 
-    /// Builds `type`'s plan and files it. Out of line: once per type per cache.
+    /// Builds `type`'s plan and files it. Out of line: once per type per table.
     @inline(never)
     private func insertPlan(for type: Any.Type, key: UInt) -> UnsafePointer<ValueHashPlan> {
         if (table.pointee.count + 1) * 4 > table.pointee.mask + 1 { grow() }
@@ -286,6 +293,9 @@ extension ValueHashPlans {
             mixDefinedRun(base, from: 0, count: plan.pointee.size, into: &hash)
             return true
         case .bypass:
+            #if TUIKIT_VALUE_HASH_CENSUS
+            census.noteStepBypass(plan.pointee.bypassReason ?? "")
+            #endif
             return false
         case .runs, .steps:
             for run in plan.pointee.runs {

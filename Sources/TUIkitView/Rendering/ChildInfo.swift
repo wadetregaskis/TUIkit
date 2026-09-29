@@ -451,8 +451,13 @@ private func memoizedMeasure<V: View>(
             context.environment.volatileReadTracker === tracker,
             "the pass's volatile-read tracker was installed without mirroring it onto the render "
                 + "cache — install one with EnvironmentValues.installVolatileReadTracker(_:)")
-        let key = measureKey(for: view, proposal: proposal, context: context)
-        if let served = servedMeasure(view, key: key, proposal: proposal, context: context, cache: cache) {
+        // `nil` for a view whose value cannot be hashed without reading bytes
+        // it may leave undefined (see `ValueHashPlan.Shape.bypass`): measured,
+        // and neither looked up nor kept.
+        let key = measureKey(for: view, proposal: proposal, context: context, cache: cache)
+        if let key,
+            let served = servedMeasure(view, key: key, proposal: proposal, context: context, cache: cache)
+        {
             return served
         }
         // The same gate `EquatableView`/`_MemoizedRow` use: a subtree that
@@ -488,7 +493,7 @@ private func memoizedMeasure<V: View>(
             cache.volatileReadTracker = tracker
         }
         let lease = cache.leases.endComputation(leaseMark)
-        if tracker.cacheUnsafeCount == unsafeBefore {
+        if let key, tracker.cacheUnsafeCount == unsafeBefore {
             cache.storeMeasure(
                 key: key,
                 proposalWidthWasSpecified: proposal.width != nil,
@@ -518,32 +523,43 @@ private func memoizedMeasure<V: View>(
 private func measureBeneathProbe<V: View>(
     _ view: V, proposal: ProposedSize, context: RenderContext, cache: RenderCache
 ) -> ViewSize {
-    let key = measureKey(for: view, proposal: proposal, context: context)
-    if let served = servedMeasure(view, key: key, proposal: proposal, context: context, cache: cache) {
+    let key = measureKey(for: view, proposal: proposal, context: context, cache: cache)
+    if let key, let served = servedMeasure(view, key: key, proposal: proposal, context: context, cache: cache) {
         return served
     }
     cache.measuresBeneathProbes += 1
     if cache.probeMissLog != nil {
-        cache.probeMissLog?.append(
-            "\(V.self) \(key); held: \(cache.measureKeys(sharingTypeAndIdentityWith: key))")
+        if let key {
+            cache.probeMissLog?.append(
+                "\(V.self) \(key); held: \(cache.measureKeys(sharingTypeAndIdentityWith: key))")
+        } else {
+            cache.probeMissLog?.append("\(V.self) unhashable")
+        }
     }
     return measureChildUncached(view, proposal: proposal, context: context)
 }
 
-/// This pass's measure-memo key for `view` asked `proposal` in `context`.
+/// This pass's measure-memo key for `view` asked `proposal` in `context`, or
+/// `nil` when `view`'s value cannot be hashed — its type holds something the
+/// value hash cannot read without reading bytes a value may leave undefined —
+/// and the memo must measure it without looking it up or keeping it.
 @inline(__always)
 @MainActor
 private func measureKey<V: View>(
-    for view: V, proposal: ProposedSize, context: RenderContext
-) -> RenderCache.MeasureKey {
-    RenderCache.MeasureKey(
+    for view: V, proposal: ProposedSize, context: RenderContext, cache: RenderCache
+) -> RenderCache.MeasureKey? {
+    guard let valueHash = viewValueHash(view, plans: cache.valueHashPlans) else {
+        cache.noteMeasureMemoBypass()
+        return nil
+    }
+    return RenderCache.MeasureKey(
         identityHash: measureIdentityHash(context),
         effectiveWidth: proposal.width ?? context.availableWidth,
         availableWidth: context.availableWidth,
         hasExplicitWidth: context.hasExplicitWidth,
         hasExplicitHeight: context.hasExplicitHeight,
         viewType: ObjectIdentifier(V.self),
-        valueHash: viewValueHash(view))
+        valueHash: valueHash)
 }
 
 /// What this pass's measure memo holds at `key` for this query, or `nil` when
@@ -927,15 +943,21 @@ package func resolveChildViews<V: View>(
     // for each scrollbar probe, and for the render's own layout — five
     // resolutions of the same content value in one frame, each building a
     // `_MemoizedRow` per element: 26% of a `fanout` frame. Keyed the way the
-    // measure memo is (identity, type, the content's raw bytes), and scratch
+    // measure memo is (identity, type, the content's value hash), and scratch
     // for the pass like it, so a content value that changed is resolved
     // afresh and nothing outlives the walk that could have made it stale.
+    // A content value that cannot be hashed (see `measureKey`) is resolved as
+    // content not worth memoising is: afresh, and kept nowhere.
     guard provider.childViewsAreWorthMemoising, let cache = context.renderCache else {
+        return provider.childViews(context: context)
+    }
+    guard let valueHash = viewValueHash(content, plans: cache.valueHashPlans) else {
+        cache.noteChildViewsMemoBypass()
         return provider.childViews(context: context)
     }
     let key = RenderCache.ChildViewsKey(
         identityHash: context.identity.structuralHash, viewType: ObjectIdentifier(V.self),
-        valueHash: viewValueHash(content))
+        valueHash: valueHash)
     if let remembered = cache.lookupChildViews(key: key) { return remembered }
     // Identities resolved once here, for the same reason the array is: every
     // later use of this entry is under `context.identity` (it is in the key).

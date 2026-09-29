@@ -10,14 +10,15 @@ import Testing
 @testable import TUIkitStyling
 @testable import TUIkitView
 
-/// The per-pass memos key a view by its raw bytes (`viewValueHash`), and a
-/// padding byte is whatever the memory held before — so two equal values can
-/// differ there, and one misses the other's entry. Swift lays out stored
+/// The per-pass memos key a view by a hash of its bytes (`viewValueHash`), and
+/// a padding byte is whatever the memory held before — so two equal values
+/// differed there, and one missed the other's entry, until the hash learned to
+/// skip it; a type with none is still smaller, and read as plain words. Swift lays out stored
 /// properties in declaration order, so the order is what decides whether a
 /// type has any. On Linux a standard button's two cap `Text`s missed the memo
 /// on every probe through exactly these bytes: 7 between `Text.style` and
 /// `Text.runs`, and 2 before `TextStyle.lineLimit`.
-@Suite("Text's layout leaves no bytes for the memos' raw-byte key to read undefined")
+@Suite("Text's layout leaves no undefined bytes for the memos' value hash to skip")
 struct TextLayoutPaddingTests {
     @Test("Text, TextStyle and Color have no padding between their fields")
     func noInteriorPadding() {

@@ -415,6 +415,36 @@ struct ValueHashPlanTests {
         #expect(Set(none).count == 1, "\(none)")
     }
 
+    // MARK: Ownership
+
+    /// A plan is a fact about a type, so the table outlives any one cache: its
+    /// maker hands it to each cache it makes — `Stress --bench --cold` a fresh
+    /// cache every frame — and a type met under one is not planned again
+    /// under the next.
+    @Test("A table handed to several caches plans each type once")
+    func tableOutlivesItsCaches() {
+        let shared = ValueHashPlans()
+        func measureOnce(in cache: RenderCache) {
+            var context = makeRenderContext(width: 40, height: 10)
+            context.environment.renderCache = cache
+            context.renderCache = cache
+            context.environment.installVolatileReadTracker(VolatileReadTracker())
+            _ = measureChild(
+                VStack { Text("one").padding(1); Text("two") }, proposal: ProposedSize(width: nil, height: nil),
+                context: context)
+        }
+        measureOnce(in: RenderCache(valueHashPlans: shared))
+        let planned = shared.count
+        #expect(planned > 0)
+        measureOnce(in: RenderCache(valueHashPlans: shared))
+        #expect(shared.count == planned)
+        // A cache made bare has a table of its own.
+        let bare = RenderCache()
+        measureOnce(in: bare)
+        #expect(bare.valueHashPlans !== shared)
+        #expect(bare.valueHashPlans.count == planned)
+    }
+
     // MARK: Depth
 
     /// An `AnyView` of a stack holding an `AnyView` …, far deeper than any

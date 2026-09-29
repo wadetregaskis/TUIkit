@@ -55,10 +55,10 @@ public struct Color: Sendable, Hashable {
     /// terminal colours), so `Color` is four bytes at alignment 1. A `UInt8`
     /// makes it five, still with no
     /// padding; a `Double` makes it sixteen, aligned to eight, WITH padding
-    /// bytes — and `viewValueHash` hashes the raw bytes of every view struct,
-    /// where padding is undefined. A `Double` alpha would make the render memo's
-    /// key non-deterministic for two identical views. 1/255 steps are also finer
-    /// than the 256-colour cube can show. The public API is `Double`, quantised
+    /// bytes — undefined, which the per-pass memos' value hash would have to
+    /// skip, where a colour with none is read, with everything that holds one
+    /// (a `Text` above all), as plain words. 1/255 steps are also finer than
+    /// the 256-colour cube can show. The public API is `Double`, quantised
     /// on the way in.
     ///
     /// ## What honours it

@@ -346,7 +346,7 @@ final class TUIContext: @unchecked Sendable {
         self.mouseEventDispatcher.dragAndDropSession = self.dragAndDropSession
         self.preferences = PreferenceStorage()
         self.stateStorage = StateStorage()
-        self.renderCache = RenderCache()
+        self.renderCache = RenderCache(valueHashPlans: .tuikit())
         // Point the state storage at this context's cache so a `@State` change
         // (``StateBox/value`` didSet) invalidates the right cache. Without the
         // shared singleton there is no implicit common target — the owner must
@@ -376,7 +376,7 @@ final class TUIContext: @unchecked Sendable {
         mouseEventDispatcher: MouseEventDispatcher = MouseEventDispatcher(),
         preferences: PreferenceStorage,
         stateStorage: StateStorage = StateStorage(),
-        renderCache: RenderCache = RenderCache()
+        renderCache: RenderCache = RenderCache(valueHashPlans: .tuikit())
     ) {
         self.lifecycle = lifecycle
         self.keyEventDispatcher = keyEventDispatcher

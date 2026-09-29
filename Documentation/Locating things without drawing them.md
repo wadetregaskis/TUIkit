@@ -863,9 +863,10 @@ Every count here is rows built — calls of a row's builder — on the frame aft
 a write, and each was the same on every such frame and in three runs of the
 probe that took it. That is the probe's property, not a guarantee. A row is
 built when its measure misses the pass's memo, and the memo keys a row by its
-view's bytes (`viewValueHash`), among them the heap addresses of its `ForEach`
-closure's context and of its element's box; where a freed row's address comes
-straight back, the memo serves a measure the count would otherwise show. So a
+view's value (`viewValueHash`), among it the heap address of its `ForEach`
+closure's context (its element's box is opened, and its content hashed); where
+a freed row's address comes straight back, the memo serves a measure the count
+would otherwise show. So a
 probe whose rows capture differently can read less, and move from frame to
 frame: the forty groups, in a probe whose rows capture less, read anywhere
 from 14,361 to 14,662 across runs, where the probe above read 14,662 on every

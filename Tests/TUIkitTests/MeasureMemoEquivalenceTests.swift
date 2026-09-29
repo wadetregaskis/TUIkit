@@ -278,9 +278,9 @@ struct MeasureMemoEquivalenceTests {
     ///
     /// What it can and cannot claim, said out loud because the case it guards
     /// against is a test that passed while the bug was present. This is a
-    /// PROBABILISTIC guard, not a proof: `viewValueHash` hashes raw storage, and
-    /// a menu row's `ButtonStyleConfiguration` carries an `AnyView` and closures,
-    /// so its bytes include freshly-allocated pointers. Run against the reverted
+    /// PROBABILISTIC guard, not a proof: the value hash reads a closure's words
+    /// as they are, and a menu row's `ButtonStyleConfiguration` carries
+    /// closures, so its hash includes freshly-allocated pointers. Run against the reverted
     /// commit with `measureChild` instrumented, this exact fixture's rows MISSED
     /// on every pass, so the collision never arose and this case passed — while
     /// the same code on the live Example collided forty times in one walk. It

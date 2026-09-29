@@ -46,7 +46,11 @@ swift run -c release Stress -- --bench --scenario fanout --iterations 2000 --col
 `--variants` lists every matrix scenario's variants, grouped by the axis each
 one varies. `--bench` also takes `--iterations N`, `--cols C`, `--rows R`, and `--cold`
 (fresh state + cache each frame → worst-case measure+render, vs the default
-cache-warm steady state).
+cache-warm steady state). What `--cold` does NOT make afresh is the value hash's
+plan table: a plan is a fact about a type, not a memo, so the bench keeps one
+table and hands it to every cache it makes, as an app's `TUIContext` keeps one
+for its own — a cold frame misses every memo, and is not also the first sight
+of every type, which an app pays once.
 
 Interactive keys: `↑/↓` select · `enter` open · `esc` back/quit · `+/−` change
 scale live · `a` toggle autopilot.
@@ -373,6 +377,20 @@ its cost is worth timing on a quiet box. (`churn` is the exception: its hits
 move by about ±1.5% from run to run, the extra ones all on a `Text` rebuilt
 within a pass whose string buffer the allocator happened to hand back at the
 old address — the memos key a value by its bytes, an address among them.)
+`unkeyed` counts the measures and resolutions whose view the value hash
+cannot read (a payload enum that has not opted in, say, or a value nested too deep for the stack to hash — which
+cuts no tree short, so the stack guard's count of descents stopped leaves
+it out): measured or resolved every time, neither looked up nor kept. Build with `-Xswiftc -DTUIKIT_VALUE_HASH_CENSUS` (a scratch path of its
+own saves rebuilding the ordinary one) and `--bench` also prints the value
+hash's census: lookups by the shape of the plan that answered them — dense,
+runs, steps, bypass — and the types behind all but the first. A lookup that
+bypasses through a step names what stopped it inside: an optional's payload
+or an existential's content that bypasses, by its own type, or a value too
+deep for the stack. A last list names the existentials opened by a cast —
+a static type the table has no opener for, whose payload is found by boxing it
+in an `Any` — which is what a `ValueHashOpener` would make cheap. In a
+`--cold` run the census covers every frame, since the table outlives the
+caches.
 
 ```sh
 swift build -c release --product Stress -Xswiftc -g

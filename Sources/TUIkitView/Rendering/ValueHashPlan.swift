@@ -300,7 +300,7 @@ struct ValueHashPlanBuilder {
         case .enum where size <= 1:
             items.append(.bytes(offset: base, count: size, leaf: .smallEnum))
         case .enum:
-            throw Bypass(reason: "\(path()): a payload enum")
+            throw Bypass(reason: "\(path()): a payload enum, \(type)")
         case .existential:
             items.append(.step(.init(offset: base, action: .existential(ExistentialField(type, openers: openers)))))
         default:

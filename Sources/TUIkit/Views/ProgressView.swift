@@ -71,7 +71,8 @@ import Foundation
 /// is provided, the view is 2 lines tall; otherwise 1 line.
 public struct ProgressView<Label: View, CurrentValueLabel: View>: View {
     // Declared so the common shape has no padding: the per-pass memos key a
-    // view by its raw bytes, and padding is whatever the memory held before.
+    // view by a hash of its bytes, and padding is whatever the memory held
+    // before — skipped by the hash, where a type with none is plain words.
     // The fraction was a `Double?`, nine bytes at eight-byte alignment, which
     // left seven undefined bytes before the style; stored as a `Double` and a
     // flag, and the flag placed after the style's odd 79 bytes, a bar with no

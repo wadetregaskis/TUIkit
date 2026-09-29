@@ -47,10 +47,10 @@ private struct FadedSlotPalette: Palette {
 @Suite("Colour alpha storage")
 struct ColourAlphaStorageTests {
 
-    /// Padding-free, because `viewValueHash` hashes the raw bytes of every view
-    /// struct and views hold `Color`s. A `Double` alpha would align the struct to
-    /// eight and introduce padding, whose contents are undefined — making the
-    /// render memo's key non-deterministic for two identical views.
+    /// Padding-free, so the per-pass memos' value hash reads a colour — and
+    /// every view holding one — as plain words. A `Double` alpha would align
+    /// the struct to eight and introduce padding, whose contents are undefined
+    /// and which the hash would have to skip.
     @Test("Color stays padding-free")
     func layoutHasNoPadding() {
         #expect(MemoryLayout<Color>.size == 5, "got \(MemoryLayout<Color>.size)")

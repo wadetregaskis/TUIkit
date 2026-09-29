@@ -180,7 +180,7 @@ extension RenderCache {
         /// This is the same bargain ``valueHash`` already strikes one field
         /// down, with the same shape of failure: a collision would need two
         /// distinct identity paths to hash identically *within one pass* AND to
-        /// carry the same view type, the same value bytes and the same two
+        /// carry the same view type, the same value hash and the same two
         /// widths — and it would show as one frame sized from a twin, never as
         /// aliased state, because nothing here outlives the pass.
         /// The identity's structural hash — with the measure generation folded
@@ -196,7 +196,7 @@ extension RenderCache {
         ///
         /// The bargain is the one this field already strikes: a wrong answer
         /// needs two distinct (identity, generation) pairs to hash identically
-        /// WITHIN one pass and to carry the same view type, the same value bytes
+        /// WITHIN one pass and to carry the same view type, the same value hash
         /// and the same two widths.
         let identityHash: Int
         let effectiveWidth: Int
@@ -204,29 +204,54 @@ extension RenderCache {
         let hasExplicitWidth: Bool
         let hasExplicitHeight: Bool
         let viewType: ObjectIdentifier
-        /// A hash of the view value's raw bytes — the discriminator that makes
-        /// this memo sound.
+        /// A hash of the view's value — the discriminator that makes this memo
+        /// sound. `viewValueHash(_:plans:)`.
         ///
         /// Identity + type + proposal is *not* enough: two different view
         /// values can share an identity within one pass (a transparent wrapper
-        /// descends under its parent's identity), and without this the memo
-        /// serves the first one's size for the second.
+        /// descends under its parent's identity, and a `Form` measures every
+        /// label at its own), and without this the memo serves the first one's
+        /// size for the second.
         ///
-        /// Raw bytes work here for a reason that does **not** hold across
-        /// frames. The cross-frame byte key was abandoned because `@State`,
-        /// `@Environment`, `Binding` and existential boxes each embed a
-        /// freshly-allocated pointer every frame, so nothing ever matched.
-        /// Within a single pass those allocations are fixed: the same view
-        /// value, copied down the tree, has byte-identical storage including
-        /// its pointers. Two *different* values differ in the bytes that make
-        /// them different.
+        /// It hashes the bytes the value DEFINES, by the type's
+        /// ``ValueHashPlan``, and never any other: not a struct's padding, not
+        /// an enum's inactive payload, not the half of an optional its `nil`
+        /// leaves unwritten, not the unused words of an existential's buffer.
+        /// Those hold whatever the memory held before, so reading them split
+        /// equal values — differently by platform and run: Linux missed where
+        /// macOS hit — and was reading uninitialised memory. What typed Swift
+        /// must read (an optional's case, a conditional's branch, an
+        /// existential's payload and its type) typed Swift reads; a view whose
+        /// type holds something neither can read — a payload enum that has not
+        /// opted in, a metatype, which a struct may store in no bytes, or a
+        /// tuple the plan could not read whole, which may hide one — has no
+        /// hash, and is measured and not kept, as is a value nested through
+        /// its existentials too deep for the stack to hash.
         ///
-        /// The failure mode is asymmetric, which is what makes it safe. Struct
-        /// padding and enum payload slack are undefined bytes; when they differ
-        /// the lookup **misses** and the view is measured again — correct, just
-        /// not saved. A false *hit* would need two different values to hash
-        /// identically, i.e. a 64-bit collision among the few hundred entries a
-        /// pass stores.
+        /// Bytes work here for a reason that does **not** hold across frames.
+        /// The cross-frame byte key was abandoned because `@State`,
+        /// `@Environment`, `Binding` and closures each embed a freshly-allocated
+        /// pointer every frame, so nothing ever matched. Within a single pass
+        /// those allocations are fixed: the same view value, copied down the
+        /// tree, has the same defined bytes, its pointers included. Two
+        /// *different* values differ in the bytes, cases or types that make them
+        /// different — the plan mixes a case before its payload and an opened
+        /// existential's type before its value, so its encoding of a type's
+        /// values is unambiguous.
+        ///
+        /// The failure mode is asymmetric, which is what makes it safe — with
+        /// one exception. Equal values whose defined bytes differ (a class
+        /// reference, a closure, a string stored two ways) **miss**, and the
+        /// view is measured again — correct, just not saved. A false *hit*
+        /// needs two different values to hash identically: a 64-bit collision
+        /// among the few hundred entries a pass stores — or, with no collision
+        /// at all, an ADDRESS, which names a value only while that value lives.
+        /// A class instance or a closure's context freed during a pass can have
+        /// its address handed straight back to the next allocation, and a view
+        /// holding the newcomer has the old view's bytes (Performance-profile
+        /// §60, §62: still open for references and closures). An erased view's
+        /// box, the one such address §60 found in a key, is never hashed: its
+        /// content is.
         let valueHash: Int
 
         /// The six fields folded into one word before `Hasher` sees any of them
@@ -265,7 +290,7 @@ extension RenderCache {
 
     /// A stack's resolved children for the pass — see
     /// `resolveChildViews(from:context:)`. The identity's hash plus the
-    /// content's type and raw bytes, like ``MeasureKey`` without a proposal:
+    /// content's type and value hash, like ``MeasureKey`` without a proposal:
     /// which children a content value has does not depend on the space it is
     /// offered.
     public struct ChildViewsKey: Hashable {
