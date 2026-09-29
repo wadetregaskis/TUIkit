@@ -84,11 +84,13 @@ it.
 |-------|------------|--------|
 | Focused + Selected | Pulsing accent | `●` in the accent |
 | Focused only (the cursor row) | Pulsing focus wash | blank |
-| Selected only (control unfocused) | Subtle accent | `●`, dimmed |
+| Selected, not the cursor row | Subtle accent, still | `●`, dimmed |
 | Neither | Default | blank |
 
 So a control with no selection draws no mark on any row: being under the
-cursor is not being chosen. `.unfocusedSelectionVisibility(.hidden)`
+cursor is not being chosen. The subtle accent is what says "selected" where the
+mark is hidden (`.rowSelectionIndicator(.hidden)`) — a `Table` drew no fill
+there until 2026-09-29, so its selected rows away from the cursor showed nothing. `.unfocusedSelectionVisibility(.hidden)`
 collapses the third row of that table into the fourth — background and mark
 together — for a transient list where an ambient highlight is more noise
 than signal.

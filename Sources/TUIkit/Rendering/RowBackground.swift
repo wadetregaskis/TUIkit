@@ -107,8 +107,8 @@ enum RowBackground {
     ///
     /// Such a row repeats what the ● beside it and the cursor row already say. Reversed
     /// it would read as a second cursor, so where its tint has no RGB it is left
-    /// unfilled — which is what a `Table` has always drawn for a selected row it does
-    /// not have the cursor on.
+    /// unfilled, its ● alone saying it is selected. `_ListCore` and `Table` both ask
+    /// this for a selected row the cursor is not on.
     static func tint(_ highlight: HighlightFill) -> Self {
         guard case .fill(let color) = highlight else { return .none }
         return .fixed(color)

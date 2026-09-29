@@ -4248,10 +4248,16 @@ where Value.ID: Hashable {
                 // the wash cannot be measured — the same answer `_ListCore` takes for
                 // the same row, from the same place.
                 .focused(in: context, palette: palette)
+            } else if isSelected && context.environment.unfocusedSelectionVisibility != .hidden {
+                // A selected row the cursor is not on: the still tint of the accent a
+                // `List` gives it, from the same place, and nothing where that tint
+                // cannot be measured (``RowBackground/tint(_:)``) — the ● beside it
+                // says it is selected. A table used to draw no fill here, so under
+                // `.rowSelectionIndicator(.hidden)` its selected rows showed nothing
+                // at all. `unfocusedSelectionVisibility(.hidden)` suppresses it, as it
+                // does the List's.
+                .tint(palette.selectedRowFill())
             } else {
-                // A selected row while the table itself does not have focus
-                // draws its mark and no fill; `.hidden` suppresses both, and
-                // the indicator has already agreed to that.
                 .none
             }
         return (indicator.glyph, indicator.color, background)

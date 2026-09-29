@@ -4136,8 +4136,8 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
                         palette: palette)
                 }
                 // A tint of the accent, and nothing at all where that tint cannot be
-                // measured: the ● beside the row says it is selected, which is how a
-                // `Table` has always drawn a selected row it has no cursor on.
+                // measured: the ● beside the row says it is selected. `Table` asks the
+                // same for the same row.
                 return .tint(palette.selectedRowFill())
             } else {
                 return alternatingBackgroundIfAny(

@@ -224,6 +224,32 @@ struct CursorRowBreathTests {
         #expect(back.runs.contains { $0.offsetY == line }, "focus-in did not bring the breath back")
     }
 
+    // MARK: - A selected row the cursor is not on
+
+    /// A still selected row the cursor is not on (S) draws the selected-row tint in a
+    /// `List` and in a `Table` alike, with the ● shown or hidden: under
+    /// `.rowSelectionIndicator(.hidden)` the tint is all that says it is selected. A
+    /// `Table` drew no fill there, so its selected rows under `.hidden` showed nothing.
+    @Test(
+        "A selected row the cursor is not on draws the selected-row tint, with the ● or without",
+        arguments: ReversedCursorRowTests.Kind.allCases, [Visibility.automatic, .hidden])
+    func selectedRowOffTheCursorIsTinted(kind: ReversedCursorRowTests.Kind, indicator: Visibility) throws {
+        let palette = CursorRowBreathApp.palette
+        let active = try settled(
+            CursorRowBreathApp(kind: kind, selection: [0, 2], indicator: indicator, palette: palette)
+        ).frame
+        guard case .fill(let tint) = palette.selectedRowFill() else {
+            Issue.record("the premise: the palette's selected-row tint is a fill")
+            return
+        }
+        #expect(
+            try #require(sgrState(of: "row 2", in: active.lines)).renderedBackground == renderedBackground(of: tint),
+            "\(kind), \(indicator): row 2 is selected and not the cursor")
+        #expect(
+            try #require(sgrState(of: "row 1", in: active.lines)).renderedBackground != renderedBackground(of: tint),
+            "\(kind), \(indicator): row 1 is not selected")
+    }
+
     // MARK: - A translucent wash
 
     /// A wash the palette states translucent is spent over the page by the breath, at
