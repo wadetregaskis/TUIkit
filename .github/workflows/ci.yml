@@ -184,8 +184,10 @@ jobs:
       # Not parity, but the same kind of check and a free ride on a job that
       # already has Python: the shipped palettes' row fills are generated from
       # Tools/RowFillValues/values.json, and a hand edit to either side alone
-      # would ship a look nobody chose.
-      - name: Row fill table is generated from its values
+      # would ship a look nobody chose. Likewise the runtime rule's goldens,
+      # which are its reference's (rule.py) answers: a change to the Swift rule
+      # alone fails its tests, and to rule.py alone fails here.
+      - name: Row fill table and rule goldens are generated from their sources
         run: python3 Tools/RowFillValues/generate.py --check
 
   # ── macOS ──────────────────────────────────────────────────────────────────

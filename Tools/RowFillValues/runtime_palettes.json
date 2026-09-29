@@ -1,0 +1,1778 @@
+{
+ "about": "Palettes that arrive at runtime, with the colours the row-fill rule reads (page, text, secondary text, accent; alpha already spent over the page). From the 2026-09-29 design: custom palettes, the tinted shipped palettes, real terminal themes as LiveTerminalPalette reports them (live: their page and text are the terminal's own, never quantised; table: the sixteen slots they report), and the shipped palettes run as if custom. rule.py's answers for them are RowFillRuleTests' goldens.",
+ "palettes": [
+  {
+   "name": "dark-black-h0-v",
+   "group": "v4-custom",
+   "live": false,
+   "page": "0A0A0A",
+   "text": "E6E6E6",
+   "secondary": "E6E6E6",
+   "accent": "F04C4C"
+  },
+  {
+   "name": "dark-black-h95-s",
+   "group": "v4-custom",
+   "live": false,
+   "page": "0A0A0A",
+   "text": "E6E6E6",
+   "secondary": "E6E6E6",
+   "accent": "98C577"
+  },
+  {
+   "name": "dark-black-h215-v",
+   "group": "v4-custom",
+   "live": false,
+   "page": "0A0A0A",
+   "text": "86AFEA",
+   "secondary": "86AFEA",
+   "accent": "4C90F0"
+  },
+  {
+   "name": "dark-ink-h35-v",
+   "group": "v4-custom",
+   "live": false,
+   "page": "12141C",
+   "text": "E6E6E6",
+   "secondary": "E6E6E6",
+   "accent": "F0AC4C"
+  },
+  {
+   "name": "dark-ink-h140-s",
+   "group": "v4-custom",
+   "live": false,
+   "page": "12141C",
+   "text": "E6E6E6",
+   "secondary": "E6E6E6",
+   "accent": "77C591"
+  },
+  {
+   "name": "dark-ink-h250-v",
+   "group": "v4-custom",
+   "live": false,
+   "page": "12141C",
+   "text": "9686EA",
+   "secondary": "9686EA",
+   "accent": "674CF0"
+  },
+  {
+   "name": "dark-grey-h60-v",
+   "group": "v4-custom",
+   "live": false,
+   "page": "202022",
+   "text": "E6E6E6",
+   "secondary": "E6E6E6",
+   "accent": "F0F04C"
+  },
+  {
+   "name": "dark-grey-h185-s",
+   "group": "v4-custom",
+   "live": false,
+   "page": "202022",
+   "text": "E6E6E6",
+   "secondary": "E6E6E6",
+   "accent": "77BEC5"
+  },
+  {
+   "name": "dark-grey-h285-v",
+   "group": "v4-custom",
+   "live": false,
+   "page": "202022",
+   "text": "D186EA",
+   "secondary": "D186EA",
+   "accent": "C74CF0"
+  },
+  {
+   "name": "dark-plum-h0-v",
+   "group": "v4-custom",
+   "live": false,
+   "page": "280C34",
+   "text": "E6E6E6",
+   "secondary": "E6E6E6",
+   "accent": "F04C4C"
+  },
+  {
+   "name": "dark-plum-h95-s",
+   "group": "v4-custom",
+   "live": false,
+   "page": "280C34",
+   "text": "E6E6E6",
+   "secondary": "E6E6E6",
+   "accent": "98C577"
+  },
+  {
+   "name": "dark-plum-h215-v",
+   "group": "v4-custom",
+   "live": false,
+   "page": "280C34",
+   "text": "86AFEA",
+   "secondary": "86AFEA",
+   "accent": "4C90F0"
+  },
+  {
+   "name": "light-white-h60-v",
+   "group": "v4-custom",
+   "live": false,
+   "page": "FFFFFF",
+   "text": "141414",
+   "secondary": "141414",
+   "accent": "989810"
+  },
+  {
+   "name": "light-white-h185-s",
+   "group": "v4-custom",
+   "live": false,
+   "page": "FFFFFF",
+   "text": "141414",
+   "secondary": "141414",
+   "accent": "468A91"
+  },
+  {
+   "name": "light-white-h285-v",
+   "group": "v4-custom",
+   "live": false,
+   "page": "FFFFFF",
+   "text": "421452",
+   "secondary": "421452",
+   "accent": "9615C1"
+  },
+  {
+   "name": "light-paper-h0-v",
+   "group": "v4-custom",
+   "live": false,
+   "page": "F5F0E6",
+   "text": "141414",
+   "secondary": "141414",
+   "accent": "C11515"
+  },
+  {
+   "name": "light-paper-h95-s",
+   "group": "v4-custom",
+   "live": false,
+   "page": "F5F0E6",
+   "text": "141414",
+   "secondary": "141414",
+   "accent": "659146"
+  },
+  {
+   "name": "light-paper-h215-v",
+   "group": "v4-custom",
+   "live": false,
+   "page": "F5F0E6",
+   "text": "142E52",
+   "secondary": "142E52",
+   "accent": "155DC1"
+  },
+  {
+   "name": "light-mist-h35-v",
+   "group": "v4-custom",
+   "live": false,
+   "page": "E0E2E6",
+   "text": "141414",
+   "secondary": "141414",
+   "accent": "B37013"
+  },
+  {
+   "name": "light-mist-h140-s",
+   "group": "v4-custom",
+   "live": false,
+   "page": "E0E2E6",
+   "text": "141414",
+   "secondary": "141414",
+   "accent": "448E5D"
+  },
+  {
+   "name": "light-mist-h250-v",
+   "group": "v4-custom",
+   "live": false,
+   "page": "E0E2E6",
+   "text": "1F1452",
+   "secondary": "1F1452",
+   "accent": "3215C1"
+  },
+  {
+   "name": "light-sky-h60-v",
+   "group": "v4-custom",
+   "live": false,
+   "page": "E8F4FF",
+   "text": "141414",
+   "secondary": "141414",
+   "accent": "8E8E0F"
+  },
+  {
+   "name": "light-sky-h185-s",
+   "group": "v4-custom",
+   "live": false,
+   "page": "E8F4FF",
+   "text": "141414",
+   "secondary": "141414",
+   "accent": "468A91"
+  },
+  {
+   "name": "light-sky-h285-v",
+   "group": "v4-custom",
+   "live": false,
+   "page": "E8F4FF",
+   "text": "421452",
+   "secondary": "421452",
+   "accent": "9615C1"
+  },
+  {
+   "name": "mid-slate-h30",
+   "group": "v4-custom",
+   "live": false,
+   "page": "707680",
+   "text": "000000",
+   "secondary": "000000",
+   "accent": "402407"
+  },
+  {
+   "name": "mid-slate-h200",
+   "group": "v4-custom",
+   "live": false,
+   "page": "707680",
+   "text": "000000",
+   "secondary": "000000",
+   "accent": "073045"
+  },
+  {
+   "name": "mid-slate-h300",
+   "group": "v4-custom",
+   "live": false,
+   "page": "707680",
+   "text": "000000",
+   "secondary": "000000",
+   "accent": "4E084E"
+  },
+  {
+   "name": "mid-azure-h30",
+   "group": "v4-custom",
+   "live": false,
+   "page": "2864C8",
+   "text": "FFFFFF",
+   "secondary": "FFFFFF",
+   "accent": "F5CCA3"
+  },
+  {
+   "name": "mid-azure-h200",
+   "group": "v4-custom",
+   "live": false,
+   "page": "2864C8",
+   "text": "FFFFFF",
+   "secondary": "FFFFFF",
+   "accent": "A3DAF5"
+  },
+  {
+   "name": "mid-azure-h300",
+   "group": "v4-custom",
+   "live": false,
+   "page": "2864C8",
+   "text": "FFFFFF",
+   "secondary": "FFFFFF",
+   "accent": "F5A3F5"
+  },
+  {
+   "name": "dark-black-greyaccent",
+   "group": "v4-custom",
+   "live": false,
+   "page": "0C0C0C",
+   "text": "DCDCDC",
+   "secondary": "DCDCDC",
+   "accent": "8C8E96"
+  },
+  {
+   "name": "light-white-greyaccent",
+   "group": "v4-custom",
+   "live": false,
+   "page": "FFFFFF",
+   "text": "141414",
+   "secondary": "141414",
+   "accent": "6E7076"
+  },
+  {
+   "name": "dark-ink-greyaccent-bluish",
+   "group": "v4-custom",
+   "live": false,
+   "page": "12141C",
+   "text": "C8CDD7",
+   "secondary": "C8CDD7",
+   "accent": "788096"
+  },
+  {
+   "name": "light-paper-greyaccent",
+   "group": "v4-custom",
+   "live": false,
+   "page": "F5F0E6",
+   "text": "28241E",
+   "secondary": "28241E",
+   "accent": "787268"
+  },
+  {
+   "name": "phosphor-cyan",
+   "group": "v4-custom",
+   "live": false,
+   "page": "050A0A",
+   "text": "00EAFF",
+   "secondary": "00EAFF",
+   "accent": "4DF0FF"
+  },
+  {
+   "name": "phosphor-pink",
+   "group": "v4-custom",
+   "live": false,
+   "page": "0A0508",
+   "text": "F655A6",
+   "secondary": "F655A6",
+   "accent": "FC83BF"
+  },
+  {
+   "name": "live-apple-basic",
+   "group": "v4-live",
+   "live": true,
+   "page": "FFFFFF",
+   "text": "000000",
+   "secondary": "404040",
+   "accent": "0000B3",
+   "table": [
+    "000000",
+    "990000",
+    "00A600",
+    "999900",
+    "0000B3",
+    "B300B3",
+    "00A6B3",
+    "BFBFBF",
+    "666666",
+    "E60000",
+    "00D900",
+    "E6E600",
+    "0000FF",
+    "E600E6",
+    "00E6E6",
+    "E6E6E6"
+   ]
+  },
+  {
+   "name": "live-xterm-light",
+   "group": "v4-live",
+   "live": true,
+   "page": "FFFFFF",
+   "text": "000000",
+   "secondary": "404040",
+   "accent": "0000EE",
+   "table": [
+    "000000",
+    "CD0000",
+    "00CD00",
+    "CDCD00",
+    "0000EE",
+    "CD00CD",
+    "00CDCD",
+    "E5E5E5",
+    "7F7F7F",
+    "FF0000",
+    "00FF00",
+    "FFFF00",
+    "5C5CFF",
+    "FF00FF",
+    "00FFFF",
+    "FFFFFF"
+   ]
+  },
+  {
+   "name": "live-xterm-dark",
+   "group": "v4-live",
+   "live": true,
+   "page": "000000",
+   "text": "E5E5E5",
+   "secondary": "ACACAC",
+   "accent": "0000EE",
+   "table": [
+    "000000",
+    "CD0000",
+    "00CD00",
+    "CDCD00",
+    "0000EE",
+    "CD00CD",
+    "00CDCD",
+    "E5E5E5",
+    "7F7F7F",
+    "FF0000",
+    "00FF00",
+    "FFFF00",
+    "5C5CFF",
+    "FF00FF",
+    "00FFFF",
+    "FFFFFF"
+   ]
+  },
+  {
+   "name": "live-iterm2-dark",
+   "group": "v4-live",
+   "live": true,
+   "page": "000000",
+   "text": "C7C7C7",
+   "secondary": "959595",
+   "accent": "0225C7",
+   "table": [
+    "000000",
+    "C91B00",
+    "00C200",
+    "C7C400",
+    "0225C7",
+    "CA30C7",
+    "00C5C7",
+    "C7C7C7",
+    "686868",
+    "FF6E67",
+    "5FFA68",
+    "FFFC67",
+    "6871FF",
+    "FF77FF",
+    "60FDFF",
+    "FFFFFF"
+   ]
+  },
+  {
+   "name": "tint-Green-red",
+   "group": "tint",
+   "live": false,
+   "page": "050A05",
+   "text": "33FF33",
+   "secondary": "27C427",
+   "accent": "FF3B30"
+  },
+  {
+   "name": "tint-Green-green",
+   "group": "tint",
+   "live": false,
+   "page": "050A05",
+   "text": "33FF33",
+   "secondary": "27C427",
+   "accent": "34C759"
+  },
+  {
+   "name": "tint-Green-blue",
+   "group": "tint",
+   "live": false,
+   "page": "050A05",
+   "text": "33FF33",
+   "secondary": "27C427",
+   "accent": "007AFF"
+  },
+  {
+   "name": "tint-Green-orange",
+   "group": "tint",
+   "live": false,
+   "page": "050A05",
+   "text": "33FF33",
+   "secondary": "27C427",
+   "accent": "FF9500"
+  },
+  {
+   "name": "tint-Amber-red",
+   "group": "tint",
+   "live": false,
+   "page": "0A0805",
+   "text": "FFAA00",
+   "secondary": "CC8800",
+   "accent": "FF3B30"
+  },
+  {
+   "name": "tint-Amber-green",
+   "group": "tint",
+   "live": false,
+   "page": "0A0805",
+   "text": "FFAA00",
+   "secondary": "CC8800",
+   "accent": "34C759"
+  },
+  {
+   "name": "tint-Amber-blue",
+   "group": "tint",
+   "live": false,
+   "page": "0A0805",
+   "text": "FFAA00",
+   "secondary": "CC8800",
+   "accent": "007AFF"
+  },
+  {
+   "name": "tint-Amber-orange",
+   "group": "tint",
+   "live": false,
+   "page": "0A0805",
+   "text": "FFAA00",
+   "secondary": "CC8800",
+   "accent": "FF9500"
+  },
+  {
+   "name": "tint-Basic-red",
+   "group": "tint",
+   "live": false,
+   "page": "FFFFFF",
+   "text": "000000",
+   "secondary": "404040",
+   "accent": "FF3B30"
+  },
+  {
+   "name": "tint-Basic-green",
+   "group": "tint",
+   "live": false,
+   "page": "FFFFFF",
+   "text": "000000",
+   "secondary": "404040",
+   "accent": "2CA74B"
+  },
+  {
+   "name": "tint-Basic-blue",
+   "group": "tint",
+   "live": false,
+   "page": "FFFFFF",
+   "text": "000000",
+   "secondary": "404040",
+   "accent": "007AFF"
+  },
+  {
+   "name": "tint-Basic-orange",
+   "group": "tint",
+   "live": false,
+   "page": "FFFFFF",
+   "text": "000000",
+   "secondary": "404040",
+   "accent": "D67D00"
+  },
+  {
+   "name": "tint-Novel-red",
+   "group": "tint",
+   "live": false,
+   "page": "DFDBC3",
+   "text": "4D2F2D",
+   "secondary": "725A53",
+   "accent": "F70D00"
+  },
+  {
+   "name": "tint-Novel-green",
+   "group": "tint",
+   "live": false,
+   "page": "DFDBC3",
+   "text": "4D2F2D",
+   "secondary": "725A53",
+   "accent": "248A3E"
+  },
+  {
+   "name": "tint-Novel-blue",
+   "group": "tint",
+   "live": false,
+   "page": "DFDBC3",
+   "text": "4D2F2D",
+   "secondary": "725A53",
+   "accent": "0075F5"
+  },
+  {
+   "name": "tint-Novel-orange",
+   "group": "tint",
+   "live": false,
+   "page": "DFDBC3",
+   "text": "4D2F2D",
+   "secondary": "725A53",
+   "accent": "B36800"
+  },
+  {
+   "name": "k-sat0",
+   "group": "critic-custom",
+   "live": false,
+   "page": "0C0C0C",
+   "text": "E1E1E1",
+   "secondary": "E1E1E1",
+   "accent": "F43434"
+  },
+  {
+   "name": "k-sat120",
+   "group": "critic-custom",
+   "live": false,
+   "page": "0C0C0C",
+   "text": "E1E1E1",
+   "secondary": "E1E1E1",
+   "accent": "44E444"
+  },
+  {
+   "name": "k-neargrey220",
+   "group": "critic-custom",
+   "live": false,
+   "page": "0C0C0C",
+   "text": "E1E1E1",
+   "secondary": "E1E1E1",
+   "accent": "89909F"
+  },
+  {
+   "name": "k-lowtext-sat220",
+   "group": "critic-custom",
+   "live": false,
+   "page": "0C0C0C",
+   "text": "787878",
+   "secondary": "787878",
+   "accent": "3976EF"
+  },
+  {
+   "name": "k-washhue-sat120",
+   "group": "critic-custom",
+   "live": false,
+   "page": "0C0C0C",
+   "text": "E1E1E1",
+   "secondary": "E1E1E1",
+   "accent": "44E444"
+  },
+  {
+   "name": "k-rawacc-sat0",
+   "group": "critic-custom",
+   "live": false,
+   "page": "0C0C0C",
+   "text": "E1E1E1",
+   "secondary": "E1E1E1",
+   "accent": "F20D0D"
+  },
+  {
+   "name": "navy-sat30",
+   "group": "critic-custom",
+   "live": false,
+   "page": "1A1C2E",
+   "text": "D2D6E6",
+   "secondary": "D2D6E6",
+   "accent": "F5993D"
+  },
+  {
+   "name": "navy-sat180",
+   "group": "critic-custom",
+   "live": false,
+   "page": "1A1C2E",
+   "text": "D2D6E6",
+   "secondary": "D2D6E6",
+   "accent": "4CE6E6"
+  },
+  {
+   "name": "navy-neargrey270",
+   "group": "critic-custom",
+   "live": false,
+   "page": "1A1C2E",
+   "text": "D2D6E6",
+   "secondary": "D2D6E6",
+   "accent": "998FA3"
+  },
+  {
+   "name": "navy-lowtext-sat270",
+   "group": "critic-custom",
+   "live": false,
+   "page": "1A1C2E",
+   "text": "767A96",
+   "secondary": "767A96",
+   "accent": "9942F0"
+  },
+  {
+   "name": "navy-washhue-sat180",
+   "group": "critic-custom",
+   "live": false,
+   "page": "1A1C2E",
+   "text": "D2D6E6",
+   "secondary": "D2D6E6",
+   "accent": "4CE6E6"
+  },
+  {
+   "name": "navy-rawacc-sat30",
+   "group": "critic-custom",
+   "live": false,
+   "page": "1A1C2E",
+   "text": "D2D6E6",
+   "secondary": "D2D6E6",
+   "accent": "F2800D"
+  },
+  {
+   "name": "brown-sat60",
+   "group": "critic-custom",
+   "live": false,
+   "page": "281E14",
+   "text": "EBDCBE",
+   "secondary": "EBDCBE",
+   "accent": "F4F434"
+  },
+  {
+   "name": "brown-sat220",
+   "group": "critic-custom",
+   "live": false,
+   "page": "281E14",
+   "text": "EBDCBE",
+   "secondary": "EBDCBE",
+   "accent": "4479E4"
+  },
+  {
+   "name": "brown-neargrey320",
+   "group": "critic-custom",
+   "live": false,
+   "page": "281E14",
+   "text": "EBDCBE",
+   "secondary": "EBDCBE",
+   "accent": "9F8997"
+  },
+  {
+   "name": "brown-lowtext-sat320",
+   "group": "critic-custom",
+   "live": false,
+   "page": "281E14",
+   "text": "8C785F",
+   "secondary": "8C785F",
+   "accent": "EF39B2"
+  },
+  {
+   "name": "brown-washhue-sat220",
+   "group": "critic-custom",
+   "live": false,
+   "page": "281E14",
+   "text": "EBDCBE",
+   "secondary": "EBDCBE",
+   "accent": "4479E4"
+  },
+  {
+   "name": "brown-rawacc-sat60",
+   "group": "critic-custom",
+   "live": false,
+   "page": "281E14",
+   "text": "EBDCBE",
+   "secondary": "EBDCBE",
+   "accent": "F2F20D"
+  },
+  {
+   "name": "dgreen-sat120",
+   "group": "critic-custom",
+   "live": false,
+   "page": "12281C",
+   "text": "C8EBD2",
+   "secondary": "C8EBD2",
+   "accent": "34F434"
+  },
+  {
+   "name": "dgreen-sat270",
+   "group": "critic-custom",
+   "live": false,
+   "page": "12281C",
+   "text": "C8EBD2",
+   "secondary": "C8EBD2",
+   "accent": "9444E4"
+  },
+  {
+   "name": "dgreen-neargrey0",
+   "group": "critic-custom",
+   "live": false,
+   "page": "12281C",
+   "text": "C8EBD2",
+   "secondary": "C8EBD2",
+   "accent": "9F8989"
+  },
+  {
+   "name": "dgreen-lowtext-sat0",
+   "group": "critic-custom",
+   "live": false,
+   "page": "12281C",
+   "text": "698C73",
+   "secondary": "698C73",
+   "accent": "EF3939"
+  },
+  {
+   "name": "dgreen-washhue-sat270",
+   "group": "critic-custom",
+   "live": false,
+   "page": "12281C",
+   "text": "C8EBD2",
+   "secondary": "C8EBD2",
+   "accent": "9444E4"
+  },
+  {
+   "name": "dgreen-rawacc-sat120",
+   "group": "critic-custom",
+   "live": false,
+   "page": "12281C",
+   "text": "C8EBD2",
+   "secondary": "C8EBD2",
+   "accent": "0DF20D"
+  },
+  {
+   "name": "w-sat180",
+   "group": "critic-custom",
+   "live": false,
+   "page": "FAFAFA",
+   "text": "191919",
+   "secondary": "191919",
+   "accent": "08A0A0"
+  },
+  {
+   "name": "w-sat320",
+   "group": "critic-custom",
+   "live": false,
+   "page": "FAFAFA",
+   "text": "191919",
+   "secondary": "191919",
+   "accent": "B3197F"
+  },
+  {
+   "name": "w-neargrey30",
+   "group": "critic-custom",
+   "live": false,
+   "page": "FAFAFA",
+   "text": "191919",
+   "secondary": "191919",
+   "accent": "70665C"
+  },
+  {
+   "name": "w-lowtext-sat30",
+   "group": "critic-custom",
+   "live": false,
+   "page": "FAFAFA",
+   "text": "787878",
+   "secondary": "787878",
+   "accent": "BD660F"
+  },
+  {
+   "name": "w-washhue-sat320",
+   "group": "critic-custom",
+   "live": false,
+   "page": "FAFAFA",
+   "text": "191919",
+   "secondary": "191919",
+   "accent": "B3197F"
+  },
+  {
+   "name": "w-rawacc-sat180",
+   "group": "critic-custom",
+   "live": false,
+   "page": "FAFAFA",
+   "text": "191919",
+   "secondary": "191919",
+   "accent": "0DF2F2"
+  },
+  {
+   "name": "cream-sat220",
+   "group": "critic-custom",
+   "live": false,
+   "page": "F2ECDC",
+   "text": "32281E",
+   "secondary": "32281E",
+   "accent": "0A47C2"
+  },
+  {
+   "name": "cream-sat0",
+   "group": "critic-custom",
+   "live": false,
+   "page": "F2ECDC",
+   "text": "32281E",
+   "secondary": "32281E",
+   "accent": "B31919"
+  },
+  {
+   "name": "cream-neargrey60",
+   "group": "critic-custom",
+   "live": false,
+   "page": "F2ECDC",
+   "text": "32281E",
+   "secondary": "32281E",
+   "accent": "70705C"
+  },
+  {
+   "name": "cream-lowtext-sat60",
+   "group": "critic-custom",
+   "live": false,
+   "page": "F2ECDC",
+   "text": "827664",
+   "secondary": "827664",
+   "accent": "89890B"
+  },
+  {
+   "name": "cream-washhue-sat0",
+   "group": "critic-custom",
+   "live": false,
+   "page": "F2ECDC",
+   "text": "32281E",
+   "secondary": "32281E",
+   "accent": "B31919"
+  },
+  {
+   "name": "cream-rawacc-sat220",
+   "group": "critic-custom",
+   "live": false,
+   "page": "F2ECDC",
+   "text": "32281E",
+   "secondary": "32281E",
+   "accent": "0D59F2"
+  },
+  {
+   "name": "cool-sat270",
+   "group": "critic-custom",
+   "live": false,
+   "page": "DCE2EC",
+   "text": "141820",
+   "secondary": "141820",
+   "accent": "610AB8"
+  },
+  {
+   "name": "cool-sat30",
+   "group": "critic-custom",
+   "live": false,
+   "page": "DCE2EC",
+   "text": "141820",
+   "secondary": "141820",
+   "accent": "AA6118"
+  },
+  {
+   "name": "cool-neargrey120",
+   "group": "critic-custom",
+   "live": false,
+   "page": "DCE2EC",
+   "text": "141820",
+   "secondary": "141820",
+   "accent": "576B57"
+  },
+  {
+   "name": "cool-lowtext-sat120",
+   "group": "critic-custom",
+   "live": false,
+   "page": "DCE2EC",
+   "text": "69707D",
+   "secondary": "69707D",
+   "accent": "0C920C"
+  },
+  {
+   "name": "cool-washhue-sat30",
+   "group": "critic-custom",
+   "live": false,
+   "page": "DCE2EC",
+   "text": "141820",
+   "secondary": "141820",
+   "accent": "AA6118"
+  },
+  {
+   "name": "cool-rawacc-sat270",
+   "group": "critic-custom",
+   "live": false,
+   "page": "DCE2EC",
+   "text": "141820",
+   "secondary": "141820",
+   "accent": "7F0DF2"
+  },
+  {
+   "name": "mgrey-b-sat320",
+   "group": "critic-custom",
+   "live": false,
+   "page": "808080",
+   "text": "000000",
+   "secondary": "000000",
+   "accent": "6A0549"
+  },
+  {
+   "name": "mgrey-b-sat60",
+   "group": "critic-custom",
+   "live": false,
+   "page": "808080",
+   "text": "000000",
+   "secondary": "000000",
+   "accent": "363608"
+  },
+  {
+   "name": "mgrey-b-neargrey180",
+   "group": "critic-custom",
+   "live": false,
+   "page": "808080",
+   "text": "000000",
+   "secondary": "000000",
+   "accent": "2E3838"
+  },
+  {
+   "name": "mgrey-b-lowtext-sat180",
+   "group": "critic-custom",
+   "live": false,
+   "page": "808080",
+   "text": "282828",
+   "secondary": "282828",
+   "accent": "053E3E"
+  },
+  {
+   "name": "mgrey-b-washhue-sat60",
+   "group": "critic-custom",
+   "live": false,
+   "page": "808080",
+   "text": "000000",
+   "secondary": "000000",
+   "accent": "363608"
+  },
+  {
+   "name": "mgrey-b-rawacc-sat320",
+   "group": "critic-custom",
+   "live": false,
+   "page": "808080",
+   "text": "000000",
+   "secondary": "000000",
+   "accent": "F20DA6"
+  },
+  {
+   "name": "mgrey-w-sat0",
+   "group": "critic-custom",
+   "live": false,
+   "page": "606068",
+   "text": "FFFFFF",
+   "secondary": "FFFFFF",
+   "accent": "FA9E9E"
+  },
+  {
+   "name": "mgrey-w-sat120",
+   "group": "critic-custom",
+   "live": false,
+   "page": "606068",
+   "text": "FFFFFF",
+   "secondary": "FFFFFF",
+   "accent": "9DF19D"
+  },
+  {
+   "name": "mgrey-w-neargrey220",
+   "group": "critic-custom",
+   "live": false,
+   "page": "606068",
+   "text": "FFFFFF",
+   "secondary": "FFFFFF",
+   "accent": "C1C5CD"
+  },
+  {
+   "name": "mgrey-w-lowtext-sat220",
+   "group": "critic-custom",
+   "live": false,
+   "page": "606068",
+   "text": "C8C8CD",
+   "secondary": "C8C8CD",
+   "accent": "97B7F7"
+  },
+  {
+   "name": "mgrey-w-washhue-sat120",
+   "group": "critic-custom",
+   "live": false,
+   "page": "606068",
+   "text": "FFFFFF",
+   "secondary": "FFFFFF",
+   "accent": "9DF19D"
+  },
+  {
+   "name": "mgrey-w-rawacc-sat0",
+   "group": "critic-custom",
+   "live": false,
+   "page": "606068",
+   "text": "FFFFFF",
+   "secondary": "FFFFFF",
+   "accent": "F20D0D"
+  },
+  {
+   "name": "mblue-w-sat30",
+   "group": "critic-custom",
+   "live": false,
+   "page": "3C6EA0",
+   "text": "FFFFFF",
+   "secondary": "FFFFFF",
+   "accent": "FACC9E"
+  },
+  {
+   "name": "mblue-w-sat180",
+   "group": "critic-custom",
+   "live": false,
+   "page": "3C6EA0",
+   "text": "FFFFFF",
+   "secondary": "FFFFFF",
+   "accent": "A6F2F2"
+  },
+  {
+   "name": "mblue-w-neargrey270",
+   "group": "critic-custom",
+   "live": false,
+   "page": "3C6EA0",
+   "text": "FFFFFF",
+   "secondary": "FFFFFF",
+   "accent": "CCC7D1"
+  },
+  {
+   "name": "mblue-w-lowtext-sat270",
+   "group": "critic-custom",
+   "live": false,
+   "page": "3C6EA0",
+   "text": "C8DCF0",
+   "secondary": "C8DCF0",
+   "accent": "D9B8F9"
+  },
+  {
+   "name": "mblue-w-washhue-sat180",
+   "group": "critic-custom",
+   "live": false,
+   "page": "3C6EA0",
+   "text": "FFFFFF",
+   "secondary": "FFFFFF",
+   "accent": "A6F2F2"
+  },
+  {
+   "name": "mblue-w-rawacc-sat30",
+   "group": "critic-custom",
+   "live": false,
+   "page": "3C6EA0",
+   "text": "FFFFFF",
+   "secondary": "FFFFFF",
+   "accent": "F2800D"
+  },
+  {
+   "name": "mbrick-w-sat60",
+   "group": "critic-custom",
+   "live": false,
+   "page": "AA503C",
+   "text": "FFFAF0",
+   "secondary": "FFFAF0",
+   "accent": "FAFAA8"
+  },
+  {
+   "name": "mbrick-w-sat220",
+   "group": "critic-custom",
+   "live": false,
+   "page": "AA503C",
+   "text": "FFFAF0",
+   "secondary": "FFFAF0",
+   "accent": "AFC6F4"
+  },
+  {
+   "name": "mbrick-w-neargrey320",
+   "group": "critic-custom",
+   "live": false,
+   "page": "AA503C",
+   "text": "FFFAF0",
+   "secondary": "FFFAF0",
+   "accent": "D6CDD3"
+  },
+  {
+   "name": "mbrick-w-lowtext-sat320",
+   "group": "critic-custom",
+   "live": false,
+   "page": "AA503C",
+   "text": "F0C8B4",
+   "secondary": "F0C8B4",
+   "accent": "F8AADE"
+  },
+  {
+   "name": "mbrick-w-washhue-sat220",
+   "group": "critic-custom",
+   "live": false,
+   "page": "AA503C",
+   "text": "FFFAF0",
+   "secondary": "FFFAF0",
+   "accent": "AFC6F4"
+  },
+  {
+   "name": "mbrick-w-rawacc-sat60",
+   "group": "critic-custom",
+   "live": false,
+   "page": "AA503C",
+   "text": "FFFAF0",
+   "secondary": "FFFAF0",
+   "accent": "F2F20D"
+  },
+  {
+   "name": "live-solarized-dark",
+   "group": "critic-live",
+   "live": true,
+   "page": "002B36",
+   "text": "839496",
+   "secondary": "627A7E",
+   "accent": "268BD2",
+   "table": [
+    "073642",
+    "DC322F",
+    "859900",
+    "B58900",
+    "268BD2",
+    "D33682",
+    "2AA198",
+    "EEE8D5",
+    "002B36",
+    "CB4B16",
+    "586E75",
+    "657B83",
+    "839496",
+    "6C71C4",
+    "93A1A1",
+    "FDF6E3"
+   ]
+  },
+  {
+   "name": "live-solarized-light",
+   "group": "critic-live",
+   "live": true,
+   "page": "FDF6E3",
+   "text": "657B83",
+   "secondary": "8B9A9B",
+   "accent": "268BD2",
+   "table": [
+    "073642",
+    "DC322F",
+    "859900",
+    "B58900",
+    "268BD2",
+    "D33682",
+    "2AA198",
+    "EEE8D5",
+    "002B36",
+    "CB4B16",
+    "586E75",
+    "657B83",
+    "839496",
+    "6C71C4",
+    "93A1A1",
+    "FDF6E3"
+   ]
+  },
+  {
+   "name": "live-gruvbox-dark",
+   "group": "critic-live",
+   "live": true,
+   "page": "282828",
+   "text": "EBDBB2",
+   "secondary": "BAAE90",
+   "accent": "458588",
+   "table": [
+    "282828",
+    "CC241D",
+    "98971A",
+    "D79921",
+    "458588",
+    "B16286",
+    "689D6A",
+    "A89984",
+    "928374",
+    "FB4934",
+    "B8BB26",
+    "FABD2F",
+    "83A598",
+    "D3869B",
+    "8EC07C",
+    "EBDBB2"
+   ]
+  },
+  {
+   "name": "live-gruvbox-light",
+   "group": "critic-live",
+   "live": true,
+   "page": "FBF1C7",
+   "text": "3C3836",
+   "secondary": "6C665A",
+   "accent": "458588",
+   "table": [
+    "FBF1C7",
+    "CC241D",
+    "98971A",
+    "D79921",
+    "458588",
+    "B16286",
+    "689D6A",
+    "7C6F64",
+    "928374",
+    "9D0006",
+    "79740E",
+    "B57614",
+    "076678",
+    "8F3F71",
+    "427B58",
+    "3C3836"
+   ]
+  },
+  {
+   "name": "live-dracula",
+   "group": "critic-live",
+   "live": true,
+   "page": "282A36",
+   "text": "F8F8F2",
+   "secondary": "C4C5C3",
+   "accent": "BD93F9",
+   "table": [
+    "21222C",
+    "FF5555",
+    "50FA7B",
+    "F1FA8C",
+    "BD93F9",
+    "FF79C6",
+    "8BE9FD",
+    "F8F8F2",
+    "6272A4",
+    "FF6E6E",
+    "69FF94",
+    "FFFFA5",
+    "D6ACFF",
+    "FF92DF",
+    "A4FFFF",
+    "FFFFFF"
+   ]
+  },
+  {
+   "name": "live-nord",
+   "group": "critic-live",
+   "live": true,
+   "page": "2E3440",
+   "text": "D8DEE9",
+   "secondary": "AEB4BF",
+   "accent": "81A1C1",
+   "table": [
+    "3B4252",
+    "BF616A",
+    "A3BE8C",
+    "EBCB8B",
+    "81A1C1",
+    "B48EAD",
+    "88C0D0",
+    "E5E9F0",
+    "4C566A",
+    "BF616A",
+    "A3BE8C",
+    "EBCB8B",
+    "81A1C1",
+    "B48EAD",
+    "8FBCBB",
+    "ECEFF4"
+   ]
+  },
+  {
+   "name": "live-one-dark",
+   "group": "critic-live",
+   "live": true,
+   "page": "282C34",
+   "text": "ABB2BF",
+   "secondary": "8A919C",
+   "accent": "61AFEF",
+   "table": [
+    "282C34",
+    "E06C75",
+    "98C379",
+    "E5C07B",
+    "61AFEF",
+    "C678DD",
+    "56B6C2",
+    "ABB2BF",
+    "5C6370",
+    "E06C75",
+    "98C379",
+    "E5C07B",
+    "61AFEF",
+    "C678DD",
+    "56B6C2",
+    "FFFFFF"
+   ]
+  },
+  {
+   "name": "live-tango-dark",
+   "group": "critic-live",
+   "live": true,
+   "page": "2E3436",
+   "text": "D3D7CF",
+   "secondary": "AAAEA9",
+   "accent": "3465A4",
+   "table": [
+    "2E3436",
+    "CC0000",
+    "4E9A06",
+    "C4A000",
+    "3465A4",
+    "75507B",
+    "06989A",
+    "D3D7CF",
+    "555753",
+    "EF2929",
+    "8AE234",
+    "FCE94F",
+    "729FCF",
+    "AD7FA8",
+    "34E2E2",
+    "EEEEEC"
+   ]
+  },
+  {
+   "name": "live-tango-light",
+   "group": "critic-live",
+   "live": true,
+   "page": "FFFFFF",
+   "text": "2E3436",
+   "secondary": "626768",
+   "accent": "3465A4",
+   "table": [
+    "2E3436",
+    "CC0000",
+    "4E9A06",
+    "C4A000",
+    "3465A4",
+    "75507B",
+    "06989A",
+    "D3D7CF",
+    "555753",
+    "EF2929",
+    "8AE234",
+    "FCE94F",
+    "729FCF",
+    "AD7FA8",
+    "34E2E2",
+    "EEEEEC"
+   ]
+  },
+  {
+   "name": "live-campbell",
+   "group": "critic-live",
+   "live": true,
+   "page": "0C0C0C",
+   "text": "CCCCCC",
+   "secondary": "9C9C9C",
+   "accent": "0037DA",
+   "table": [
+    "0C0C0C",
+    "C50F1F",
+    "13A10E",
+    "C19C00",
+    "0037DA",
+    "881798",
+    "3A96DD",
+    "CCCCCC",
+    "767676",
+    "E74856",
+    "16C60C",
+    "F9F1A5",
+    "3B78FF",
+    "B4009E",
+    "61D6D6",
+    "F2F2F2"
+   ]
+  },
+  {
+   "name": "live-monokai",
+   "group": "critic-live",
+   "live": true,
+   "page": "272822",
+   "text": "F8F8F2",
+   "secondary": "C4C4BE",
+   "accent": "66D9EF",
+   "table": [
+    "272822",
+    "F92672",
+    "A6E22E",
+    "F4BF75",
+    "66D9EF",
+    "AE81FF",
+    "A1EFE4",
+    "F8F8F2",
+    "75715E",
+    "F92672",
+    "A6E22E",
+    "F4BF75",
+    "66D9EF",
+    "AE81FF",
+    "A1EFE4",
+    "F9F8F5"
+   ]
+  },
+  {
+   "name": "live-catppuccin-mocha",
+   "group": "critic-live",
+   "live": true,
+   "page": "1E1E2E",
+   "text": "CDD6F4",
+   "secondary": "A1A8C3",
+   "accent": "89B4FA",
+   "table": [
+    "45475A",
+    "F38BA8",
+    "A6E3A1",
+    "F9E2AF",
+    "89B4FA",
+    "F5C2E7",
+    "94E2D5",
+    "BAC2DE",
+    "585B70",
+    "F38BA8",
+    "A6E3A1",
+    "F9E2AF",
+    "89B4FA",
+    "F5C2E7",
+    "94E2D5",
+    "A6ADC8"
+   ]
+  },
+  {
+   "name": "live-catppuccin-latte",
+   "group": "critic-live",
+   "live": true,
+   "page": "EFF1F5",
+   "text": "4C4F69",
+   "secondary": "75788C",
+   "accent": "1E66F5",
+   "table": [
+    "5C5F77",
+    "D20F39",
+    "40A02B",
+    "DF8E1D",
+    "1E66F5",
+    "EA76CB",
+    "179299",
+    "ACB0BE",
+    "6C6F85",
+    "D20F39",
+    "40A02B",
+    "DF8E1D",
+    "1E66F5",
+    "EA76CB",
+    "179299",
+    "BCC0CC"
+   ]
+  },
+  {
+   "name": "live-github-light",
+   "group": "critic-live",
+   "live": true,
+   "page": "FFFFFF",
+   "text": "24292F",
+   "secondary": "5B5F63",
+   "accent": "0969DA",
+   "table": [
+    "24292F",
+    "CF222E",
+    "116329",
+    "4D2D00",
+    "0969DA",
+    "8250DF",
+    "1B7C83",
+    "6E7781",
+    "57606A",
+    "A40E26",
+    "1A7F37",
+    "633C01",
+    "218BFF",
+    "A475F9",
+    "3192AA",
+    "8C959F"
+   ]
+  },
+  {
+   "name": "live-tomorrow-night",
+   "group": "critic-live",
+   "live": true,
+   "page": "1D1F21",
+   "text": "C5C8C6",
+   "secondary": "9B9E9D",
+   "accent": "81A2BE",
+   "table": [
+    "1D1F21",
+    "CC6666",
+    "B5BD68",
+    "F0C674",
+    "81A2BE",
+    "B294BB",
+    "8ABEB7",
+    "C5C8C6",
+    "969896",
+    "CC6666",
+    "B5BD68",
+    "F0C674",
+    "81A2BE",
+    "B294BB",
+    "8ABEB7",
+    "FFFFFF"
+   ]
+  },
+  {
+   "name": "live-zenburn",
+   "group": "critic-live",
+   "live": true,
+   "page": "3F3F3F",
+   "text": "DCDCCC",
+   "secondary": "B5B5A9",
+   "accent": "506070",
+   "table": [
+    "1E2320",
+    "705050",
+    "60B48A",
+    "DFAF8F",
+    "506070",
+    "DC8CC3",
+    "8CD0D3",
+    "DCDCCC",
+    "709080",
+    "DCA3A3",
+    "C3BF9F",
+    "F0DFAF",
+    "94BFF3",
+    "EC93D3",
+    "93E0E3",
+    "FFFFFF"
+   ]
+  },
+  {
+   "name": "Green",
+   "group": "shipped-as-custom",
+   "live": false,
+   "page": "050A05",
+   "text": "33FF33",
+   "secondary": "27C427",
+   "accent": "66FF66"
+  },
+  {
+   "name": "Amber",
+   "group": "shipped-as-custom",
+   "live": false,
+   "page": "0A0805",
+   "text": "FFAA00",
+   "secondary": "CC8800",
+   "accent": "FFCC33"
+  },
+  {
+   "name": "Red",
+   "group": "shipped-as-custom",
+   "live": false,
+   "page": "0A0505",
+   "text": "FF4242",
+   "secondary": "CC3333",
+   "accent": "FF6666"
+  },
+  {
+   "name": "Violet",
+   "group": "shipped-as-custom",
+   "live": false,
+   "page": "08050A",
+   "text": "B275F0",
+   "secondary": "8C3CDD",
+   "accent": "C797F7"
+  },
+  {
+   "name": "Blue",
+   "group": "shipped-as-custom",
+   "live": false,
+   "page": "05080A",
+   "text": "00AAFF",
+   "secondary": "0088CC",
+   "accent": "33BBFF"
+  },
+  {
+   "name": "White",
+   "group": "shipped-as-custom",
+   "live": false,
+   "page": "06070A",
+   "text": "E8E8E8",
+   "secondary": "B0B0B0",
+   "accent": "FFFFFF"
+  },
+  {
+   "name": "Basic",
+   "group": "shipped-as-custom",
+   "live": false,
+   "page": "FFFFFF",
+   "text": "000000",
+   "secondary": "404040",
+   "accent": "3E95FF"
+  },
+  {
+   "name": "Grass",
+   "group": "shipped-as-custom",
+   "live": false,
+   "page": "13773D",
+   "text": "FFF0A5",
+   "secondary": "C4D28B",
+   "accent": "FFB03B"
+  },
+  {
+   "name": "Homebrew",
+   "group": "shipped-as-custom",
+   "live": false,
+   "page": "000000",
+   "text": "28FE14",
+   "secondary": "1EBF0F",
+   "accent": "00F900"
+  },
+  {
+   "name": "Man Page",
+   "group": "shipped-as-custom",
+   "live": false,
+   "page": "FEF49C",
+   "text": "000000",
+   "secondary": "403D27",
+   "accent": "948C44"
+  },
+  {
+   "name": "Novel",
+   "group": "shipped-as-custom",
+   "live": false,
+   "page": "DFDBC3",
+   "text": "4D2F2D",
+   "secondary": "725A53",
+   "accent": "933A21"
+  },
+  {
+   "name": "Ocean",
+   "group": "shipped-as-custom",
+   "live": false,
+   "page": "2B66C9",
+   "text": "FFFFFF",
+   "secondary": "CAD9F2",
+   "accent": "99C5FF"
+  },
+  {
+   "name": "Pro",
+   "group": "shipped-as-custom",
+   "live": false,
+   "page": "000000",
+   "text": "F4F4F4",
+   "secondary": "B7B7B7",
+   "accent": "FFFFFF"
+  },
+  {
+   "name": "Red Sands",
+   "group": "shipped-as-custom",
+   "live": false,
+   "page": "8E3527",
+   "text": "D7C9A7",
+   "secondary": "C5A487",
+   "accent": "E6C72B"
+  },
+  {
+   "name": "Silver Aerogel",
+   "group": "shipped-as-custom",
+   "live": false,
+   "page": "929292",
+   "text": "000000",
+   "secondary": "252525",
+   "accent": "43445C"
+  },
+  {
+   "name": "Solid Colors",
+   "group": "shipped-as-custom",
+   "live": false,
+   "page": "F2DEC9",
+   "text": "000000",
+   "secondary": "3D3832",
+   "accent": "067CFF"
+  },
+  {
+   "name": "live-apple-pro",
+   "group": "extra-live",
+   "live": true,
+   "page": "000000",
+   "text": "F2F2F2",
+   "secondary": "B6B6B6",
+   "accent": "0000B3",
+   "table": [
+    "000000",
+    "990000",
+    "00A600",
+    "999900",
+    "0000B3",
+    "B300B3",
+    "00A6B3",
+    "BFBFBF",
+    "666666",
+    "E60000",
+    "00D900",
+    "E6E600",
+    "0000FF",
+    "E600E6",
+    "00E6E6",
+    "E6E6E6"
+   ]
+  }
+ ]
+}
