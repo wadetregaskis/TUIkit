@@ -7,6 +7,34 @@
 import Foundation
 
 extension Color {
+    /// The phase of a breath of `count` frames at `frame`: 1 at frame 0 (the bright
+    /// end), 0 halfway round, on a cosine, so the breath eases at both ends.
+    ///
+    /// Here rather than on the clock that ticks it because what a breath shows at each
+    /// frame is a question about colour: the row-fill rule checks every frame of the
+    /// breaths it chooses, and must see the ones the terminal will draw.
+    package static func breathPhase(atFrame frame: Int, of count: Int) -> Double {
+        guard count > 0 else { return 1 }
+        let wrapped = frame % count
+        let normalized = Double(wrapped < 0 ? wrapped + count : wrapped) / Double(count)
+        // Cosine wave: 1 → 0 → 1 over the cycle, so frame 0 is the bright end.
+        return (cos(normalized * 2 * .pi) + 1) / 2
+    }
+
+    /// Which of a ramp's `count` steps a breath shows at `phase`, dim step first.
+    ///
+    /// Even intervals of TIME, not of `phase`. The phase is a cosine of the clock
+    /// (``breathPhase(atFrame:of:)``), so slicing it evenly gave the ends most of the
+    /// cycle: a three-shade ramp over 16 frames showed 7/2/7 frames, and the middle
+    /// shade flashed past. `acos` undoes the cosine, so the same ramp shows 5/6/5; a
+    /// two-shade ramp (every 16-colour breath) shows its bright end on frames 0–4 and
+    /// 12–15 and its dim end on 5–11 — symmetric about the dim frame. The epsilon keeps
+    /// frame 12, whose phase computes as 0.4999…, on the same side as frame 4.
+    package static func breathStep(atPhase phase: Double, of count: Int) -> Int {
+        let time = acos(min(1, max(-1, 1 - 2 * phase))) / .pi
+        let step = Int((time * Double(count) + 1e-9).rounded(.down))
+        return min(max(0, step), count - 1)
+    }
 
     /// The colours a `dim`…`bright` fade can actually PRODUCE on this terminal,
     /// in order, with the off-hue ones removed — all but `bright`'s own.
@@ -23,7 +51,7 @@ extension Color {
     /// Apple Terminal.
     ///
     /// Walking this list at even intervals of time (not of the cosine phase —
-    /// see `SelectionEmphasis.pulsed`) instead gives every shade the same
+    /// see ``breathStep(atPhase:of:)``) instead gives every shade the same
     /// screen time, so the animation is as smooth as the palette permits and
     /// never off-hue. Truecolor callers should keep the continuous lerp — there
     /// the ramp is effectively infinite.

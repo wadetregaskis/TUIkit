@@ -402,15 +402,12 @@ extension CursorTimer {
         return Self.pulsePhase(atFrame: layout.timing.step(on: self), of: layout.frameCount)
     }
 
-    /// The pulse phase at `frame` of a pulse of `count` frames. See
+    /// The pulse phase at `frame` of a pulse of `count` frames
+    /// (``Color/breathPhase(atFrame:of:)``). See
     /// ``blinkVisible(atFrame:)`` for why this is static and why reading it is not a
     /// volatile read.
     nonisolated static func pulsePhase(atFrame frame: Int, of count: Int) -> Double {
-        guard count > 0 else { return 1 }
-        let wrapped = frame % count
-        let normalized = Double(wrapped < 0 ? wrapped + count : wrapped) / Double(count)
-        // Cosine wave: 1 → 0 → 1 over the cycle, so frame 0 is the bright end.
-        return (cos(normalized * 2 * .pi) + 1) / 2
+        Color.breathPhase(atFrame: frame, of: count)
     }
 }
 
