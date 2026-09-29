@@ -89,6 +89,14 @@ extension Color {
             terminalColorsGeneration: terminalColorsGeneration)
         if let cached = pulseRampCacheLock.withLock({ pulseRampCache[key] }) { return cached }
 
+        if depth == .palette256, case .palette256(let dimIndex) = dim.value,
+            case .palette256(let brightIndex) = bright.value, dimIndex >= 16, brightIndex >= 16
+        {
+            let answer = cubeRamp(from: dimIndex, to: brightIndex)
+            pulseRampCacheLock.withLock { pulseRampCache[key] = answer }
+            return answer
+        }
+
         // An achromatic step is only a defect when the fade itself is meant to
         // have colour — a grey accent (the White / Pro / Silver Aerogel
         // palettes) is *supposed* to render grey.
@@ -127,6 +135,78 @@ extension Color {
             pulseRampCache[key] = answer
         }
         return answer
+    }
+
+    /// The breath between two cube entries: the two ends, with at most one
+    /// middle step between them.
+    ///
+    /// A row's fills at 256 colours are chosen at coding time as cube entries
+    /// (`RowFills`), and a lerp between two entries re-quantised along the way
+    /// wanders: it can pass through a grey, or through S's own entry, which
+    /// would put the selected row's colour on the cursor row mid-breath. So
+    /// the steps are a function of the two ends alone, and every caller that
+    /// breathes between them — a list or table row, a menu, a drop-down, the
+    /// DatePicker, the split-view divider, `accentFillPulse` — draws the same
+    /// ones.
+    ///
+    /// The middle is the entry nearest the ends' OKLab midpoint whose L* lies
+    /// at least 2 inside both ends, in the ends' hue (within 30° OKLCh of
+    /// each), or a grey between two greys; ties go to the lower index. There
+    /// is none between a grey end and a hued one — a phosphor palette's cursor
+    /// row, from the lifted page to the accent — because there the middle
+    /// would be the cube's darkest tinted entry, which is where the selected
+    /// row sits. The text stays legible on the middle: its lightness is
+    /// between the ends', and so is its contrast with the text.
+    ///
+    /// `Tools/RowFillValues/generate.py`'s `cube_ramp` is the reference; the
+    /// shipped palettes' ramps are pinned against it.
+    static func cubeRamp(from dim: UInt8, to bright: UInt8) -> [Color] {
+        guard dim != bright else { return [.palette256(dim)] }
+        let dimRGB = palette256ToRGB(dim)
+        let brightRGB = palette256ToRGB(bright)
+        let dimLightness = Self.rgb(dimRGB.red, dimRGB.green, dimRGB.blue).perceivedLightness ?? 0
+        let brightLightness = Self.rgb(brightRGB.red, brightRGB.green, brightRGB.blue).perceivedLightness ?? 0
+        let lowest = min(dimLightness, brightLightness) + 2
+        let highest = max(dimLightness, brightLightness) - 2
+        let ends = [Self.palette256(dim), .palette256(bright)]
+        guard lowest <= highest else { return ends }
+
+        func isGrey(_ rgb: (red: UInt8, green: UInt8, blue: UInt8)) -> Bool {
+            rgb.red == rgb.green && rgb.green == rgb.blue
+        }
+        func oklab(_ rgb: (red: UInt8, green: UInt8, blue: UInt8)) -> (l: Double, a: Double, b: Double) {
+            Self.oklab(red: rgb.red, green: rgb.green, blue: rgb.blue)
+        }
+        func hue(_ lab: (l: Double, a: Double, b: Double)) -> Double { atan2(lab.b, lab.a) * 180 / .pi }
+        func hueGap(_ first: Double, _ second: Double) -> Double {
+            let gap = abs(first - second).truncatingRemainder(dividingBy: 360)
+            return min(gap, 360 - gap)
+        }
+
+        let dimLab = oklab(dimRGB)
+        let brightLab = oklab(brightRGB)
+        let dimHue = isGrey(dimRGB) ? nil : hue(dimLab)
+        let brightHue = isGrey(brightRGB) ? nil : hue(brightLab)
+        guard (dimHue == nil) == (brightHue == nil) else { return ends }
+        let middle = (
+            l: (dimLab.l + brightLab.l) / 2, a: (dimLab.a + brightLab.a) / 2, b: (dimLab.b + brightLab.b) / 2)
+
+        var best: (distance: Double, index: UInt8)?
+        for index in UInt8(16)...UInt8(255) where index != dim && index != bright {
+            let rgb = palette256ToRGB(index)
+            guard let lightness = Self.rgb(rgb.red, rgb.green, rgb.blue).perceivedLightness,
+                lowest <= lightness, lightness <= highest, isGrey(rgb) == (brightHue == nil)
+            else { continue }
+            let lab = oklab(rgb)
+            if let brightHue, let dimHue {
+                guard hueGap(hue(lab), brightHue) <= 30, hueGap(hue(lab), dimHue) <= 30 else { continue }
+            }
+            let distance = (lab.l - middle.l) * (lab.l - middle.l) + (lab.a - middle.a) * (lab.a - middle.a)
+                + (lab.b - middle.b) * (lab.b - middle.b)
+            if best.map({ distance < $0.distance }) ?? true { best = (distance, index) }
+        }
+        guard let best else { return ends }
+        return [ends[0], .palette256(best.index), ends[1]]
     }
 
     private struct PulseRampKey: Hashable {

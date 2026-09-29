@@ -8,8 +8,14 @@ record of the design that chose them (2026-09-29); change a look there, re-run t
 
     python3 Tools/RowFillValues/generate.py            # rewrite the Swift table
     python3 Tools/RowFillValues/generate.py --check    # exit 1 if the table is stale (CI)
+    python3 Tools/RowFillValues/generate.py --ramps    # the 256-colour breaths' steps, for PulseRampTests
+
+`cube_ramp` below is the reference for `Color.cubeRamp(from:to:)`: the steps every caller draws
+between two cube entries. It uses the same colour maths as TUIkitStyling (WCAG luminance, CIE L*,
+OKLab), so the two agree to the bit on the shipped breaths.
 """
 import json
+import math
 import os
 import sys
 
@@ -17,6 +23,74 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 TABLE = os.path.join(ROOT, 'Sources', 'TUIkitStyling', 'Theme', 'RowFillTable.swift')
 ENDS = ('S', 'Fd', 'Ft', 'Bd', 'Bt')
+
+
+def cube_rgb(index):
+    """xterm's RGB for a 256-colour entry from 16 up (Color.palette256ToRGB)."""
+    if index >= 232:
+        grey = 8 + (index - 232) * 10
+        return (grey, grey, grey)
+    levels = (0, 95, 135, 175, 215, 255)
+    i = index - 16
+    return (levels[i // 36], levels[i % 36 // 6], levels[i % 6])
+
+
+def linear(byte):
+    c = byte / 255.0
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
+def lightness(rgb):
+    """Color.perceivedLightness: CIE L* of the WCAG relative luminance."""
+    y = 0.2126 * linear(rgb[0]) + 0.7152 * linear(rgb[1]) + 0.0722 * linear(rgb[2])
+    return 116 * (y ** (1 / 3) if y > 0.008856 else 7.787 * y + 16 / 116) - 16
+
+
+def oklab(rgb):
+    r, g, b = (linear(x) for x in rgb)
+    cbrt = lambda v: math.copysign(abs(v) ** (1 / 3), v)
+    l_ = cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+    m_ = cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+    s_ = cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+    return (0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+            1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
+            0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_)
+
+
+def cube_ramp(dim, bright, family_deg=30.0):
+    """The steps between two cube entries: [dim, middle, bright], or [dim, bright] where no entry fits.
+
+    The middle is the entry nearest the ends' OKLab midpoint whose L* lies >= 2 inside both ends, within
+    `family_deg` OKLCh of each end's hue (a grey between two greys); ties go to the lower index. A grey end
+    and a hued one get no middle: there it would be the cube's darkest tinted entry, where S sits."""
+    if dim == bright:
+        return [dim]
+    a, b = cube_rgb(dim), cube_rgb(bright)
+    lo = min(lightness(a), lightness(b)) + 2
+    hi = max(lightness(a), lightness(b)) - 2
+    if hi < lo:
+        return [dim, bright]
+    grey = lambda c: c[0] == c[1] == c[2]
+    hue = lambda lab: math.degrees(math.atan2(lab[2], lab[1]))
+    gap = lambda x, y: min(abs(x - y) % 360, 360 - abs(x - y) % 360)
+    oa, ob = oklab(a), oklab(b)
+    ha = None if grey(a) else hue(oa)
+    hb = None if grey(b) else hue(ob)
+    if (ha is None) != (hb is None):
+        return [dim, bright]
+    mid = tuple((x + y) / 2 for x, y in zip(oa, ob))
+    best = None
+    for i in range(16, 256):
+        e = cube_rgb(i)
+        if i in (dim, bright) or not (lo <= lightness(e) <= hi) or grey(e) != (hb is None):
+            continue
+        oe = oklab(e)
+        if hb is not None and (gap(hue(oe), hb) > family_deg or gap(hue(oe), ha) > family_deg):
+            continue
+        d = sum((x - y) ** 2 for x, y in zip(oe, mid))
+        if best is None or d < best[0]:
+            best = (d, i)
+    return [dim, best[1], bright] if best else [dim, bright]
 
 
 def swift_table(palettes):
@@ -48,6 +122,13 @@ def swift_table(palettes):
 
 def main():
     palettes = json.load(open(os.path.join(HERE, 'values.json')))['palettes']
+    if '--ramps' in sys.argv:
+        for p in palettes:
+            c = p['cube']
+            for row in 'FB':
+                d, b = c[row + 'd'], c[row + 't']
+                print(f"        ({d}, {b}, {cube_ramp(d, b)}),  // {p['name']} {row}")
+        return 0
     text = swift_table(palettes)
     if '--check' in sys.argv:
         current = open(TABLE).read() if os.path.exists(TABLE) else ''

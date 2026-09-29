@@ -121,4 +121,49 @@ struct PulseRampTests {
         let steps = ramp(palette, depth: .truecolor)
         #expect(steps.count == 2, "just the endpoints; the caller lerps between them")
     }
+
+    // MARK: - Two cube entries
+
+    /// The sixteen shipped palettes' 256-colour breaths (the cursor row, F,
+    /// and the selected cursor row, B), as the reference rule —
+    /// `Tools/RowFillValues/generate.py --ramps` — steps them. Every
+    /// caller that breathes between two cube entries draws these steps, so a
+    /// drift here changes every shipped look at 256 colours.
+    private static let shippedCubeBreaths: [(dim: UInt8, bright: UInt8, steps: [UInt8])] = [
+        (236, 28, [236, 28]), (28, 70, [28, 34, 70]),  // Green
+        (236, 94, [236, 94]), (94, 101, [94, 101]),  // Amber
+        (234, 88, [234, 88]), (236, 124, [236, 124]),  // Red
+        (234, 90, [234, 90]), (54, 92, [54, 55, 92]),  // Violet
+        (17, 20, [17, 18, 20]), (20, 26, [20, 21, 26]),  // Blue
+        (235, 240, [235, 237, 240]), (240, 244, [240, 242, 244]),  // White
+        (254, 75, [254, 75]), (110, 32, [110, 68, 32]),  // Basic
+        (101, 143, [101, 107, 143]), (64, 178, [64, 142, 178]),  // Grass
+        (234, 28, [234, 28]), (28, 70, [28, 34, 70]),  // Homebrew
+        (192, 144, [192, 150, 144]), (143, 101, [143, 107, 101]),  // Man Page
+        (217, 202, [217, 209, 202]), (209, 166, [209, 202, 166]),  // Novel
+        (27, 105, [27, 69, 105]), (69, 146, [69, 105, 146]),  // Ocean
+        (235, 243, [235, 239, 243]), (240, 246, [240, 243, 246]),  // Pro
+        (94, 101, [94, 101]), (130, 172, [130, 166, 172]),  // Red Sands
+        (103, 61, [103, 97, 61]), (61, 55, [61, 56, 55]),  // Silver Aerogel
+        (153, 75, [153, 117, 75]), (110, 32, [110, 68, 32]),  // Solid Colors
+    ]
+
+    @Test("A breath between two cube entries takes the reference rule's steps")
+    func cubeEntriesBreatheByTheReferenceRule() {
+        for breath in Self.shippedCubeBreaths {
+            let ramp = Color.pulseRamp(
+                from: .palette256(breath.dim), to: .palette256(breath.bright), depth: .palette256,
+                terminalColorsGeneration: -2)
+            #expect(ramp == breath.steps.map { .palette256($0) }, "\(breath.dim) → \(breath.bright)")
+        }
+    }
+
+    /// The middle step is chosen from the ends alone, so it never leaves their
+    /// hue: a grey end and a hued one get no middle, because there it would
+    /// be the cube's darkest tinted entry, where the selected row sits.
+    @Test("A grey end and a hued one breathe with no middle step")
+    func greyToHueHasNoMiddle() {
+        #expect(Color.cubeRamp(from: 236, to: 28) == [.palette256(236), .palette256(28)])
+        #expect(Color.cubeRamp(from: 28, to: 28) == [.palette256(28)])
+    }
 }
