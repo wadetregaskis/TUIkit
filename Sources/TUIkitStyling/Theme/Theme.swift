@@ -1066,8 +1066,12 @@ extension Palette {
     /// ``Color/pulseRamp(from:to:depth:samples:)`` — on 256 colours.
     ///
     /// Where the wash or the page has no RGB, both ends are the wash: there is no
-    /// distance to double, and a breath between two equal ends is still. Below 256
-    /// colours, every palette's wash breathes this way, for now.
+    /// distance to double, and a breath between two equal ends is still.
+    ///
+    /// On a 16-colour terminal the ends are slots, and where sixteen are too few one
+    /// end of a list's or a table's cursor row breath is reverse video. This pair
+    /// cannot say that, so it gives that end the other end's slot: a still fill, which
+    /// is what a site that cannot draw a reversal shows.
     public func focusWashPulse() -> (dim: Color, bright: Color) {
         // The palette's row fills (see `RowFills`) wherever it has them: a shipped
         // palette's F, chosen at coding time whatever `focusBackground` it states (every

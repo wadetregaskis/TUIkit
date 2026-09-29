@@ -35,8 +35,15 @@ import Foundation
 /// shipped palette's own wash, carried through a `.tint`, was chosen for the
 /// shipped accent and not for this one, so there the rule places F too.
 ///
-/// `nil` below 256 colours, and where a colour cannot be measured (the terminal's
-/// own before it has reported it): the callers keep their own rule there.
+/// On a 16-colour terminal the fills are slots of the table the terminal reports
+/// (xterm's until it reports one). The shipped palettes carry their picks for
+/// xterm's and Apple Terminal's default tables; any other table, and every other
+/// palette, runs the rule against it. Sixteen colours are sometimes too few to keep
+/// every state apart, and then one end of a breath is reverse video
+/// (``reversedFocusEnd``, ``reversedEmphasisEnd``).
+///
+/// `nil` without colour, and where a colour cannot be measured (the terminal's own
+/// before it has reported it): the callers keep their own rule there.
 package struct RowFills: Equatable, Sendable {
     /// S: a selected row away from the cursor.
     package let selection: Color
@@ -48,6 +55,17 @@ package struct RowFills: Equatable, Sendable {
     package let emphasisDim: Color
     /// B's top end, the brightest of the five.
     package let emphasisBright: Color
+    /// Which end of F is reverse video — 16 colours only. That end's colour above is
+    /// the other end's, so a site that cannot draw a reversal holds a legible fill.
+    package var reversedFocusEnd: BreathEnd?
+    /// Which end of B is reverse video, as ``reversedFocusEnd``.
+    package var reversedEmphasisEnd: BreathEnd?
+
+    /// One end of a breath.
+    package enum BreathEnd: Sendable {
+        case dim
+        case top
+    }
 }
 
 extension RowFills {
@@ -60,6 +78,9 @@ extension RowFills {
         let truecolour: (UInt32, UInt32, UInt32, UInt32, UInt32)
         /// The same at 256 colours, as cube entries.
         let cube: (UInt8, UInt8, UInt8, UInt8, UInt8)
+        /// The same at 16 colours, as slots of xterm's and of Apple Terminal's default
+        /// tables, -1 for reverse video.
+        let sixteen: (xterm: RowFills.Picks, apple: RowFills.Picks)
     }
 
     /// The shipped entry chosen for these four colours, or `nil`.
@@ -114,9 +135,14 @@ extension RowFills {
         let accent: UInt32
         /// The page and the text are the terminal's own, drawn as SGR 49 and 39.
         let live: Bool
-        let cube: Bool
+        let depth: ColorDepth
         /// F where the palette states its wash, at truecolour.
         let statedWash: [Color]?
+        /// At 16 colours: the slots the terminal paints, 0xRRGGBB.
+        var table: [UInt32]?
+        /// At 16 colours, for a shipped palette on a table it has no picks for: its
+        /// truecolour fills, which the slots are placed toward.
+        var shippedTarget: [UInt32]?
     }
 
     private static let cacheLock = NSLock()
@@ -143,7 +169,8 @@ extension RowFills {
             page: colour(key.page), text: colour(key.text), secondary: colour(key.secondary),
             accent: colour(key.accent), live: key.live)
         let look = rule.truecolour()
-        guard key.cube else {
+        if key.depth < .palette256 { return sixteen(key, rule: rule, look: look) }
+        guard key.depth == .palette256 else {
             return RowFills(
                 selection: look.selection.color, focusDim: key.statedWash?[0] ?? look.focus.dim.color,
                 focusBright: key.statedWash?[1] ?? look.focus.top.color, emphasisDim: look.emphasis.dim.color,
@@ -171,7 +198,7 @@ extension RowFills {
     }
 
     /// A cube swatch as the `.palette256` entry it is.
-    private static func entry(_ swatch: RowFillRule.Swatch) -> Color {
+    static func entry(_ swatch: RowFillRule.Swatch) -> Color {
         RowFillRule.cubeIndex[swatch.packed].map(Color.palette256) ?? swatch.color
     }
 
@@ -187,7 +214,7 @@ extension Palette {
     /// This palette's row fills at `depth`, or `nil` where it has none — see
     /// ``RowFills``.
     package func rowFills(at depth: ColorDepth = .current) -> RowFills? {
-        guard depth >= .palette256 else { return nil }
+        guard depth > .noColor else { return nil }
         let page = background
         func packed(_ colour: Color) -> UInt32? {
             guard let (red, green, blue) = colour.spendingAlpha(over: page).rgbComponents else { return nil }
@@ -196,8 +223,14 @@ extension Palette {
         guard let pageRGB = packed(page), let textRGB = packed(foreground),
             let secondaryRGB = packed(foregroundSecondary), let accentRGB = packed(accent)
         else { return nil }
-        if let entry = RowFills.entry(page: pageRGB, text: textRGB, secondary: secondaryRGB, accent: accentRGB) {
-            return entry.fills(at: depth)
+        let entry = RowFills.entry(page: pageRGB, text: textRGB, secondary: secondaryRGB, accent: accentRGB)
+        let table = depth < .palette256 ? RowFills.reportedTable() : nil
+        if let entry {
+            if let table {
+                if let fills = entry.fills(on: table) { return fills }
+            } else {
+                return entry.fills(at: depth)
+            }
         }
         func isTerminals(_ colour: Color) -> Bool {
             switch colour.value {
@@ -212,8 +245,12 @@ extension Palette {
         return RowFills.ruled(
             RowFills.RuleKey(
                 page: pageRGB, text: textRGB, secondary: secondaryRGB, accent: accentRGB,
-                live: isTerminals(page) || isTerminals(foreground), cube: depth == .palette256,
-                statedWash: wash))
+                live: isTerminals(page) || isTerminals(foreground), depth: depth,
+                statedWash: entry == nil ? wash : nil, table: table,
+                shippedTarget: entry.map { entry in
+                    let (selection, focusDim, focusTop, emphasisDim, emphasisTop) = entry.truecolour
+                    return [selection, focusDim, focusTop, emphasisDim, emphasisTop]
+                }))
     }
 
     /// ``focusBackground`` where this palette states its own, or `nil` where it is

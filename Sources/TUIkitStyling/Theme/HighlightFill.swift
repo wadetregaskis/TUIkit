@@ -118,9 +118,9 @@ extension Palette {
 
     /// The still tint a selected row shows while the list it is in does not hold the
     /// keys: the palette's S (``RowFills``) — chosen at coding time for a shipped
-    /// palette, else by the row-fill rule — and below 256 colours the accent at
-    /// ``ViewConstants/selectedBackground`` over the page, or reverse video where that
-    /// tint cannot be measured.
+    /// palette, else by the row-fill rule — and where the palette's colours cannot be
+    /// measured, the accent at ``ViewConstants/selectedBackground`` over the page, or
+    /// reverse video where that tint cannot be measured either.
     ///
     /// The quiet counterpart of ``emphasisFill(over:)``: the same accent, about half
     /// the strength of its peak, and still. `PaletteContrastAuditTests` measures the
@@ -153,10 +153,27 @@ extension Palette {
     /// — is already still, and the tint it would become is exactly the one that
     /// cannot be measured there.
     ///
-    /// - Parameter appearsActive: Whether the row's view appears active
-    ///   (`EnvironmentValues.appearsActive`).
-    package func highlightedRowFill(appearsActive: Bool) -> HighlightFill {
-        emphasisFill().stilled(to: selectedRowFill(), unless: appearsActive)
+    /// - Parameters:
+    ///   - appearsActive: Whether the row's view appears active
+    ///     (`EnvironmentValues.appearsActive`).
+    ///   - reversing: Whether the site can draw a breath with one end in reverse
+    ///     video (``HighlightFill/reversingPulse(dim:bright:ink:field:)``) — a list or
+    ///     table row. Elsewhere such a breath's fill end is held still.
+    package func highlightedRowFill(appearsActive: Bool, reversing: Bool = false) -> HighlightFill {
+        let breath = reversing ? reversingBreath(\.reversedEmphasisEnd, \.emphasisDim, \.emphasisBright) : nil
+        return (breath ?? emphasisFill()).stilled(to: selectedRowFill(), unless: appearsActive)
+    }
+
+    /// The breath at `end` of this palette's row fills, where one of its ends is
+    /// reverse video (16 colours only), else `nil`.
+    private func reversingBreath(
+        _ end: KeyPath<RowFills, RowFills.BreathEnd?>, _ dim: KeyPath<RowFills, Color>,
+        _ bright: KeyPath<RowFills, Color>
+    ) -> HighlightFill? {
+        guard let fills = rowFills(), let reversed = fills[keyPath: end] else { return nil }
+        return .reversingPulse(
+            dim: reversed == .dim ? nil : fills[keyPath: dim], bright: reversed == .top ? nil : fills[keyPath: bright],
+            ink: foreground, field: background)
     }
 
     /// What the cursor row of a list or table paints on a row the selection does not
@@ -189,7 +206,11 @@ extension Palette {
     ///   (`EnvironmentValues.appearsActive`).
     package func focusWashEmphasis(appearsActive: Bool) -> HighlightFill {
         let still = focusWashFill()
-        guard case .fill = still else { return still }
+        guard case .fill(let rest) = still else { return still }
+        // A 16-colour breath with an end in reverse video: rows draw it.
+        if let breath = reversingBreath(\.reversedFocusEnd, \.focusDim, \.focusBright) {
+            return breath.stilled(to: .fill(rest), unless: appearsActive)
+        }
         let (dim, bright) = focusWashPulse()
         return HighlightFill.pulse(dim: dim, bright: bright).stilled(to: .fill(dim), unless: appearsActive)
     }

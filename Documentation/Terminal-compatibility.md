@@ -2586,6 +2586,21 @@ keeps there:
 | A date field's active component (`DatePicker`) | `ESC[7;<ink>;<field>m` over the palette's own ink and page, keeping the component's underline. Never a BARE 7 here: that would exchange the terminal's defaults and collapse to dark-on-dark on a mid-tone theme | the accent's breath as a block, with the digits punched out of it |
 | A `NavigationSplitView`'s focused or dragging divider, and the sidebar toggle's edge column | `ESC[7;<ink>;<field>m` over the palette's own ink and page, cell by cell down the column; the grip dots and the ◀ come through in the page's colour on a bar of the foreground's | the accent's breath filling the column |
 
+**A 16-colour row breath (since 2026-09-29).** On a 16-colour terminal a `List`'s
+or a `Table`'s row fills are slots of the table the host REPORTS (OSC 4), or of
+xterm's until it has reported one. The shipped palettes carry picks for xterm's
+default table and for Apple Terminal 455.1's "Basic" (above); any other table, and
+every other palette, is placed by the row-fill rule against the table reported.
+Sixteen slots are sometimes too few to keep the selected row, the cursor row and
+the selected cursor row apart, and then one end of a cursor row's breath is
+reverse video: on those frames the row is `ESC[7;<ink>;<field>m` over the
+palette's own ink and page, with every colour the row's content states dropped
+first, so the whole row is the text's colour and everything on it — text,
+secondary text, the ●, a badge — the page's. The other frames are an ordinary slot
+fill. Of the shipped palettes: Violet on Apple's table, White and Red Sands on
+xterm's. A menu's bar and a `DatePicker` cell hold the fill end still instead.
+What a host paints for it is what the card's rows A, B and D ask: UNMEASURED.
+
 The trigger is those colours and never the terminal's silence: a palette of
 ordinary RGB roles keeps its tints on a host that answers nothing. The ink and
 the field are stated beside the 7 for the reason ECMA-48 gives below — a bare 7

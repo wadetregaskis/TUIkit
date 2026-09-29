@@ -102,7 +102,7 @@ enum RowBackground {
     @MainActor
     static func focusedSelection(in context: RenderContext, palette: any Palette) -> Self {
         breathing(
-            palette.highlightedRowFill(appearsActive: context.environment.appearsActive),
+            palette.highlightedRowFill(appearsActive: context.environment.appearsActive, reversing: true),
             in: context)
     }
 

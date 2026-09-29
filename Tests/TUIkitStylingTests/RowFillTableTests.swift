@@ -59,11 +59,35 @@ struct RowFillTableTests {
                     emphasisDim: .palette256(94), emphasisBright: .palette256(101)))
     }
 
-    /// 16 colours are not in the table yet: the slots depend on the table
-    /// the terminal reports.
-    @Test("At 16 colours no palette has fills")
-    func sixteenColoursHaveNone() {
-        #expect(shipped.allSatisfy { $0.rowFills(at: .basic16) == nil && $0.rowFills(at: .noColor) == nil })
+    @Test("Without colour no palette has fills")
+    func noColourHasNone() {
+        #expect(shipped.allSatisfy { $0.rowFills(at: .noColor) == nil })
+    }
+
+    /// At 16 colours the table carries picks for xterm's slots and Apple Terminal's:
+    /// Violet's on Apple's F tops out in reverse video, and its top holds F's dim slot
+    /// for a site that cannot draw one.
+    @Test("At 16 colours a shipped palette reads its picks for the table the terminal reports")
+    func sixteenColourPicks() throws {
+        let violet = try #require(shipped.first { $0.name == "Violet" })
+        let onXterm = try #require(TerminalColors.withCurrent(.unknown) { violet.rowFills(at: .basic16) })
+        // xterm: (10, 2, 7, 3, 6).
+        #expect(onXterm.selection == .ansi(.brightGreen))
+        #expect(onXterm.focusDim == .ansi(.green) && onXterm.focusBright == .ansi(.white))
+        #expect(onXterm.reversedFocusEnd == nil && onXterm.reversedEmphasisEnd == nil)
+
+        let apple = TerminalColors(
+            foreground: .init(red: 0, green: 0, blue: 0), background: .init(red: 255, green: 255, blue: 255),
+            slots: TerminalColors.Slots(
+                RowFills.appleTable.map {
+                    TerminalColors.RGB(red: UInt8($0 >> 16 & 0xFF), green: UInt8($0 >> 8 & 0xFF), blue: UInt8($0 & 0xFF))
+                }))
+        let onApple = try #require(TerminalColors.withCurrent(apple) { violet.rowFills(at: .basic16) })
+        // Apple: (1, 4, -1, 13, 4).
+        #expect(onApple.selection == .ansi(.red))
+        #expect(onApple.reversedFocusEnd == .top)
+        #expect(onApple.focusDim == .ansi(.blue) && onApple.focusBright == .ansi(.blue))
+        #expect(onApple.emphasisDim == .ansi(.brightMagenta) && onApple.emphasisBright == .ansi(.blue))
     }
 
     @Test("An accent one channel off still finds the entry; a different accent does not")

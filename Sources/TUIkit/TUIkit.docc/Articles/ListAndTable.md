@@ -108,7 +108,10 @@ own colours, a `.tint` subtree — come from a rule that places them the same
 way. A `focusBackground` a palette states is drawn as stated: at truecolour
 the unselected cursor row breathes up from it to twice its distance from the
 page, and on 256 colours its entries are kept wherever the selected rows
-still stand apart from it. 16 colours keep the older rule for now. The ● is
+still stand apart from it. On 16 colours the fills are slots of the table the
+terminal reports, and where sixteen are too few to keep the states apart, one end
+of a cursor row's breath is reverse video: the whole row the text's colour, and
+everything on it the page's. The ● is
 what tells the two apart: most palettes' wash shares the accent's hue. A control drawn with `.rowSelectionIndicator(.hidden)` has no ●,
 and its cursor row breathes all the same, selected or not: the focus indicator
 always visibly breathes. A control that does not have the keys draws no

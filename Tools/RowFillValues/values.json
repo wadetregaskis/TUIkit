@@ -1,5 +1,5 @@
 {
- "about": "The row fills of the sixteen shipped palettes, frozen from the v5 design (2026-09-29), with v5b's 16-colour slot picks. key: page, text, secondary text, accent (alpha spent over the page). S = selected row; F = cursor row (dim, top); B = selected cursor row (dim, top). cube: 256-colour entries. sixteen: slot picks (S, Fd, Ft, Bd, Bt) for xterm's and Apple Terminal's default tables, -1 = reverse video (not yet read by the framework).",
+ "about": "The row fills of the sixteen shipped palettes, frozen from the v5 design (2026-09-29), with v5b's 16-colour slot picks. key: page, text, secondary text, accent (alpha spent over the page). S = selected row; F = cursor row (dim, top); B = selected cursor row (dim, top). cube: 256-colour entries. sixteen: slot picks (S, Fd, Ft, Bd, Bt) for xterm's and Apple Terminal's default tables, -1 = reverse video.",
  "palettes": [
   {
    "name": "Green",

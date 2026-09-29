@@ -277,4 +277,49 @@ struct CursorRowBreathTests {
             held == bottom,
             "the inactive cursor row holds \(held.debugDescription), not the \(bottom.debugDescription) its breath starts from")
     }
+
+    // MARK: - 16 colours
+
+    /// Which frames of row 0's breath are reverse video, on a 16-colour terminal with
+    /// xterm's table (nothing reported).
+    private func reversedFrames(_ app: CursorRowBreathApp) throws -> (reversed: [Int], filled: Set<String>) {
+        try ColorDepth.withCurrent(.basic16) {
+            try TerminalColors.withCurrent(.unknown) {
+                let frame = try settled(app).frame
+                let line = try #require(frame.lines.firstIndex { $0.stripped.contains("row 0") })
+                let run = try #require(frame.runs.first { $0.offsetY == line }, "row 0 does not breathe")
+                let states = try run.frames.map { try #require(sgrState(of: "row 0", in: [$0])) }
+                return (
+                    states.indices.filter { states[$0].reversesVideo },
+                    Set(states.filter { !$0.reversesVideo }.map(\.renderedBackground))
+                )
+            }
+        }
+    }
+
+    @Test(
+        "On 16 colours an unselected cursor row whose breath tops out in reverse video reverses on its bright frames",
+        arguments: ReversedCursorRowTests.Kind.allCases)
+    func sixteenColourFocusReverses(kind: ReversedCursorRowTests.Kind) throws {
+        // White on xterm's table: F = (blue, reverse video).
+        let palette = try #require(PaletteRegistry.palette(withName: "White"))
+        let fills = try #require(ColorDepth.withCurrent(.basic16) { TerminalColors.withCurrent(.unknown) { palette.rowFills() } })
+        #expect(fills.reversedFocusEnd == .top)
+        let (reversed, filled) = try reversedFrames(CursorRowBreathApp(kind: kind, selection: [2], palette: palette))
+        #expect(reversed == [0, 1, 2, 3, 4, 12, 13, 14, 15])
+        #expect(filled == [ColorDepth.withCurrent(.basic16) { renderedBackground(of: fills.focusDim) }])
+    }
+
+    @Test(
+        "On 16 colours a selected cursor row whose breath starts in reverse video reverses on its dim frames",
+        arguments: ReversedCursorRowTests.Kind.allCases)
+    func sixteenColourEmphasisReverses(kind: ReversedCursorRowTests.Kind) throws {
+        // Red Sands on xterm's table: B = (reverse video, blue).
+        let palette = try #require(PaletteRegistry.palette(withName: "Red Sands"))
+        let fills = try #require(ColorDepth.withCurrent(.basic16) { TerminalColors.withCurrent(.unknown) { palette.rowFills() } })
+        #expect(fills.reversedEmphasisEnd == .dim)
+        let (reversed, filled) = try reversedFrames(CursorRowBreathApp(kind: kind, selection: [0], palette: palette))
+        #expect(reversed == Array(5...11))
+        #expect(filled == [ColorDepth.withCurrent(.basic16) { renderedBackground(of: fills.emphasisBright) }])
+    }
 }
