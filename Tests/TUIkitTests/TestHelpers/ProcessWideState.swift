@@ -137,6 +137,18 @@ enum ProcessWideState {
         set { if mayWrite("TerminalClient.urlOpeningSupport") { TerminalClient.urlOpeningSupport = newValue } }
     }
 
+    /// `StorageDiagnostics.report(_:)`: moves the process's latest failure and
+    /// its count, which a test elsewhere may be about to read as its own.
+    static func reportStorageFailure(_ failure: StorageFailure) {
+        if mayWrite("StorageDiagnostics.report(_:)") { StorageDiagnostics.report(failure) }
+    }
+
+    /// `StorageDiagnostics.reset()`: clears the latest failure and the count for
+    /// every test in the process, not just the caller.
+    static func resetStorageDiagnostics() {
+        if mayWrite("StorageDiagnostics.reset()") { StorageDiagnostics.reset() }
+    }
+
     /// `TerminalHost.seedDiscoveredHost(_:)`: what identification does with the
     /// name a terminal answered. It writes the environment, where each
     /// `TerminalHost` detector not yet read finds it, and every one that reads

@@ -34,11 +34,14 @@ private struct Boom: Error, CustomStringConvertible {
 /// arrives at the handler.
 ///
 /// Serialized because ``StorageDiagnostics`` is a process-wide channel (the same
-/// shape as `StorageDefaults.backend` beside it). `.serialized` orders this
-/// suite internally but not against the others, which run in parallel and now
-/// also report — so every assertion below is scoped to *this* test's own
-/// unique temporary directory or key, never to the global counters. A shared
-/// mutable default is exactly how the render-cache flakes happened.
+/// shape as `StorageDefaults.backend` beside it) and these tests take turns
+/// installing its one handler. `.serialized` orders this suite internally but
+/// not against the others, which run in parallel and also report. So a handler
+/// here keeps only the failures under *this* test's own directory or key.
+/// The two tests that assert on the channel's process-wide half — "the latest
+/// failure is mine", the count, and `reset()`, which clears both for everyone
+/// — run in exit tests, whose child process no other suite reports into. See
+/// `ProcessWideState`.
 @Suite("Storage failure reporting", .serialized)
 struct StorageFailureTests {
 
@@ -68,10 +71,14 @@ struct StorageFailureTests {
 
     @Test("A failure handler may localize its own message")
     func handlerMayLocalize() {
-        let unwritable = LocalizationService(configDirectoryPath: "/dev/null/tuikit-unwritable")
+        // Under `/dev/null`, so every write below it fails, and unique, so the
+        // handler can tell this service's reports from a parallel suite's.
+        let directory = "/dev/null/tuikit-unwritable-\(UUID().uuidString)"
+        let unwritable = LocalizationService(configDirectoryPath: directory)
         let observed = Lock(initialState: String?.none)
         let previous = StorageDiagnostics.onFailure
-        StorageDiagnostics.onFailure = { _ in
+        StorageDiagnostics.onFailure = { failure in
+            guard failure.path?.hasPrefix(directory) == true else { return }
             observed.withLock { $0 = unwritable.string(for: LocalizationKey.Button.cancel) }
         }
         defer { StorageDiagnostics.onFailure = previous }
@@ -162,32 +169,33 @@ struct StorageFailureTests {
         #expect(failures.first?.key == "doomed")
     }
 
+    /// In an exit test: "the latest failure is this one" is a claim about the
+    /// whole process, which a parallel suite's report falsifies if it lands
+    /// between the write and the read — and `reset()` clears the latest failure
+    /// and the count for every suite, not just this one.
     @Test("A failure is recorded even with no handler installed")
-    func failureRecordedWithoutHandler() {
-        let previous = StorageDiagnostics.onFailure
-        StorageDiagnostics.onFailure = nil
-        defer { StorageDiagnostics.onFailure = previous }
+    func failureRecordedWithoutHandler() async {
+        await #expect(processExitsWith: .success) {
+            #expect(StorageDiagnostics.onFailure == nil, "the fixture: a child installs no handler")
 
-        let root = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("tuikit-storage-\(UUID().uuidString)")
-        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
+            let root = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("tuikit-storage-\(UUID().uuidString)")
+            try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: root) }
 
-        // A key no other suite can produce, so `lastFailure` is identifiable
-        // even if a parallel suite reports in the same instant.
-        let key = "doomed-\(UUID().uuidString)"
-        let storage = JSONFileStorage(fileURL: root.appendingPathComponent("settings.json"))
-        storage.setValue(Unencodable(), forKey: key)
+            let key = "doomed-\(UUID().uuidString)"
+            let storage = JSONFileStorage(fileURL: root.appendingPathComponent("settings.json"))
+            storage.setValue(Unencodable(), forKey: key)
 
-        // The whole point of retaining it: silence at the handler is not the
-        // same as losing the failure.
-        #expect(StorageDiagnostics.lastFailure?.key == key)
-        #expect(StorageDiagnostics.lastFailure?.operation == .encode)
+            // The whole point of retaining it: silence at the handler is not
+            // the same as losing the failure.
+            #expect(StorageDiagnostics.lastFailure?.key == key)
+            #expect(StorageDiagnostics.lastFailure?.operation == .encode)
 
-        // And `reset()` clears it. Asserted as "no longer mine" rather than
-        // "nil", which a concurrent suite's report would falsify.
-        StorageDiagnostics.reset()
-        #expect(StorageDiagnostics.lastFailure?.key != key)
+            // And `reset()` clears it.
+            ProcessWideState.resetStorageDiagnostics()
+            #expect(StorageDiagnostics.lastFailure == nil)
+        }
     }
 
     // MARK: - The reported string
@@ -238,27 +246,26 @@ struct StorageFailureTests {
 
     // MARK: - The counter
 
+    /// In an exit test. The counter and the latest failure are process-wide,
+    /// and other suites report into them while this one runs; in the shared
+    /// process "the latest wins" failed whenever one landed between the report
+    /// and the read, and `reset()` cleared the record under whichever suite was
+    /// about to read it. In the child nothing else reports, so the counts are
+    /// asserted exactly rather than as a one-sided bound.
     @Test("failureCount rises with every report and reset() clears it")
-    func failureCountTracksReports() {
-        // The counter is process-wide and other suites report into it while
-        // this one runs (`.serialized` orders this suite internally, not
-        // against the others). So the assertions are on the DELTA, and only in
-        // the direction nothing else can move: a report only ever raises the
-        // count, so anything concurrent can only push it further past the
-        // bound. `report(_:)` is used directly rather than provoking a real
-        // failure, which keeps the window between the reads as small as it can
-        // be.
-        let before = StorageDiagnostics.failureCount
-        StorageDiagnostics.report(StorageFailure(operation: .save, key: "counted-1"))
-        StorageDiagnostics.report(StorageFailure(operation: .load, path: "/counted-2"))
+    func failureCountTracksReports() async {
+        await #expect(processExitsWith: .success) {
+            let before = StorageDiagnostics.failureCount
+            ProcessWideState.reportStorageFailure(StorageFailure(operation: .save, key: "counted-1"))
+            ProcessWideState.reportStorageFailure(StorageFailure(operation: .load, path: "/counted-2"))
 
-        #expect(StorageDiagnostics.failureCount >= before + 2)
-        #expect(StorageDiagnostics.lastFailure?.path == "/counted-2", "the latest wins")
+            #expect(StorageDiagnostics.failureCount == before + 2)
+            #expect(StorageDiagnostics.lastFailure?.path == "/counted-2", "the latest wins")
 
-        StorageDiagnostics.reset()
-        #expect(
-            StorageDiagnostics.failureCount < before + 2,
-            "reset() left the count where it was")
+            ProcessWideState.resetStorageDiagnostics()
+            #expect(StorageDiagnostics.failureCount == 0, "reset() left the count where it was")
+            #expect(StorageDiagnostics.lastFailure == nil)
+        }
     }
 
     @Test("Reading back an undecodable value stays silent")

@@ -349,6 +349,8 @@ custom_rules:
   # - the `TerminalClient` knobs whose didSets republish them;
   # - the `apply…()` functions that publish them;
   # - `publishProcessWide` named as a value;
+  # - `StorageDiagnostics.report(` and `.reset(`, which move the latest
+  #   failure and the count a test elsewhere may be reading as its own;
   # - any environment write, including `TerminalHost.seedDiscoveredHost(` and
   #   `.identify(`, which put the identified host into the environment where
   #   the `TerminalHost` detectors, `static let`s, freeze on first read.
@@ -364,13 +366,20 @@ custom_rules:
   #   one of those a volunteered colour reply publishes the reply
   #   process-wide.
   # Tests that feed replies pass a recording closure (`RenderLoopHarness`,
-  # `RunLoopFoldTests`).
+  # `RunLoopFoldTests`). Nor can it see a report made from inside a storage
+  # backend whose write failed. Those land in `StorageDiagnostics` from the
+  # shared process all the time, which is harmless only because no test there
+  # asserts that the latest failure, or the count, is its own. The tests that
+  # do run in exit tests.
   #
   # What it deliberately leaves alone: state that is main-actor isolated and
   # published nowhere else, written and restored in one synchronous stretch.
   # `RenderCache.verifiesMeasureMemo`, `TerminalHost.startupIdentity` and
   # `StackGuard.cachedExtent` are like that. No other main-actor test can run
   # inside that stretch, and nothing off the main actor can read the value.
+  # And `StorageDiagnostics.onFailure`: only `StorageFailureTests` installs a
+  # handler, taking turns under `.serialized`, and each handler keeps only the
+  # failures under its own test's directory or key.
   # And `SignalManagerTests`, which installs process-wide signal dispositions
   # and sends the process a real SIGWINCH and SIGTERM, `.serialized`: no other
   # test installs a `SignalManager`, so no other test has a handler for the
@@ -386,7 +395,7 @@ custom_rules:
       - "Tests/.*\\.swift$"
     excluded:
       - "Tests/[^/]+/(TestHelpers/)?ProcessWideState\\.swift$"
-    regex: '\b(TerminalWidthTraits\.current|TerminalColors\.current|ColorDepth\.(current|cap)|TerminalHyperlink\.isSupported|KittyGraphics\.is(Compression)?Supported|TerminalURLOpening\.isEnabled|TerminalClient\.(simulated|simulatedQuirks|hyperlinkSupport|graphicsSupport|graphicsCompressionSupport|urlOpeningSupport))(\.\w+)*\s*=(?!=)|\bTerminalClient\.apply\w+\(|\bTerminalColorRefresher\.publishProcessWide\b|\bTerminalHost\.(seedDiscoveredHost|identify)\(|\b(set|unset|put)env\('
+    regex: '\b(TerminalWidthTraits\.current|TerminalColors\.current|ColorDepth\.(current|cap)|TerminalHyperlink\.isSupported|KittyGraphics\.is(Compression)?Supported|TerminalURLOpening\.isEnabled|TerminalClient\.(simulated|simulatedQuirks|hyperlinkSupport|graphicsSupport|graphicsCompressionSupport|urlOpeningSupport))(\.\w+)*\s*=(?!=)|\bTerminalClient\.apply\w+\(|\bTerminalColorRefresher\.publishProcessWide\b|\bStorageDiagnostics\.(report|reset)\(|\bTerminalHost\.(seedDiscoveredHost|identify)\(|\b(set|unset|put)env\('
     match_kinds:
       - identifier
     severity: error

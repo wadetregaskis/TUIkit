@@ -333,8 +333,9 @@ Public APIs **must** match SwiftUI signatures exactly unless terminal constraint
   threads. Restoring a value does not help either, because its generation
   counter has already moved. So a test never writes, in the shared process:
   the width traits, the reported colours, link, picture or URL-opening
-  support, the `TerminalClient` knobs that republish them, or the
-  environment. Instead it does one of three things:
+  support, the `TerminalClient` knobs that republish them, the latest
+  storage failure and its count (`StorageDiagnostics.report` and `reset`),
+  or the environment. Instead it does one of three things:
   - pins the value for its own task (`TerminalWidthTraits.withTraits`,
     `TerminalColors.withCurrent`, `ColorDepth.withCurrent`,
     `TerminalHyperlink.withSupport`, `KittyGraphics.withSupport`);

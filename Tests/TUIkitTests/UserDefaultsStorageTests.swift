@@ -42,10 +42,13 @@ struct UserDefaultsStorageTests {
     ///
     /// A fresh suite rather than `.standard`: this runs in a real user session,
     /// and the standard domain is the user's own preferences. The unique key is
-    /// what makes the diagnostics assertions below safe — ``StorageDiagnostics``
-    /// is a process-wide channel that other suites report into in parallel, so
-    /// every claim here is "this key's failure", never a global count.
-    private func withStorage(_ body: (UserDefaultsStorage, String) -> Void) {
+    /// what makes the "not reported" assertions below safe:
+    /// ``StorageDiagnostics`` is a process-wide channel that other suites
+    /// report into in parallel, and another key's report cannot make
+    /// `lastFailure?.key != key` false. It CAN make `== key` false — another
+    /// report lands between the write and the read — so the one test that
+    /// asserts its own report is the latest runs in an exit test.
+    private static func withStorage(_ body: (UserDefaultsStorage, String) -> Void) {
         let suite = "tuikit.tests.\(UUID().uuidString)"
         let key = "settings-\(UUID().uuidString)"
         let storage = UserDefaultsStorage(suiteName: suite)
@@ -72,7 +75,7 @@ struct UserDefaultsStorageTests {
 
     @Test("A Codable value round-trips through the backend")
     func roundTrip() {
-        withStorage { storage, key in
+        Self.withStorage { storage, key in
             let value = Settings(name: "hello", count: 3, enabled: true)
             storage.setValue(value, forKey: key)
             #expect(storage.value(forKey: key) == Optional(value))
@@ -83,7 +86,7 @@ struct UserDefaultsStorageTests {
 
     @Test("An absent key reads as nil")
     func absentKeyIsNil() {
-        withStorage { storage, key in
+        Self.withStorage { storage, key in
             let absent: Settings? = storage.value(forKey: key)
             #expect(absent == nil)
         }
@@ -91,7 +94,7 @@ struct UserDefaultsStorageTests {
 
     @Test("A value stored under one type reads back as nil under another, silently")
     func decodeFailureIsSilentAndFallsBack() {
-        withStorage { storage, key in
+        Self.withStorage { storage, key in
             storage.setValue("a string", forKey: key)
             // The migration case the doc comment describes: the stored shape no
             // longer matches the type asked for. `@AppStorage`'s defined
@@ -105,20 +108,25 @@ struct UserDefaultsStorageTests {
         }
     }
 
+    /// In an exit test: `lastFailure` is the process's latest report, and in
+    /// the shared process another suite's report can land between this write
+    /// and the read (`StorageFailureTests` makes several).
     @Test("A value that cannot be encoded is reported with its key")
-    func encodeFailureIsReported() {
-        withStorage { storage, key in
-            // The other half of the asymmetry: a write that cannot happen is
-            // data the user expected to keep, so it is worth surfacing.
-            storage.setValue(UnencodableSetting(), forKey: key)
-            #expect(StorageDiagnostics.lastFailure?.key == key)
-            #expect(StorageDiagnostics.lastFailure?.operation == .encode)
+    func encodeFailureIsReported() async {
+        await #expect(processExitsWith: .success) {
+            Self.withStorage { storage, key in
+                // The other half of the asymmetry: a write that cannot happen
+                // is data the user expected to keep, so it is worth surfacing.
+                storage.setValue(UnencodableSetting(), forKey: key)
+                #expect(StorageDiagnostics.lastFailure?.key == key)
+                #expect(StorageDiagnostics.lastFailure?.operation == .encode)
+            }
         }
     }
 
     @Test("Removing a key clears it, and removing one that was never set is not an error")
     func removal() {
-        withStorage { storage, key in
+        Self.withStorage { storage, key in
             storage.setValue(Settings(name: "x", count: 1, enabled: false), forKey: key)
             #expect(storage.value(forKey: key) != Optional<Settings>.none)
 
@@ -136,8 +144,8 @@ struct UserDefaultsStorageTests {
     func suitesAreSeparate() {
         // What `init(suiteName:)` is for, and the property this file's own
         // isolation rests on.
-        withStorage { first, key in
-            withStorage { second, _ in
+        Self.withStorage { first, key in
+            Self.withStorage { second, _ in
                 first.setValue(Settings(name: "first", count: 1, enabled: true), forKey: key)
                 let leaked: Settings? = second.value(forKey: key)
                 #expect(leaked == nil)
