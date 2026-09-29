@@ -327,7 +327,26 @@ Public APIs **must** match SwiftUI signatures exactly unless terminal constraint
 ## Testing
 
 - Uses Swift Testing framework (`@Test`, `#expect`, `@Suite`)
-- Tests run in parallel; the few that mutate global state are serialised
+- **Tests run in parallel, and every suite of every test target shares one
+  process.** `.serialized` orders a suite's own tests, not other suites, so it
+  does not protect process-wide state. Other tests read that state on other
+  threads. Restoring a value does not help either, because its generation
+  counter has already moved. So a test never writes, in the shared process:
+  the width traits, the reported colours, link, picture or URL-opening
+  support, the `TerminalClient` knobs that republish them, or the
+  environment. Instead it does one of three things:
+  - pins the value for its own task (`TerminalWidthTraits.withTraits`,
+    `TerminalColors.withCurrent`, `ColorDepth.withCurrent`,
+    `TerminalHyperlink.withSupport`, `KittyGraphics.withSupport`);
+  - poses the question on arguments (`ColorDepth.detect(environment:)` and
+    its siblings);
+  - if the publication itself is the subject, writes the value through
+    `ProcessWideState` inside an exit test (`#expect(processExitsWith:)`). An
+    exit test's body runs in a child process of its own.
+  SwiftLint's `process_wide_write_in_tests` forbids the raw writes, and
+  `ProcessWideState` refuses a write made outside an exit test. See
+  `Tests/TUIkitTests/TestHelpers/ProcessWideState.swift` for the two flakes
+  this came from.
 - **A test that asserts the framework's own UI words** — "No items", "dismiss",
   "Done" — depends on the language `LocalizationService.shared` picked from
   `LANGUAGE` / `LC_ALL` / `LC_MESSAGES` / `LANG`. Declare that on the suite with

@@ -322,6 +322,75 @@ custom_rules:
       - string
     severity: error
 
+  # swift-testing runs every suite of every test target concurrently in ONE
+  # process, so a value published process-wide is in force for every test
+  # running at that moment, on every thread. `.serialized` orders a suite's own
+  # tests and nothing else. Restoring the value afterwards leaves the window
+  # open and does not undo the generation counter that every render cache
+  # clears on. Two flakes on 2026-09-28 came from this:
+  # `ANSIPrefixKnownWidthTests`' fuzz, measured under traits another suite had
+  # moved, and `BackdropMemoTests`, whose cache a colours test on another
+  # thread cleared between two frames.
+  #
+  # So a test writes process-wide state only inside an exit test
+  # (`#expect(processExitsWith:)`), whose body runs in a child process that no
+  # other test shares, and only through `ProcessWideState`. That type refuses
+  # a write anywhere else: it records an issue and leaves the value alone.
+  # This rule is the static half. It forbids the raw writes everywhere in
+  # `Tests/` except the two `ProcessWideState` files. Every other test pins
+  # the value for its own task (`TerminalWidthTraits.withTraits`,
+  # `TerminalColors.withCurrent`, `ColorDepth.withCurrent`,
+  # `TerminalHyperlink.withSupport`, `KittyGraphics.withSupport`) or poses the
+  # question on arguments.
+  #
+  # What it matches:
+  # - assignments to the values the render path reads process-wide, including
+  #   through a member (`TerminalWidthTraits.current.skinTone = …`);
+  # - the `TerminalClient` knobs whose didSets republish them;
+  # - the `apply…()` functions that publish them;
+  # - `publishProcessWide` named as a value;
+  # - any environment write, including `TerminalHost.seedDiscoveredHost(` and
+  #   `.identify(`, which put the identified host into the environment where
+  #   the `TerminalHost` detectors, `static let`s, freeze on first read.
+  # `(?!=)` rather than `[^=]` after the `=`, so that `==` is not a match and
+  # the match does not run into the next token, which may be a keyword
+  # (`nil`) that `match_kinds` would reject.
+  #
+  # What it cannot see: a DEFAULT argument that publishes.
+  # - `TerminalColorRefresher`'s `publish:` defaults to `publishProcessWide`.
+  #   `TerminalColorLatePublicationTests` relies on that, inside its exit test.
+  # - `RenderLoop`'s `publishTerminalColors:` has the same default, and so has
+  #   every loop built through `HeadlessApp` or `AppRunner`. A test that feeds
+  #   one of those a volunteered colour reply publishes the reply
+  #   process-wide.
+  # Tests that feed replies pass a recording closure (`RenderLoopHarness`,
+  # `RunLoopFoldTests`).
+  #
+  # What it deliberately leaves alone: state that is main-actor isolated and
+  # published nowhere else, written and restored in one synchronous stretch.
+  # `RenderCache.verifiesMeasureMemo`, `TerminalHost.startupIdentity` and
+  # `StackGuard.cachedExtent` are like that. No other main-actor test can run
+  # inside that stretch, and nothing off the main actor can read the value.
+  # And `SignalManagerTests`, which installs process-wide signal dispositions
+  # and sends the process a real SIGWINCH and SIGTERM, `.serialized`: no other
+  # test installs a `SignalManager`, so no other test has a handler for the
+  # signal to reach. A test that installs one would share its signals.
+  process_wide_write_in_tests:
+    name: "Process-wide write in a test"
+    message: >-
+      Every test in the process reads this, on every thread, while it stays
+      written. Pin it for this task (withTraits / withCurrent / withSupport),
+      pose the question on arguments, or — if the publication itself is the
+      subject — write it through ProcessWideState inside an exit test.
+    included:
+      - "Tests/.*\\.swift$"
+    excluded:
+      - "Tests/[^/]+/(TestHelpers/)?ProcessWideState\\.swift$"
+    regex: '\b(TerminalWidthTraits\.current|TerminalColors\.current|ColorDepth\.(current|cap)|TerminalHyperlink\.isSupported|KittyGraphics\.is(Compression)?Supported|TerminalURLOpening\.isEnabled|TerminalClient\.(simulated|simulatedQuirks|hyperlinkSupport|graphicsSupport|graphicsCompressionSupport|urlOpeningSupport))(\.\w+)*\s*=(?!=)|\bTerminalClient\.apply\w+\(|\bTerminalColorRefresher\.publishProcessWide\b|\bTerminalHost\.(seedDiscoveredHost|identify)\(|\b(set|unset|put)env\('
+    match_kinds:
+      - identifier
+    severity: error
+
   # The standard library's SPI (`_forEachField`, `_forEachFieldWithKeyPath`,
   # `_EachFieldOptions`, `_MetadataKind`, …) is declared only in its PRIVATE
   # module interface. swift.org toolchains ship that — every local gate here,
