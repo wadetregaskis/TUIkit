@@ -278,7 +278,9 @@ final class ResidualSession<Kind: ResidualRowKind>: StressSession {
                 let button = palette.angled ? "<\(task.title)>" : "[\(task.title)]"
                 let start = ResidualColumns.linesWidth + ResidualColumns.itemsWidth + 2
                 let drawn = row.count > start ? String(row[start...]) : ""
-                guard drawn.contains(button) else {
+                // A terminal narrower than the three columns cuts the third
+                // short ("[hidden-beaco…") or off: there is no button to read.
+                guard drawn.contains(button) || drawn.isEmpty || drawn.hasSuffix("…") else {
                     return "task \(task.id) is drawn \"\(drawn)\" without \"\(button)\""
                 }
             }

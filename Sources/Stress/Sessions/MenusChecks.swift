@@ -177,10 +177,13 @@ extension MenusSession {
             if case .context(let id) = menu.kind, !showsDocument(id, on: screen) { return nil }
             return "\(describe(menu.kind)) is open, but none of its rows is on the screen"
         }
+        // Two lines of content (a terminal eight tall, less the header's and
+        // the status bar's boxes) have no room for a box round a row at all.
+        let content = Self.contentLines(of: screen)
+        guard content.count >= 3 else { return nil }
         guard let box = PopupBox(aroundColumn: x, at: y, on: screen) else {
             return "\(describe(menu.kind)) is open, but the box around \"\(first)\" is not whole on the screen"
         }
-        let content = Self.contentLines(of: screen)
         if !content.contains(box.top) || !content.contains(box.bottom) {
             return "\(describe(menu.kind))'s box runs from line \(box.top) to \(box.bottom), outside the content's "
                 + "lines \(content.lowerBound)...\(content.upperBound)"

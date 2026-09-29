@@ -246,9 +246,16 @@ extension ThemeFrame {
 
 extension ThemesSession {
     func check(_ screen: [String], after index: Int) -> String? {
-        let look = "look: \(formPalette.name) · \(formPalette.colorScheme == .dark ? "dark" : "light")"
-        if !screen.contains(where: { $0.contains(look) }) {
-            return "the page should say \"\(look)\""
+        // The form's line, as far as the terminal shows it: the scheme may wrap
+        // onto the next line in a narrow one, and the whole form may be cut
+        // off in a short one — so the palette's name is what must be there,
+        // and the scheme on its line or the next.
+        let scheme = formPalette.colorScheme == .dark ? "dark" : "light"
+        if let y = screen.firstIndex(where: { $0.contains("look: ") }) {
+            let said = screen[y...].prefix(2).joined(separator: " ")
+            if !screen[y].contains("look: \(formPalette.name) ·") || !said.contains(scheme) {
+                return "the page should say \"look: \(formPalette.name) · \(scheme)\": \(said)"
+            }
         }
         if !screen.prefix(3).contains(where: { $0.contains("Themes · \(rootPalette.name)") }) {
             return "the header should name the app's palette, \(rootPalette.name)"

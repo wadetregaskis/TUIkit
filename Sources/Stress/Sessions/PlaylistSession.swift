@@ -190,16 +190,65 @@ final class PlaylistSession: StressSession {
         let header = "\(playlist.tracks.count) tracks · \(total) min"
         guard screen.contains(where: { $0.hasPrefix(header) }) else { return "the header does not say \(header)" }
         guard !carrying else { return nil }
-        let shown = screen.compactMap { line -> Int? in
-            // Nothing else on a row has a `#`: the first one is the number.
-            guard let range = line.range(of: #"#\d+"#, options: .regularExpression) else { return nil }
-            return Int(line[range].dropFirst())
+        return listProblem(screen)
+    }
+
+    /// The tracks in the list's box, read line by line: a run of the
+    /// playlist's own order, with no blank line among them.
+    ///
+    /// In a narrow terminal a row wraps, and its number is what it cuts: a
+    /// row drawn without its number — or with it truncated (`#4…`) — is still
+    /// a row. So the numbers that ARE drawn must be in the playlist's order,
+    /// and a track between two of them that shows no number must have a line
+    /// of its own to be on: never more of them skipped than there are lines
+    /// between the two with no number. Where every row shows its number,
+    /// that allows no gap at all. A blank line with a track below it is a row
+    /// drawn blank, at any width; blank lines at the end are the list ending,
+    /// and leave no track after the last number without a line either.
+    private func listProblem(_ screen: [String]) -> String? {
+        guard !playlist.tracks.isEmpty else { return nil }
+        guard let top = screen.firstIndex(where: { $0.hasPrefix("╭") }),
+            let bottom = screen[(top + 1)...].firstIndex(where: { $0.hasPrefix("╰") })
+        else { return "the list's box is not on the screen" }
+        // Each line inside the walls. The right wall may be the scroll
+        // indicator, and a line is padded to the terminal's width.
+        let lines = screen[(top + 1)..<bottom].map { line -> (id: Int?, blank: Bool) in
+            var body = line.dropFirst()
+            while body.last == " " { body = body.dropLast() }
+            body = body.dropLast()
+            // Nothing else on a row has a `#`: the first one is the number,
+            // unless the row is cut short inside it.
+            let id = body.firstMatch(of: /#(\d+)(?![\d…])/).flatMap { Int($0.output.1) }
+            return (id, body.allSatisfy { $0 == " " })
         }
-        guard let first = shown.first else { return playlist.tracks.isEmpty ? nil : "no track is on the screen" }
+        guard lines.contains(where: { !$0.blank }) else { return "no track is on the screen" }
+        if let blank = lines.indices.first(where: { lines[$0].blank && lines[($0 + 1)...].contains { !$0.blank } }) {
+            return "line \(blank + 1) of the list is blank, with tracks below it"
+        }
         let order = playlist.tracks.map(\.id)
-        guard let start = order.firstIndex(of: first) else { return "#\(first) is drawn but not in the playlist" }
-        let expected = Array(order[start..<min(order.count, start + shown.count)])
-        return shown == expected ? nil : "the screen shows \(shown) where the playlist has \(expected)"
+        // The lines drawn with no number in `range`: where the tracks whose
+        // numbers are not drawn can be.
+        let spare = { (range: Range<Int>) in lines[range].filter { !$0.blank && $0.id == nil }.count }
+        var previous: (at: Int, line: Int)?
+        for (line, entry) in lines.enumerated() {
+            guard let id = entry.id else { continue }
+            guard let at = order.firstIndex(of: id) else { return "#\(id) is drawn but not in the playlist" }
+            if let previous {
+                let skipped = at - previous.at - 1
+                guard skipped >= 0, skipped <= spare((previous.line + 1)..<line) else {
+                    let between = order[(previous.at + 1)...].prefix(max(1, min(skipped, 6)))
+                    return "#\(id) is drawn after #\(order[previous.at]), where the playlist has \(Array(between)) next"
+                }
+            }
+            previous = (at, line)
+        }
+        if let previous, lines.last?.blank == true {
+            let after = order.count - previous.at - 1
+            guard after <= spare((previous.line + 1)..<lines.count) else {
+                return "the list ends at #\(order[previous.at]), with \(after) tracks after it in the playlist"
+            }
+        }
+        return nil
     }
 
     static let descriptor = SessionDescriptor(

@@ -4,6 +4,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import Observation
 import TUIkit
 
@@ -148,8 +149,19 @@ final class LogSession: StressSession {
         }
         guard following == true, let newest = log.lines.last else { return nil }
         let number = "\(newest.id) "
-        return screen.contains { $0.drop { $0 == " " }.hasPrefix(number) }
-            ? nil : "following the log, but its newest line (\(newest.id)) is not on the screen"
+        if screen.contains(where: { $0.drop { $0 == " " }.hasPrefix(number) }) { return nil }
+        // A line taller than the viewport, followed to its end, shows its end
+        // and not its number. Then every row the log draws is that line's —
+        // none starts with a number of its own — and what they draw, read in
+        // order, is how its text ends.
+        let absent = "following the log, but its newest line (\(newest.id)) is not on the screen"
+        guard let header = screen.firstIndex(where: { $0.hasPrefix(count) }) else { return absent }
+        let rows = screen[(header + 1)...].filter { $0.hasPrefix(" ") }
+            .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: " ▲▼▁▂▃▄▅▆▇█")) }
+            .filter { !$0.isEmpty }
+        guard !rows.isEmpty, !rows.contains(where: { $0.contains(/^\d+ (INFO|WARN|ERROR)\b/) }) else { return absent }
+        let unspaced = { (text: String) in text.filter { $0 != " " } }
+        return unspaced(newest.text).hasSuffix(unspaced(rows.joined())) ? nil : absent
     }
 
     static let descriptor = SessionDescriptor(
