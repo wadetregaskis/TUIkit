@@ -43,8 +43,8 @@ struct ScreenCell: Equatable {
     }
 }
 
-/// How a colour was spelled on the wire — what a colour depth allows.
-enum ColourSpelling: Comparable {
+/// How a colour was spelled on the wire — what a colour depth decides.
+enum ColourSpelling: Comparable, Hashable, CustomStringConvertible {
     /// One of the sixteen named codes (30–37, 90–97 and their fields).
     case named
     /// A 256-colour index (`38;5;n`).
@@ -52,8 +52,10 @@ enum ColourSpelling: Comparable {
     /// 24 bits (`38;2;r;g;b`).
     case rgb
 
-    /// The richest spelling a terminal of `depth` understands.
-    static func allowed(at depth: ColorDepth) -> Self? {
+    /// The spelling TUIkit gives the colours it computes at `depth`: 24 bits,
+    /// an index into the 256, or one of the sixteen — `nil` where it spells
+    /// none. A named colour is spelled by name at every depth.
+    static func computed(at depth: ColorDepth) -> Self? {
         switch depth {
         case .noColor: nil
         case .basic16: .named
@@ -61,29 +63,37 @@ enum ColourSpelling: Comparable {
         case .truecolor: .rgb
         }
     }
+
+    var description: String {
+        switch self {
+        case .named: "one of the sixteen"
+        case .indexed: "a 256-colour index"
+        case .rgb: "24 bits"
+        }
+    }
 }
 
-/// A frame's lines, each taken apart into ``ScreenCell``s, and the richest
-/// colour spelling any of them used.
+/// A frame's lines, each taken apart into ``ScreenCell``s, and where each
+/// spelling of a colour first appears in it.
 struct ScreenCells {
     /// One row of cells per line, a cell per column.
     let rows: [[ScreenCell]]
-    /// The richest spelling of a colour anywhere in the frame, with the first
-    /// place it appears: a frame drawn for a 256-colour terminal must not state
-    /// a 24-bit colour anywhere.
-    let richestSpelling: (spelling: ColourSpelling, row: Int, column: Int)?
+    /// The first cell each spelling of a colour paints, by spelling: a frame
+    /// drawn for a 256-colour terminal must state no 24-bit colour anywhere,
+    /// and one drawn for a truecolour terminal no index TUIkit computed.
+    let spellings: [ColourSpelling: (row: Int, column: Int)]
 
     init(_ lines: [String]) {
-        var richest: (spelling: ColourSpelling, row: Int, column: Int)?
+        var spellings: [ColourSpelling: (row: Int, column: Int)] = [:]
         rows = lines.enumerated().map { row, line in
             var parser = CellParser()
             let cells = parser.cells(of: line)
-            if let seen = parser.richest, richest.map({ seen.spelling > $0.spelling }) ?? true {
-                richest = (seen.spelling, row, seen.column)
+            for (spelling, column) in parser.spellings where spellings[spelling] == nil {
+                spellings[spelling] = (row, column)
             }
             return cells
         }
-        richestSpelling = richest
+        self.spellings = spellings
     }
 
     /// The cell at `column` of `row`, or `nil` off the frame.
@@ -100,7 +110,8 @@ private struct CellParser {
     private var bold = false
     private var dim = false
     private var reversed = false
-    private(set) var richest: (spelling: ColourSpelling, column: Int)?
+    /// The first column each spelling paints.
+    private(set) var spellings: [ColourSpelling: Int] = [:]
 
     mutating func cells(of line: String) -> [ScreenCell] {
         var cells: [ScreenCell] = []
@@ -113,10 +124,8 @@ private struct CellParser {
             characters = characters.dropFirst()
             let ink = reversed ? background : foreground
             let field = reversed ? foreground : background
-            if let spelling = [ink?.1, field?.1].compactMap({ $0 }).max(),
-                richest.map({ spelling > $0.spelling }) ?? true
-            {
-                richest = (spelling, cells.count)
+            for spelling in [ink?.1, field?.1].compactMap({ $0 }) where spellings[spelling] == nil {
+                spellings[spelling] = cells.count
             }
             let cell = ScreenCell(
                 character: first, foreground: ink?.0, background: field?.0, isBold: bold, isDim: dim)

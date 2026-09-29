@@ -26,7 +26,7 @@
 //
 //  Sessions (interaction scripts played over time — see Sessions/Session.swift):
 //    --sessions                                  list them
-//    --session <id> [--steps N] [--verify] [--resize-every N] [--cols C] [--rows R] [--show] [--trace] [--census]
+//    --session <id> [--steps N] [--verify] [--resize-every N] [--cols C] [--rows R] [--show] [--show-steps A-B] [--trace] [--census]
 //    --bench --scenario session/<id> ...         a session as a benchmark
 
 import Dispatch
@@ -58,7 +58,7 @@ let usageText = """
     Benchmark:    Stress --bench --scenario <id> [--variant V] [--iterations N] [--cols C] [--rows R] [--cold]
     Variants:     Stress --variants
     Sessions:     Stress --sessions
-    Session:      Stress --session <id> [--steps N] [--verify] [--resize-every N] [--cols C] [--rows R] [--show] [--trace] [--census]
+    Session:      Stress --session <id> [--steps N] [--verify] [--resize-every N] [--cols C] [--rows R] [--show] [--show-steps A-B] [--trace] [--census]
                   (and Stress --bench --scenario session/<id>, which ab_bench.py can A/B)
 
     Scenario ids (the interactive menu shows titles, not ids):
@@ -112,6 +112,9 @@ if rawArgs.contains("--help") || rawArgs.contains("-h") {
     options.verify = rawArgs.contains("--verify")
     options.resizeEvery = flagValue("--resize-every").flatMap(Int.init) ?? 0
     options.show = rawArgs.contains("--show")
+    if let steps = flagValue("--show-steps")?.split(separator: "-").compactMap({ Int($0) }), let first = steps.first {
+        options.showSteps = first...max(first, steps.last ?? first)
+    }
     options.trace = rawArgs.contains("--trace")
     options.census = rawArgs.contains("--census")
     let code = await MainActor.run { () -> Int32 in

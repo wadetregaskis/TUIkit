@@ -94,6 +94,13 @@ protocol StressSession: AnyObject {
     /// `withKnownIssue`, for a session.
     var knownIssues: [String: String] { get }
 
+    /// The colour depth every frame is drawn at — pinned for the frame with
+    /// `ColorDepth.withCurrent(_:operation:)`, TUIkit's scoped pin, as a test
+    /// pins it — or `nil` for whatever the process detected. Read before each
+    /// frame, so a session can change it between two, as an app changes it
+    /// when it lowers `ColorDepth.cap`.
+    var colorDepth: ColorDepth? { get }
+
     /// Every how many steps the runner reports the run so far — its resident
     /// size — for a session whose cost is what builds up over a long run, or
     /// `nil` for the usual end-of-run report alone.
@@ -110,6 +117,7 @@ extension StressSession {
     func check(_ screen: [String], after index: Int) -> String? { nil }
     func check(styled screen: [String], after index: Int) -> String? { nil }
     var knownIssues: [String: String] { [:] }
+    var colorDepth: ColorDepth? { nil }
     var looksBeforeEachStep: Bool { false }
     func look(at screen: [String]) {}
     var checkpointEvery: Int? { nil }
@@ -201,10 +209,24 @@ final class DrivenSession {
             if session.looksBeforeEachStep { session.look(at: app.screen.map(\.stripped)) }
             return session.step(index)
         }
-        send = { app.send($0) }
-        sendMouse = { app.send($0) }
-        resize = { app.resize(width: $0, height: $1) }
-        frame = { app.frame(atNanos: $0, date: Self.date(atNanos: $0)) }
+        // The session's colour depth, pinned around everything the app does in
+        // a step — its input as well as its frame, as a process-wide depth
+        // would be. An input handler can draw: a List's Down that scrolls
+        // stores a row in the render cache as it handles the key, and pinned
+        // around the frame alone that row was spelled at the process's depth
+        // and served at the pin's (measured: one store during the key, and
+        // the next frame's row in 24 bits at 256 colours).
+        func pinned(_ body: () -> Void) {
+            guard let depth = session.colorDepth else {
+                body()
+                return
+            }
+            ColorDepth.withCurrent(depth, operation: body)
+        }
+        send = { event in pinned { app.send(event) } }
+        sendMouse = { event in pinned { app.send(event) } }
+        resize = { width, height in app.resize(width: width, height: height) }
+        frame = { nanos in pinned { app.frame(atNanos: nanos, date: Self.date(atNanos: nanos)) } }
         screen = { app.screen }
         bytesWritten = { app.bytesWritten }
         check = { screen, index in
@@ -259,6 +281,7 @@ enum Sessions {
             AccumulateSession.descriptor,
             ImageRowsSession.descriptor,
             MenusSession.descriptor,
+            ThemesSession.descriptor,
         ]
 
     @MainActor

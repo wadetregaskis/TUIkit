@@ -32,6 +32,10 @@ enum SessionRunner {
         /// Print the last frame, styling stripped — what a session is doing,
         /// for the person writing one.
         var show = false
+        /// Print the frame drawn after each of these steps, styling stripped —
+        /// what a step did, for the person writing a session, or chasing what
+        /// a check reported.
+        var showSteps: ClosedRange<Int>?
         /// Print every step as it is played: its action and input, what its
         /// frame cost, and how many bytes it wrote.
         var trace = false
@@ -188,13 +192,7 @@ enum SessionRunner {
             let wall = DispatchTime.now().uptimeNanoseconds &- wallStart
             let cpu = threadCPUNanoseconds().flatMap { end in cpuStart.map { end &- $0 } } ?? wall
             let bytes = warm.bytesWritten() &- bytesBefore
-            if options.trace {
-                let keys = (step.keys.map { "\($0.key)" } + step.mouse.map { "\($0.button) \($0.phase)@\($0.x),\($0.y)" })
-                    .joined(separator: " ")
-                let micros = String(format: "%.1f", Double(cpu) / 1_000)
-                Swift.print(
-                    "  step \(index): \(step.action)\(keys.isEmpty ? "" : " [\(keys)]") — \(micros) µs, \(bytes) bytes")
-            }
+            if options.trace { trace(step, index, cpu: cpu, bytes: bytes) }
 
             report.steps += 1
             report.wallNanos &+= wall
@@ -203,7 +201,7 @@ enum SessionRunner {
             report.costs[step.action, default: ActionCost()].count += 1
             report.costs[step.action, default: ActionCost()].cpuNanos.append(cpu)
             report.costs[step.action, default: ActionCost()].bytes += bytes
-            if options.checks { checkFrame(of: warm, after: index, action: step.action, into: &report) }
+            inspect(warm, after: step, index, options: options, into: &report)
             if RenderCache.verifiesRenderMemo, warm.staleServes().count > staleSoFar {
                 report.staleServeSteps.append(index)
                 staleSoFar = warm.staleServes().count
@@ -248,6 +246,29 @@ enum SessionRunner {
         report.sizesVerified = RenderCache.verifiesMeasureMemo
         report.staleSizes = warm.staleSizes()
         return report
+    }
+
+    /// Prints a step as `--trace` does: its action, its keys and mouse events,
+    /// what its frame cost and how many bytes it wrote.
+    private static func trace(_ step: SessionStep, _ index: Int, cpu: UInt64, bytes: Int) {
+        let input = step.keys.map { "\($0.key)" } + step.mouse.map { "\($0.button) \($0.phase)@\($0.x),\($0.y)" }
+        let keys = input.joined(separator: " ")
+        let micros = String(format: "%.1f", Double(cpu) / 1_000)
+        Swift.print("  step \(index): \(step.action)\(keys.isEmpty ? "" : " [\(keys)]") — \(micros) µs, \(bytes) bytes")
+    }
+
+    /// What the runner does with the frame a step drew besides timing it:
+    /// prints it, styling stripped, when `--show-steps` names the step, and
+    /// asks the session whether it shows what it should.
+    @MainActor
+    private static func inspect(
+        _ session: DrivenSession, after step: SessionStep, _ index: Int, options: Options, into report: inout Report
+    ) {
+        if options.showSteps?.contains(index) == true {
+            Swift.print("  frame after step \(index) (\(step.action)):")
+            for line in session.screen() { Swift.print("  | " + line.stripped) }
+        }
+        if options.checks { checkFrame(of: session, after: index, action: step.action, into: &report) }
     }
 
     /// Files a checkpoint's line when `steps` is one of the session's
@@ -365,7 +386,17 @@ enum SessionRunner {
         let line = seen.indices.first { seen[$0] != expected[$0] } ?? 0
         let drawn = seen[line].stripped
         let wanted = expected[line].stripped
-        let differs = drawn == wanted ? "  (the same text, styled differently)" : ""
+        var differs = drawn == wanted ? "  (the same text, styled differently)" : ""
+        // Where the paint differs, and how: the first cell whose ink or field
+        // is not the twin's.
+        let (mine, theirs) = (ScreenCells([seen[line]]).rows[0], ScreenCells([expected[line]]).rows[0])
+        if drawn == wanted, let column = mine.indices.first(where: { $0 < theirs.count && mine[$0] != theirs[$0] }) {
+            let paint = { (cell: ScreenCell) in
+                "\(ScreenCell.name(cell.foreground)) on \(ScreenCell.name(cell.background))"
+                    + (cell.isBold ? " bold" : "") + (cell.isDim ? " dim" : "")
+            }
+            differs += " from column \(column): \(paint(mine[column])), the twin's \(paint(theirs[column]))"
+        }
         return """
             step \(index) (\(action)): line \(line) differs\(differs)
                 drawn:    \(drawn)
