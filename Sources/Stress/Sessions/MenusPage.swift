@@ -79,10 +79,13 @@ final class MenuDesk {
 }
 
 /// Where the focus is, as the page's `@FocusState` reads it — shown on the
-/// status line so the session can see where a closed menu left it.
+/// status line so the session can see where a closed menu left it. A document
+/// is not among them: it says it holds the focus itself (`DocumentRow`), so
+/// that no `.focused(_:equals:)` sits on the rows — a focus stop claiming the
+/// id one offers is a registration no memo can make again, and the rows are
+/// where the memos are worth having.
 enum MenuDeskFocus: Hashable {
     case file, filter, view, tag, export, help, jump
-    case row(Int)
 
     var name: String {
         switch self {
@@ -93,7 +96,6 @@ enum MenuDeskFocus: Hashable {
         case .export: "export"
         case .help: "help"
         case .jump: "jump"
-        case .row(let id): "row \(id)"
         }
     }
 }
@@ -202,7 +204,6 @@ struct MenusPage: View {
                             Divider()
                             Button("Trash #\(document.id)", role: .destructive) { trash(document.id) }
                         }
-                        .focused($focus, equals: .row(document.id))
                 }
             }
         }
@@ -258,13 +259,15 @@ struct MenusPage: View {
 }
 
 /// A document: its name, its status, and its number — how the session finds
-/// it on the screen.
+/// it on the screen — and a `▸` before its name while its context menu's
+/// focus stop holds the focus (`\.isFocused`, which `.contextMenu` publishes).
 private struct DocumentRow: View {
     let document: MenuDesk.Document
+    @Environment(\.isFocused) private var isFocused
 
     var body: some View {
         HStack(spacing: 1) {
-            Text(verbatim: document.name)
+            Text(verbatim: (isFocused ? "▸" : " ") + document.name)
             Spacer()
             Text(verbatim: MenuDesk.statuses[document.status]).foregroundStyle(Color.gray)
             Text(verbatim: "#\(document.id)")
@@ -272,5 +275,9 @@ private struct DocumentRow: View {
     }
 }
 
-// Every field compared, as the synthesized `==` does. Isolated, as the view is.
-extension DocumentRow: @MainActor Equatable {}
+// The document compared, which is every field but the environment's: what the
+// row reads from there is the environment's to invalidate. Isolated, as the
+// view is.
+extension DocumentRow: @MainActor Equatable {
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.document == rhs.document }
+}

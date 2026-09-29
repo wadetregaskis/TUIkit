@@ -47,7 +47,12 @@ extension MenusSession {
         guard let line = statusLine(on: screen), line.hasPrefix("["), let end = line.firstIndex(of: "]") else {
             return nil
         }
-        return String(line[line.index(after: line.startIndex)..<end])
+        let shown = String(line[line.index(after: line.startIndex)..<end])
+        // A document says so itself, with a `▸` before its name — and where a
+        // narrow terminal has cut its number off, nobody can say which.
+        guard shown == "none", let row = screen.first(where: { $0.contains("▸") }) else { return shown }
+        guard let range = row.range(of: #"#\d+"#, options: .regularExpression) else { return nil }
+        return "row " + row[range].dropFirst()
     }
 
     /// The page's status line, where the screen shows it.
