@@ -482,28 +482,6 @@ struct PaletteContrastAuditTests {
         }
     }
 
-    /// The breath's ends move only where the plain one — ``ViewConstants/focusPulseMin``
-    /// to ``ViewConstants/focusPulseMax`` of the accent over the page — fails as a
-    /// 256-colour terminal draws it. A palette whose plain breath holds keeps it exactly,
-    /// at every depth: twelve of the sixteen shipped palettes.
-    @Test("A breath that holds on 256 colours is left at the plain shares")
-    func holdingBreathIsNotMoved() {
-        for palette in Self.statedPalettes {
-            let dim = palette.accent.opacity(ViewConstants.focusPulseMin, over: palette.background)
-            let bright = palette.accent.opacity(ViewConstants.focusPulseMax, over: palette.background)
-            let drawn = DrawnBreath(dim: dim, bright: bright, in: palette)
-            let holds = BreathCriterion.allCases.allSatisfy { drawn.failure($0) == nil }
-            guard holds else { continue }
-            // The rule itself: the shipped palettes read constants (`RowFills`), so
-            // it is what the rest of the palettes get.
-            let ends = AccentFillBreath.ends(
-                accent: palette.accent, ground: palette.background, text: palette.foreground)
-            #expect(
-                ends.dim == dim && ends.bright == bright,
-                "\(palette.name): moved to \(Self.hex(ends.dim))→\(Self.hex(ends.bright)) from \(Self.hex(dim))→\(Self.hex(bright))")
-        }
-    }
-
     // MARK: - Hover has to be visible
 
     /// Hovering a control tints its face a step further into the accent. The

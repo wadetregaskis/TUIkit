@@ -152,4 +152,16 @@ struct RowFillRuleTests {
         #expect(fills.focusDim == look.focus.dim.color)
         #expect(fills.focusDim != base.focusBackground)
     }
+
+    @Test("Over another surface the accent's fill breath is the rule's B, placed on that surface")
+    func accentFillOverASurface() {
+        let well = Color.rgb(0x2A, 0x2E, 0x3A)
+        let look = RowFillRule(
+            page: well, text: Self.dusk.foreground, secondary: Self.dusk.foregroundSecondary,
+            accent: Self.dusk.accent, live: false
+        ).truecolour()
+        let ends = ColorDepth.withCurrent(.truecolor) { Self.dusk.accentFillPulse(over: well) }
+        #expect(ends.dim == look.emphasis.dim.color && ends.bright == look.emphasis.top.color)
+        #expect(ends.bright != ColorDepth.withCurrent(.truecolor) { Self.dusk.accentFillPulse() }.bright)
+    }
 }

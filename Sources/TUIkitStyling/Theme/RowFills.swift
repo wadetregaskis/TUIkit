@@ -213,9 +213,13 @@ extension RowFills {
 extension Palette {
     /// This palette's row fills at `depth`, or `nil` where it has none — see
     /// ``RowFills``.
-    package func rowFills(at depth: ColorDepth = .current) -> RowFills? {
+    ///
+    /// - Parameter surface: What the rows sit on, when that is not the page: the rule
+    ///   places the fills with it as their page. Only B is asked for there
+    ///   (``Palette/accentFillPulse(over:)``), so a stated wash plays no part.
+    package func rowFills(at depth: ColorDepth = .current, over surface: Color? = nil) -> RowFills? {
         guard depth > .noColor else { return nil }
-        let page = background
+        let page = surface ?? background
         func packed(_ colour: Color) -> UInt32? {
             guard let (red, green, blue) = colour.spendingAlpha(over: page).rgbComponents else { return nil }
             return UInt32(red) << 16 | UInt32(green) << 8 | UInt32(blue)
@@ -238,7 +242,7 @@ extension Palette {
             default: false
             }
         }
-        let wash = statedFocusWash().map { wash in
+        let wash = (surface == nil ? statedFocusWash() : nil).map { wash in
             let (dim, bright) = washPulse(wash)
             return [dim, bright]
         }

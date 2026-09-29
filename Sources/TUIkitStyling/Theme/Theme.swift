@@ -981,25 +981,18 @@ extension Palette {
     /// drawn on top of — a selected row's background, a highlighted date cell,
     /// a dragging split-view divider.
     ///
-    /// The dim end is the same; the bright end stops at ``ViewConstants/focusPulseMax``
-    /// rather than reaching the accent, and that is the whole difference between
-    /// the two. A fill carries arbitrary foreground content that keeps its own
-    /// colour, so the bright end is bounded by what that content stays readable
-    /// against — the pair `PaletteContrastAuditTests` measures. A mark drawn IN
-    /// the accent has nothing on top of it and can go all the way.
+    /// Unlike ``accentPulse(over:)``, the top stops short of the accent. A fill
+    /// carries arbitrary foreground content that keeps its own colour, so the top is
+    /// bounded by what that content stays readable against — the pair
+    /// `PaletteContrastAuditTests` measures. A mark drawn IN the accent has nothing on
+    /// top of it and can go all the way.
     ///
-    /// Over the page, the ends are the palette's row fills, B (``RowFills``): a
-    /// shipped palette's, chosen at coding time, and any other palette's from the
-    /// row-fill rule, which places B with the selected row and the cursor row so the
-    /// three stay distinguishable. Over any other surface, the shares below.
-    ///
-    /// Those two shares are where the breath starts, not always where it ends. A
-    /// 256-colour terminal draws the shades the cube can show between them, and the
-    /// cube moves those and the text alike, so the shares are chosen as it draws them:
-    /// kept wherever the breath holds there, and walked where it does not — the top
-    /// brought down until the row's text keeps ``ViewConstants/rowBreathPeakContrastFloor``
-    /// on every shade. The same on every terminal, so a breath looks the same everywhere.
-    /// `AccentFillBreath` has the walk and the palettes it moves.
+    /// The ends are the palette's row fills, B (``RowFills``), over what the fill sits
+    /// on: a shipped palette's over its page, chosen at coding time; any other
+    /// palette's, and any palette's over another surface, placed by the row-fill rule
+    /// with that surface as its page. The rule places B above the selected row and the
+    /// cursor row, and keeps the row's text at 2:1 on every frame, as each depth draws
+    /// it — so a breath looks the same on every terminal.
     ///
     /// When the accent or the ground has no RGB (``Color/default``, or a colour of
     /// the terminal's own that it has not reported), neither end can be mixed, and
@@ -1009,21 +1002,17 @@ extension Palette {
     /// between the page and a solid accent; held, it is still, and leaves no run.
     /// ``accentPulse(over:)`` holds its bright end the same way, through
     /// ``Color/breathEnds(dimmedTo:over:)``. A translucent accent's own alpha counts
-    /// toward the half, so one fainter than that holds the ground.
+    /// toward the half, so one fainter than that holds the ground. On a terminal that
+    /// draws no colour at all both ends are the bright one too: no fill is drawn there
+    /// (a row reverses instead, `Palette.emphasisFill(over:)`).
     ///
     /// - Parameter surface: What the fill sits on, when that is not the page.
     public func accentFillPulse(over surface: Color? = nil) -> (dim: Color, bright: Color) {
-        let ground = surface ?? background
-        // The palette's B over its page (see `RowFills`). Over any other surface the
-        // walk below still runs.
-        if ground == background, let fills = rowFills() { return (fills.emphasisDim, fills.emphasisBright) }
+        if let fills = rowFills(over: surface) { return (fills.emphasisDim, fills.emphasisBright) }
         // `Color.breathEnds(dimmedTo:over:)`'s rule for a side with no RGB, applied to
         // this pair's own bright end, which stops short of the accent.
-        guard accent.rgbComponents != nil, ground.rgbComponents != nil else {
-            let bright = accent.opacity(ViewConstants.focusPulseMax, over: ground)
-            return (bright, bright)
-        }
-        return AccentFillBreath.ends(accent: accent, ground: ground, text: foreground)
+        let bright = accent.opacity(ViewConstants.focusPulseMax, over: surface ?? background)
+        return (bright, bright)
     }
 
     /// The two ends the focus wash breathes between: the cursor row of a list or
