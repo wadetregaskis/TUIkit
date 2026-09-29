@@ -377,8 +377,13 @@ func renderMenuPopup(
                 isSelectable: ordinalByLine[line].map(selectable.contains) ?? false))
     }
 
-    let ordinalByRow = Dictionary(
-        uniqueKeysWithValues: rowByOrdinal.map { ($0.value, $0.key) })
+    // Every line of an item answers for it — the pointer over it, a click on
+    // it — not only the line `rowByOrdinal` keeps: an item too long for the
+    // menu wraps, and inverting that map left the lines above its last one
+    // belonging to nothing, so a click on the first line of "Export Everything
+    // As One Long Archive" ran nothing. A row here IS a line, so the lines'
+    // own ordinals are the rows'.
+    let ordinalByRow = ordinalByLine
     return DropdownMenu.popup(
         DropdownMenu.Configuration(
             rows: rows,
