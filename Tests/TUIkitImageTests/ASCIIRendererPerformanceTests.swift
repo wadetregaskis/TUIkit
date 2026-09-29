@@ -4,9 +4,10 @@
 //  A cost guard, not a benchmark. Both converters walk every source pixel, and
 //  the failure mode worth catching here is the one that changes the SHAPE of
 //  that walk — a per-cell rescan of the character table, a per-pixel allocation
-//  — which costs orders of magnitude, not percent. So the ceiling is loose
-//  enough that no CI runner's speed can reach it, and each case also asserts
-//  what a timing number cannot: that the frame it timed was the whole frame.
+//  — which costs orders of magnitude, not percent. So each case bounds its cost
+//  as a multiple of a plain walk over the same pixels, timed beside it (a CI
+//  runner's speed scales both), and also asserts what a timing number cannot:
+//  that the frame it timed was the whole frame.
 //
 //  Real numbers come from `Tools/Profiling`, against the app.
 //
@@ -48,12 +49,13 @@ struct ASCIIRendererPerformanceTests {
         return RGBAImage(width: width, height: height, pixels: pixels)
     }
 
-    /// Seconds per call above which the walk has changed shape rather than
-    /// merely got slower. The shape-vector pass measures ~130 ms per call in a
-    /// debug build on the machine this was written on, and braille an order
-    /// less; the ceiling is roughly eight times the slower of the two, which no
-    /// runner's slowness reaches and no linear implementation can spend.
-    private let costCeiling = 1.0
+    /// Multiples of a plain walk over the same pixels (``costMultiple(of:rounds:_:)``)
+    /// above which a converter's walk has changed shape rather than merely got
+    /// slower: about eight times what each measures in a debug build (the shape
+    /// vectors ~15, braille ~1, steady to a few percent over repeated runs,
+    /// 2026-09-29).
+    private let shapeCeiling = 120.0
+    private let brailleCeiling = 10.0
 
     /// The cells, with the SGR colour runs taken out. Both converters emit
     /// colour inline, so the raw `String` length counts escape bytes rather
@@ -79,10 +81,29 @@ struct ASCIIRendererPerformanceTests {
         return out
     }
 
-    private func measure(_ iterations: Int, _ body: () -> Void) -> Double {
-        let start = Date()
-        for _ in 0..<iterations { body() }
-        return Date().timeIntervalSince(start) / Double(iterations)
+    /// The cost of `body` as a multiple of a plain walk over `image`'s pixels,
+    /// each the best of `rounds` runs taken in turn with the other.
+    ///
+    /// A multiple, not a time: an absolute ceiling measured the machine, and a
+    /// debug build under four test processes on a CI runner took 34 times this
+    /// machine's time (1.36 s for ~40 ms, 2026-09-29) while the walk had not
+    /// changed at all. Whatever slows one of the two slows the other, taken in
+    /// turn and at their best.
+    private func costMultiple(of image: RGBAImage, rounds: Int = 5, _ body: () -> Void) -> Double {
+        var bestBody = Double.infinity
+        var bestWalk = Double.infinity
+        var sink = 0
+        for _ in 0..<rounds {
+            let walkStart = Date()
+            for pixel in image.pixels { sink &+= Int(pixel.r) &+ Int(pixel.g) &+ Int(pixel.b) }
+            bestWalk = min(bestWalk, Date().timeIntervalSince(walkStart))
+            let bodyStart = Date()
+            body()
+            bestBody = min(bestBody, Date().timeIntervalSince(bodyStart))
+        }
+        // Read, so the walk is not work nothing uses.
+        withExtendedLifetime(sink) {}
+        return bestBody / max(bestWalk, 1e-9)
     }
 
     @Test("The shape-vector renderer converts a whole frame, and cheaply")
@@ -93,9 +114,10 @@ struct ASCIIRendererPerformanceTests {
         let converter = ASCIIConverter(characterSet: .ascii, shapeAware: true)
 
         var frame: [String] = []
-        let perCall = measure(10) {
+        let multiple = costMultiple(of: image) {
             frame = converter.convert(image, width: 80, height: 40).lines
         }
+        #expect(multiple < shapeCeiling, "\(String(format: "%.1f", multiple))× a plain walk, ceiling \(Int(shapeCeiling))×")
         #expect(frame.count == 40, "every requested row")
         let widths = Set(frame.map { cells($0).count })
         #expect(widths == [80], "80 cells on every row: \(widths.sorted())")
@@ -105,9 +127,6 @@ struct ASCIIRendererPerformanceTests {
         #expect(
             Set(frame.map(cells).joined()).count > 4,
             "the character table is being used")
-        #expect(
-            perCall < costCeiling,
-            "\(String(format: "%.1f", perCall * 1000))ms per call, ceiling \(Int(costCeiling * 1000))ms")
     }
 
     @Test("The braille renderer converts a whole frame, and cheaply")
@@ -118,7 +137,7 @@ struct ASCIIRendererPerformanceTests {
         let converter = ASCIIConverter()
 
         var frame: [String] = []
-        let perCall = measure(10) {
+        let multiple = costMultiple(of: image) {
             frame = converter.convertBraille(
                 image, width: 80, height: 40, mode: .grayscale,
                 monoThreshold: ASCIIConverter.midLuminance
@@ -139,7 +158,6 @@ struct ASCIIRendererPerformanceTests {
         // timing bound above would accept.
         #expect(glyphs.count > 1, "the dot patterns vary across the ramp")
         #expect(
-            perCall < costCeiling,
-            "\(String(format: "%.1f", perCall * 1000))ms per call, ceiling \(Int(costCeiling * 1000))ms")
+            multiple < brailleCeiling, "\(String(format: "%.1f", multiple))× a plain walk, ceiling \(Int(brailleCeiling))×")
     }
 }
