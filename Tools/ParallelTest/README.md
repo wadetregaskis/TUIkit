@@ -159,7 +159,9 @@ marked.
 Capturing the clause rather than enumerating it trades one failure mode for a
 smaller one: a future rewording costs the known-issue count, which silently
 reads 0, instead of costing the whole line. `--expect-known-issues` is the
-cross-check for that, and the count this suite should report is 21. What the
+cross-check for that. The count this suite should report was 21 when this was
+written; it was 62 by 2026-09-28, and is 64 since the two checks that
+`ProcessWideState` refuses a write outside an exit test. What the
 fix restores is the trap-2 guard — the per-group `tests ran == tests predicted`
 check, which was being skipped for exactly the group that failed.
 
@@ -326,10 +328,37 @@ closed:
   `3fadcb1d` fixed elsewhere by measuring thread CPU time instead. It is
   load-sensitive by construction and is not evidence about the partition.
 
-What the harness cannot fix stays true: swift-testing already runs suites
-concurrently inside one process, so process-global state — `AppState.shared`,
-`LocalizationService.shared`, the process environment — is contended whether or
-not the suite is split across processes.
+Two more flakes surfaced on 2026-09-28. Both were one test writing
+process-wide state that another test in the same process was reading, and
+both are now closed at the writer:
+
+* **Fixed.** `ANSIPrefixKnownWidthTests/fuzzMatchesExactWalk()`
+  (`TUIkitCoreTests`) compares two width walks of each line. Beside it,
+  `TerminalWidthTraitsProcessTests` moved the process-wide width traits from
+  the main actor, so a skin-tone or ZWJ cluster was measured under one claim
+  in one walk and another in the other. Deterministic with a probe: 10 of
+  10 runs diverged with the real writers looping beside the fuzz, and none
+  alone.
+* **Fixed.** `BackdropMemoTests/thePageBehindASheetIsServed()` expects a frame
+  served from the memo. `TerminalColorsProcessTests/generationTracksRealChanges()`
+  is not main-actor isolated, and it moved `TerminalColors.generation`, which
+  the render cache clears on, between two of that test's frames. With the
+  writer between the frames it fails 10 of 10.
+
+Every write that SwiftLint's `process_wide_write_in_tests` names now happens
+only inside an exit test, through `ProcessWideState`, and the rule forbids the
+raw writes; see CONTRIBUTING's Testing section. That is not every
+process-wide write in the suite. The rule's comment lists the ones left in the
+shared process and why each is safe today: main-actor state written and
+restored in one synchronous stretch (the memo verifiers' switches,
+`TerminalHost.startupIdentity`, `StackGuard.cachedExtent`),
+`StorageDiagnostics.onFailure` swaps in the `.serialized` storage suite, and
+the real signals `SignalManagerTests` sends. What the harness cannot fix stays
+true: swift-testing runs suites concurrently inside one process, so
+process-global state is shared, whether or not the suite is split across
+processes. That includes `AppState.shared` (`DismissActionTests` requests an
+exit through it), `LocalizationService.shared` (one test redirects its
+persistence) and the process environment.
 
 ## Portability
 
