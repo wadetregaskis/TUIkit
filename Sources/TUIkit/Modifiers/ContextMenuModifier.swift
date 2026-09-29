@@ -85,10 +85,12 @@ extension ContextMenuModifier: Renderable {
             // `EnvironmentValues.isFocused`).
             var contentContext = contentContext
             var isFocused: Bool?
+            var focusID: String?
             if !context.isMeasuring {
                 context.environment.volatileReadTracker?.recordRenderSideEffect()
                 context.environment.focusManager?.deactivateSection(id: sectionID)
-                isFocused = attachKeyboardTrigger(state: state, context: context)
+                focusID = attachKeyboardTrigger(state: state, context: context)
+                isFocused = focusID.map { FocusRegistration.isFocused(context: context, focusID: $0) } ?? false
             }
             // Published the way `.focusable()` publishes it, so a memo inside
             // the content sees the change; the bare assignment this replaced
@@ -96,7 +98,7 @@ extension ContextMenuModifier: Renderable {
             FocusRegistration.publishIsFocused(isFocused, context: context, into: &contentContext)
             var buffer = TUIkit.renderToBuffer(content, context: contentContext)
             if !context.isMeasuring {
-                attachTrigger(to: &buffer, state: state, context: context)
+                attachTrigger(to: &buffer, state: state, focusID: focusID, context: context)
             }
             return buffer
         }
@@ -142,7 +144,7 @@ extension ContextMenuModifier: Renderable {
         // one's menu, which is an inconsistency with no explanation a user could
         // find.
         if !context.isMeasuring {
-            attachTrigger(to: &baseBuffer, state: state, context: context)
+            attachTrigger(to: &baseBuffer, state: state, focusID: nil, context: context)
         }
         presentMenuPopover(
             items: menuItems, over: &baseBuffer, controller: state.controller,
@@ -198,9 +200,15 @@ extension ContextMenuModifier: Renderable {
     /// (``MouseEventDispatcher/handOffGesture()``) so the drag and release reach
     /// the menu rather than routing back here — see ``Button/menuTrigger()``,
     /// which is the same move for a pull-down.
+    ///
+    /// The region carries the focus stop's id (``attachKeyboardTrigger(state:context:)``),
+    /// which is how an enclosing `ScrollView` finds where the focus lives to
+    /// scroll it into view. Without it, Tab walked the focus down a list of rows
+    /// with context menus and off the bottom of the scroll view, onto rows
+    /// nobody could see — and Shift+F10 then opened a menu on one of them.
     @MainActor
     private func attachTrigger(
-        to buffer: inout FrameBuffer, state: ContextMenuState, context: RenderContext
+        to buffer: inout FrameBuffer, state: ContextMenuState, focusID: String?, context: RenderContext
     ) {
         guard let dispatcher = context.environment.mouseEventDispatcher else { return }
         let onOpen = context.environment.menuOpenAction
@@ -235,7 +243,7 @@ extension ContextMenuModifier: Renderable {
             HitTestRegion(
                 offsetX: 0, offsetY: 0,
                 width: max(1, buffer.width), height: max(1, buffer.height),
-                handlerID: handlerID),
+                handlerID: handlerID, focusID: focusID),
             at: 0)
     }
 
@@ -256,12 +264,12 @@ extension ContextMenuModifier: Renderable {
     /// (`triggerKeys: []`), so content that is already interactive keeps every
     /// binding it had.
     ///
-    /// - Returns: Whether that focus stop currently holds the focus, for the
-    ///   content to publish as ``EnvironmentValues/isFocused``.
+    /// - Returns: The focus stop's id, or `nil` where none was registered (no
+    ///   focus manager, or the content is disabled).
     @discardableResult
-    private func attachKeyboardTrigger(state: ContextMenuState, context: RenderContext) -> Bool {
+    private func attachKeyboardTrigger(state: ContextMenuState, context: RenderContext) -> String? {
         guard context.environment.focusManager != nil, context.environment.isEnabled else {
-            return false
+            return nil
         }
         let keyboardOnOpen = context.environment.menuOpenAction
         let focusID = FocusRegistration.persistFocusID(
@@ -286,7 +294,7 @@ extension ContextMenuModifier: Renderable {
             keyboardOnOpen?()
             return true
         }
-        return FocusRegistration.isFocused(context: context, focusID: focusID)
+        return focusID
     }
 }
 
