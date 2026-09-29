@@ -25,6 +25,9 @@ final class ContextMenuState {
     /// Whether the keyboard opened it, which changes where it is anchored —
     /// see ``MenuAnchor/centredWithin``.
     var openedByKeyboard = false
+    /// Whether a menu was presented since the closed content last rendered, so
+    /// the section it activated may be left to tear down.
+    var needsSectionTeardown = false
 }
 
 // MARK: - Context menu modifier
@@ -87,9 +90,20 @@ extension ContextMenuModifier: Renderable {
             var isFocused: Bool?
             var focusID: String?
             if !context.isMeasuring {
-                context.environment.volatileReadTracker?.recordRenderSideEffect()
-                context.environment.focusManager?.deactivateSection(id: sectionID)
-                focusID = attachKeyboardTrigger(state: state, context: context)
+                // Tearing down the section a closed menu left behind is a side
+                // effect no memo can make again, and only the first closed frame
+                // after a menu has one. Every other closed frame registers only
+                // what a memo replays — the focus stop, the Shift+F10 handler,
+                // the click trigger — so a row carrying a context menu can be
+                // served rather than composed on every frame. It never was: the
+                // side effect was declared on every frame, so a list of
+                // documents each with a menu served no row at all.
+                if state.needsSectionTeardown {
+                    context.environment.volatileReadTracker?.recordRenderSideEffect()
+                    context.environment.focusManager?.deactivateSection(id: sectionID)
+                    state.needsSectionTeardown = false
+                }
+                focusID = attachKeyboardTrigger(stateBox: stateBox, context: context)
                 isFocused = focusID.map { FocusRegistration.isFocused(context: context, focusID: $0) } ?? false
             }
             // Published the way `.focusable()` publishes it, so a memo inside
@@ -98,10 +112,11 @@ extension ContextMenuModifier: Renderable {
             FocusRegistration.publishIsFocused(isFocused, context: context, into: &contentContext)
             var buffer = TUIkit.renderToBuffer(content, context: contentContext)
             if !context.isMeasuring {
-                attachTrigger(to: &buffer, state: state, focusID: focusID, context: context)
+                attachTrigger(to: &buffer, stateBox: stateBox, focusID: focusID, context: context)
             }
             return buffer
         }
+        if !context.isMeasuring { state.needsSectionTeardown = true }
 
         // OPEN: render the content beneath as an inert backdrop (isolated from
         // focus / key / state) so its controls can't steal the menu's focus. NOT
@@ -144,7 +159,7 @@ extension ContextMenuModifier: Renderable {
         // one's menu, which is an inconsistency with no explanation a user could
         // find.
         if !context.isMeasuring {
-            attachTrigger(to: &baseBuffer, state: state, focusID: nil, context: context)
+            attachTrigger(to: &baseBuffer, stateBox: stateBox, focusID: nil, context: context)
         }
         presentMenuPopover(
             items: menuItems, over: &baseBuffer, controller: state.controller,
@@ -206,10 +221,16 @@ extension ContextMenuModifier: Renderable {
     /// scroll it into view. Without it, Tab walked the focus down a list of rows
     /// with context menus and off the bottom of the scroll view, onto rows
     /// nobody could see — and Shift+F10 then opened a menu on one of them.
+    ///
+    /// Opening writes the state back through its box, which is what drops a
+    /// memo holding the closed content: the state is a class, changed in place,
+    /// and a row served as it was stored would never draw the menu.
     @MainActor
     private func attachTrigger(
-        to buffer: inout FrameBuffer, state: ContextMenuState, focusID: String?, context: RenderContext
+        to buffer: inout FrameBuffer, stateBox: StateBox<ContextMenuState>, focusID: String?,
+        context: RenderContext
     ) {
+        let state = stateBox.value
         guard let dispatcher = context.environment.mouseEventDispatcher else { return }
         let onOpen = context.environment.menuOpenAction
         let handlerID = dispatcher.register(in: context) { event in
@@ -226,6 +247,7 @@ extension ContextMenuModifier: Renderable {
                 state.openedByKeyboard = false
                 // Opened by the pointer: nothing is chosen yet.
                 state.controller.opened(withSelection: false)
+                stateBox.value = state
                 onOpen?()
                 dispatcher.handOffGesture()
                 dispatcher.pressOpenedPopup()
@@ -267,11 +289,11 @@ extension ContextMenuModifier: Renderable {
     /// - Returns: The focus stop's id, or `nil` where none was registered (no
     ///   focus manager, or the content is disabled).
     @discardableResult
-    private func attachKeyboardTrigger(state: ContextMenuState, context: RenderContext) -> String? {
+    private func attachKeyboardTrigger(stateBox: StateBox<ContextMenuState>, context: RenderContext) -> String? {
         guard context.environment.focusManager != nil, context.environment.isEnabled else {
             return nil
         }
-        let keyboardOnOpen = context.environment.menuOpenAction
+        let onOpen = context.environment.menuOpenAction
         let focusID = FocusRegistration.persistFocusID(
             context: context, explicitFocusID: nil,
             defaultPrefix: "contextmenu-target", propertyIndex: StateIndex.focusID)
@@ -280,21 +302,60 @@ extension ContextMenuModifier: Renderable {
             handler: ActionHandler(focusID: focusID, action: {}, triggerKeys: []),
             focusID: focusID)
 
-        context.environment.keyEventDispatcher!.addHandler(
-            sectionID: context.environment.activeFocusSectionID
-        ) { event in
+        // Replayable, as `onKeyPress`'s is: a memo serving the content makes the
+        // registration again from its journal, in the section it was made in.
+        let sectionID = context.environment.activeFocusSectionID
+        ContextMenuKeyRegistrar.register(
+            stateBox: stateBox, focusID: focusID, onOpen: onOpen, sectionID: sectionID, context: context)
+        context.environment.volatileReadTracker?.recordReplayableEffect()
+        if let journal = context.recordingEffectJournal {
+            journal.append(
+                EffectJournal.Entry(
+                    kind: ContextMenuKeyRegistrar.kind, channelToken: context.environment.keyChannelToken
+                ) { replay in
+                    ContextMenuKeyRegistrar.register(
+                        stateBox: stateBox, focusID: focusID, onOpen: onOpen, sectionID: sectionID,
+                        context: replay)
+                })
+        }
+        return focusID
+    }
+}
+
+/// The Shift+F10 handler a closed context menu registers, shared by the live
+/// render and by a value memo replaying it — see `EffectJournal`.
+@MainActor
+private enum ContextMenuKeyRegistrar {
+    /// The journal kind of the registration.
+    static let kind = EffectJournal.Kind("contextMenu.openKey")
+
+    /// Adds the handler that opens the menu on Shift+F10 while `focusID` holds
+    /// the focus, to `context`'s key dispatcher in `sectionID`. It looks the
+    /// dispatcher and the focus manager up in `context`, so a replay registers
+    /// into, and asks, the services of the frame that serves it.
+    static func register(
+        stateBox: StateBox<ContextMenuState>, focusID: String, onOpen: MenuOpenAction?, sectionID: String?,
+        context: RenderContext
+    ) {
+        context.environment.keyEventDispatcher!.addHandler(sectionID: sectionID) { event in
             guard event.key == .f10, event.shift,
                 FocusRegistration.isFocused(context: context, focusID: focusID)
             else { return false }
+            let state = stateBox.value
             state.isOpen = true
             state.openedByKeyboard = true
             // Opened from the keyboard, which has no other way to point at a
             // row: start on the first item so the arrows have somewhere to go.
             state.controller.opened(withSelection: true)
-            keyboardOnOpen?()
+            // Written back through the box, which drops a memo holding the
+            // closed content (see `attachTrigger`). Not load-bearing today: the
+            // row that holds the focus is never stored, its focus registration
+            // declaring itself a side effect — this keeps the menu opening if
+            // that ever changes.
+            stateBox.value = state
+            onOpen?()
             return true
         }
-        return focusID
     }
 }
 
