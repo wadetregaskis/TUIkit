@@ -49,7 +49,23 @@ struct UserDefaultsStorageTests {
     /// report lands between the write and the read — so the one test that
     /// asserts its own report is the latest runs in an exit test.
     private static func withStorage(_ body: (UserDefaultsStorage, String) -> Void) {
+        #if canImport(Darwin)
+        // On Apple platforms a suite named by an absolute path keeps its file
+        // at that path (`<path>.plist`), not in ~/Library/Preferences — so the
+        // suite lives in a temporary directory of its own, and deleting the
+        // directory removes whatever the preferences daemon wrote, whenever it
+        // wrote it. A named suite left an empty file in ~/Library/Preferences
+        // on most runs: removing the domain empties it without deleting it,
+        // and deleting the file afterwards did not stick — measured, four of
+        // the six tests' files came back (an old development machine had
+        // collected 2,031 of them, the new one 868 in a day).
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("tuikit.tests.\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let suite = directory.appendingPathComponent("defaults").path
+        #else
         let suite = "tuikit.tests.\(UUID().uuidString)"
+        #endif
         let key = "settings-\(UUID().uuidString)"
         let storage = UserDefaultsStorage(suiteName: suite)
         defer {
@@ -60,14 +76,7 @@ struct UserDefaultsStorageTests {
             storage.synchronize()
             UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
             #if canImport(Darwin)
-            // Removing the domain empties it, but the preferences daemon leaves
-            // the suite's file behind — empty, and one per test run: an old
-            // development machine had collected 2,031 of them. Measured: once
-            // the removal is flushed, deleting the file is final.
-            CFPreferencesAppSynchronize(suite as CFString)
-            try? FileManager.default.removeItem(
-                at: FileManager.default.homeDirectoryForCurrentUser
-                    .appendingPathComponent("Library/Preferences/\(suite).plist"))
+            try? FileManager.default.removeItem(at: directory)
             #endif
         }
         body(storage, key)
