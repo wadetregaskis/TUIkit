@@ -65,23 +65,31 @@ import TUIkitCore
 /// active render environment, and finally the framework defaults.
 @propertyWrapper
 public struct Environment<Value> {
-    /// Strategy for resolving the environment value.
-    ///
-    /// Both cases are one pointer wide, deliberately. The observable case used
-    /// to hold a `(EnvironmentValues) -> Value?` closure, which is two words and
-    /// took the whole wrapper to 32 bytes — past the 24-byte inline buffer of an
-    /// existential. `resolveEnvironmentProperties` reaches every `@Environment`
-    /// property through `Mirror`, whose children hand each one back as `Any`,
-    /// so an over-large wrapper meant a heap allocation per property per view
-    /// per `body`. A metatype fits, and the lookup it stands
-    /// for is ``EnvironmentValues/storedObject(ofType:)``.
-    private enum LookupStrategy {
-        case keyPath(KeyPath<EnvironmentValues, Value>)
-        case observable(Any.Type)
-    }
+    // How the value is looked up: by key path, or — for an observable object —
+    // by its type, through ``EnvironmentValues/storedObject(ofType:)``. Exactly
+    // one is set.
+    //
+    // Each is one pointer wide, deliberately. The observable lookup used to be a
+    // `(EnvironmentValues) -> Value?` closure, which is two words and took the
+    // whole wrapper to 32 bytes — past the 24-byte inline buffer of an
+    // existential. `resolveEnvironmentProperties` reaches every `@Environment`
+    // property through `Mirror`, whose children hand each one back as `Any`,
+    // so an over-large wrapper meant a heap allocation per property per view
+    // per `body`. Two optionals and the box are 24 bytes.
+    //
+    // Two optionals rather than an enum of the two, which is what this was:
+    // the enum is generic (it is `Value`'s), so the per-pass memos' value hash
+    // could not read it — a generic enum's inactive payload is not reliably
+    // written — and every view holding an `@Environment` bypassed both memos.
+    // An optional of one pointer (a key path's reference, a metatype) spells
+    // `nil` in that pointer's spare values and writes it whole, so the hash
+    // reads these, and the wrapper, as plain words.
 
-    /// The lookup strategy used by this instance.
-    private let strategy: LookupStrategy
+    /// The key path to read, or `nil` for an observable lookup.
+    private let keyPath: KeyPath<EnvironmentValues, Value>?
+
+    /// The observable type to look up, or `nil` for a key-path lookup.
+    private let observableType: Any.Type?
 
     /// Reference box holding the environment captured at the owning view's
     /// render. Shared with closures that capture the view, so they see the same
@@ -92,7 +100,8 @@ public struct Environment<Value> {
     ///
     /// - Parameter keyPath: The key path to the environment value to read.
     public init(_ keyPath: KeyPath<EnvironmentValues, Value>) {
-        self.strategy = .keyPath(keyPath)
+        self.keyPath = keyPath
+        self.observableType = nil
     }
 
     /// Creates an environment property wrapper that reads an observable
@@ -106,7 +115,8 @@ public struct Environment<Value> {
     ///
     /// - Parameter type: The observable type to look up.
     public init(_ type: Value.Type) where Value: Observable {
-        self.strategy = .observable(type)
+        self.keyPath = nil
+        self.observableType = type
     }
 
     /// The current environment value.
@@ -116,19 +126,15 @@ public struct Environment<Value> {
     /// the framework defaults.
     public var wrappedValue: Value {
         let env = box.environment ?? StateRegistration.activeEnvironment ?? EnvironmentValues()
-        switch strategy {
-        case .keyPath(let keyPath):
-            return env[keyPath: keyPath]
-        case .observable(let type):
-            guard let object = env.storedObject(ofType: type) as? Value else {
-                fatalError(
-                    "@Environment(\(Value.self).self): "
-                        + "No object of type \(Value.self) found in the environment. "
-                        + "Did you forget to call .environment(model)?"
-                )
-            }
-            return object
+        if let keyPath { return env[keyPath: keyPath] }
+        guard let type = observableType, let object = env.storedObject(ofType: type) as? Value else {
+            fatalError(
+                "@Environment(\(Value.self).self): "
+                    + "No object of type \(Value.self) found in the environment. "
+                    + "Did you forget to call .environment(model)?"
+            )
         }
+        return object
     }
 }
 
