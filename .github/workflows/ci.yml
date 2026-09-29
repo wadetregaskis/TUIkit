@@ -181,6 +181,13 @@ jobs:
       - name: API parity against SwiftUI
         run: python3 Tools/APIParity/api_parity.py --check
 
+      # Not parity, but the same kind of check and a free ride on a job that
+      # already has Python: the shipped palettes' row fills are generated from
+      # Tools/RowFillValues/values.json, and a hand edit to either side alone
+      # would ship a look nobody chose.
+      - name: Row fill table is generated from its values
+        run: python3 Tools/RowFillValues/generate.py --check
+
   # ── macOS ──────────────────────────────────────────────────────────────────
   macos:
     name: ${{ matrix.name }}

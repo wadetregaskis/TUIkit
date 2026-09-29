@@ -1,0 +1,629 @@
+{
+ "about": "The row fills of the sixteen shipped palettes, frozen from the v5 design (2026-09-29), with v5b's 16-colour slot picks. key: page, text, secondary text, accent (alpha spent over the page). S = selected row; F = cursor row (dim, top); B = selected cursor row (dim, top). cube: 256-colour entries. sixteen: slot picks (S, Fd, Ft, Bd, Bt) for xterm's and Apple Terminal's default tables, -1 = reverse video (not yet read by the framework).",
+ "palettes": [
+  {
+   "name": "Green",
+   "key": [
+    "#050A05",
+    "#33FF33",
+    "#27C427",
+    "#66FF66"
+   ],
+   "truecolour": {
+    "S": "#1D471D",
+    "Fd": "#0B300B",
+    "Ft": "#166F16",
+    "Bd": "#225422",
+    "Bt": "#378937"
+   },
+   "cube": {
+    "S": 22,
+    "Fd": 236,
+    "Ft": 28,
+    "Bd": 28,
+    "Bt": 70
+   },
+   "sixteen": {
+    "xterm": [
+     4,
+     1,
+     8,
+     9,
+     12
+    ],
+    "apple": [
+     4,
+     1,
+     8,
+     9,
+     5
+    ]
+   }
+  },
+  {
+   "name": "Amber",
+   "key": [
+    "#0A0805",
+    "#FFAA00",
+    "#CC8800",
+    "#FFCC33"
+   ],
+   "truecolour": {
+    "S": "#473911",
+    "Fd": "#352401",
+    "Ft": "#704A00",
+    "Bd": "#564513",
+    "Bt": "#856A1C"
+   },
+   "cube": {
+    "S": 58,
+    "Fd": 236,
+    "Ft": 94,
+    "Bd": 94,
+    "Bt": 101
+   },
+   "sixteen": {
+    "xterm": [
+     1,
+     4,
+     9,
+     5,
+     8
+    ],
+    "apple": [
+     1,
+     4,
+     9,
+     8,
+     5
+    ]
+   }
+  },
+  {
+   "name": "Red",
+   "key": [
+    "#0A0505",
+    "#FF4242",
+    "#CC3333",
+    "#FF6666"
+   ],
+   "truecolour": {
+    "S": "#421B1B",
+    "Fd": "#2A0B0B",
+    "Ft": "#6F1919",
+    "Bd": "#542222",
+    "Bt": "#893737"
+   },
+   "cube": {
+    "S": 52,
+    "Fd": 234,
+    "Ft": 88,
+    "Bd": 236,
+    "Bt": 124
+   },
+   "sixteen": {
+    "xterm": [
+     10,
+     4,
+     3,
+     6,
+     11
+    ],
+    "apple": [
+     10,
+     4,
+     7,
+     14,
+     11
+    ]
+   }
+  },
+  {
+   "name": "Violet",
+   "key": [
+    "#08050A",
+    "#B275F0",
+    "#8C3CDD",
+    "#C797F7"
+   ],
+   "truecolour": {
+    "S": "#342741",
+    "Fd": "#2B1144",
+    "Ft": "#56208B",
+    "Bd": "#413151",
+    "Bt": "#624A79"
+   },
+   "cube": {
+    "S": 53,
+    "Fd": 234,
+    "Ft": 90,
+    "Bd": 54,
+    "Bt": 92
+   },
+   "sixteen": {
+    "xterm": [
+     10,
+     2,
+     7,
+     3,
+     6
+    ],
+    "apple": [
+     1,
+     4,
+     -1,
+     13,
+     4
+    ]
+   }
+  },
+  {
+   "name": "Blue",
+   "key": [
+    "#05080A",
+    "#00AAFF",
+    "#0088CC",
+    "#33BBFF"
+   ],
+   "truecolour": {
+    "S": "#113547",
+    "Fd": "#022131",
+    "Ft": "#00507A",
+    "Bd": "#144158",
+    "Bt": "#1E6A91"
+   },
+   "cube": {
+    "S": 19,
+    "Fd": 17,
+    "Ft": 20,
+    "Bd": 20,
+    "Bt": 26
+   },
+   "sixteen": {
+    "xterm": [
+     5,
+     1,
+     4,
+     8,
+     12
+    ],
+    "apple": [
+     4,
+     1,
+     12,
+     8,
+     5
+    ]
+   }
+  },
+  {
+   "name": "White",
+   "key": [
+    "#06070A",
+    "#E8E8E8",
+    "#B0B0B0",
+    "#FFFFFF"
+   ],
+   "truecolour": {
+    "S": "#444547",
+    "Fd": "#2C2C2C",
+    "Ft": "#605F5C",
+    "Bd": "#515154",
+    "Bt": "#838385"
+   },
+   "cube": {
+    "S": 238,
+    "Fd": 235,
+    "Ft": 240,
+    "Bd": 240,
+    "Bt": 244
+   },
+   "sixteen": {
+    "xterm": [
+     1,
+     4,
+     -1,
+     13,
+     4
+    ],
+    "apple": [
+     2,
+     1,
+     3,
+     8,
+     6
+    ]
+   }
+  },
+  {
+   "name": "Basic",
+   "key": [
+    "#FFFFFF",
+    "#000000",
+    "#404040",
+    "#3E95FF"
+   ],
+   "truecolour": {
+    "S": "#C9E1FF",
+    "Fd": "#E3F0FF",
+    "Ft": "#499BFF",
+    "Bd": "#B4D6FF",
+    "Bt": "#3580DB"
+   },
+   "cube": {
+    "S": 117,
+    "Fd": 254,
+    "Ft": 75,
+    "Bd": 110,
+    "Bt": 32
+   },
+   "sixteen": {
+    "xterm": [
+     3,
+     7,
+     6,
+     14,
+     4
+    ],
+    "apple": [
+     13,
+     11,
+     6,
+     7,
+     14
+    ]
+   }
+  },
+  {
+   "name": "Grass",
+   "key": [
+    "#13773D",
+    "#FFF0A5",
+    "#C4D28B",
+    "#FFB03B"
+   ],
+   "truecolour": {
+    "S": "#55873C",
+    "Fd": "#39803D",
+    "Ft": "#9C983C",
+    "Bd": "#688C3C",
+    "Bt": "#C4A23C"
+   },
+   "cube": {
+    "S": 36,
+    "Fd": 101,
+    "Ft": 143,
+    "Bd": 64,
+    "Bt": 178
+   },
+   "sixteen": {
+    "xterm": [
+     12,
+     0,
+     1,
+     8,
+     9
+    ],
+    "apple": [
+     6,
+     0,
+     1,
+     8,
+     3
+    ]
+   }
+  },
+  {
+   "name": "Homebrew",
+   "key": [
+    "#000000",
+    "#28FE14",
+    "#1EBF0F",
+    "#00F900"
+   ],
+   "truecolour": {
+    "S": "#003900",
+    "Fd": "#000C00",
+    "Ft": "#005000",
+    "Bd": "#004600",
+    "Bt": "#007D00"
+   },
+   "cube": {
+    "S": 22,
+    "Fd": 234,
+    "Ft": 28,
+    "Bd": 28,
+    "Bt": 70
+   },
+   "sixteen": {
+    "xterm": [
+     1,
+     9,
+     12,
+     4,
+     8
+    ],
+    "apple": [
+     4,
+     1,
+     5,
+     12,
+     8
+    ]
+   }
+  },
+  {
+   "name": "Man Page",
+   "key": [
+    "#FEF49C",
+    "#000000",
+    "#403D27",
+    "#948C44"
+   ],
+   "truecolour": {
+    "S": "#D0C776",
+    "Fd": "#E2DA8B",
+    "Ft": "#8D8856",
+    "Bd": "#BFB768",
+    "Bt": "#797338"
+   },
+   "cube": {
+    "S": 186,
+    "Fd": 192,
+    "Ft": 144,
+    "Bd": 143,
+    "Bt": 101
+   },
+   "sixteen": {
+    "xterm": [
+     11,
+     15,
+     8,
+     3,
+     1
+    ],
+    "apple": [
+     11,
+     7,
+     2,
+     3,
+     1
+    ]
+   }
+  },
+  {
+   "name": "Novel",
+   "key": [
+    "#DFDBC3",
+    "#4D2F2D",
+    "#725A53",
+    "#933A21"
+   ],
+   "truecolour": {
+    "S": "#CEB69E",
+    "Fd": "#D7CBB3",
+    "Ft": "#C19B82",
+    "Bd": "#C7A991",
+    "Bt": "#B17A62"
+   },
+   "cube": {
+    "S": 180,
+    "Fd": 217,
+    "Ft": 202,
+    "Bd": 209,
+    "Bt": 166
+   },
+   "sixteen": {
+    "xterm": [
+     6,
+     15,
+     3,
+     11,
+     2
+    ],
+    "apple": [
+     14,
+     7,
+     10,
+     11,
+     4
+    ]
+   }
+  },
+  {
+   "name": "Ocean",
+   "key": [
+    "#2B66C9",
+    "#FFFFFF",
+    "#CAD9F2",
+    "#99C5FF"
+   ],
+   "truecolour": {
+    "S": "#4E84DA",
+    "Fd": "#2A73DF",
+    "Ft": "#27A0FF",
+    "Bd": "#5D91E1",
+    "Bt": "#84B3F5"
+   },
+   "cube": {
+    "S": 68,
+    "Fd": 27,
+    "Ft": 105,
+    "Bd": 69,
+    "Bt": 146
+   },
+   "sixteen": {
+    "xterm": [
+     5,
+     4,
+     2,
+     8,
+     13
+    ],
+    "apple": [
+     4,
+     5,
+     12,
+     8,
+     13
+    ]
+   }
+  },
+  {
+   "name": "Pro",
+   "key": [
+    "#000000",
+    "#F4F4F4",
+    "#B7B7B7",
+    "#FFFFFF"
+   ],
+   "truecolour": {
+    "S": "#404040",
+    "Fd": "#282828",
+    "Ft": "#7A7A7A",
+    "Bd": "#4D4D4D",
+    "Bt": "#949494"
+   },
+   "cube": {
+    "S": 238,
+    "Fd": 235,
+    "Ft": 243,
+    "Bd": 240,
+    "Bt": 246
+   },
+   "sixteen": {
+    "xterm": [
+     1,
+     2,
+     5,
+     8,
+     12
+    ],
+    "apple": [
+     2,
+     1,
+     8,
+     3,
+     6
+    ]
+   }
+  },
+  {
+   "name": "Red Sands",
+   "key": [
+    "#8E3527",
+    "#D7C9A7",
+    "#C5A487",
+    "#E6C72B"
+   ],
+   "truecolour": {
+    "S": "#A25728",
+    "Fd": "#964227",
+    "Ft": "#B37229",
+    "Bd": "#A86128",
+    "Bt": "#C08829"
+   },
+   "cube": {
+    "S": 95,
+    "Fd": 94,
+    "Ft": 101,
+    "Bd": 130,
+    "Bt": 172
+   },
+   "sixteen": {
+    "xterm": [
+     0,
+     4,
+     -1,
+     -1,
+     4
+    ],
+    "apple": [
+     5,
+     0,
+     13,
+     9,
+     8
+    ]
+   }
+  },
+  {
+   "name": "Silver Aerogel",
+   "key": [
+    "#929292",
+    "#000000",
+    "#252525",
+    "#43445C"
+   ],
+   "truecolour": {
+    "S": "#787880",
+    "Fd": "#808199",
+    "Ft": "#606170",
+    "Bd": "#6E6E79",
+    "Bt": "#4C4D62"
+   },
+   "cube": {
+    "S": 243,
+    "Fd": 103,
+    "Ft": 61,
+    "Bd": 61,
+    "Bt": 55
+   },
+   "sixteen": {
+    "xterm": [
+     12,
+     7,
+     6,
+     5,
+     4
+    ],
+    "apple": [
+     3,
+     7,
+     6,
+     5,
+     1
+    ]
+   }
+  },
+  {
+   "name": "Solid Colors",
+   "key": [
+    "#F2DEC9",
+    "#000000",
+    "#3D3832",
+    "#067CFF"
+   ],
+   "truecolour": {
+    "S": "#BCC7D5",
+    "Fd": "#B3D7FF",
+    "Ft": "#85B1E2",
+    "Bd": "#AEC2D9",
+    "Bt": "#4395F1"
+   },
+   "cube": {
+    "S": 81,
+    "Fd": 153,
+    "Ft": 75,
+    "Bd": 110,
+    "Bt": 32
+   },
+   "sixteen": {
+    "xterm": [
+     15,
+     14,
+     12,
+     8,
+     6
+    ],
+    "apple": [
+     11,
+     7,
+     6,
+     13,
+     14
+    ]
+   }
+  }
+ ]
+}
