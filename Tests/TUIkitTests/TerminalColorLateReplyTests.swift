@@ -267,12 +267,17 @@ struct TerminalColorReplyWiringTests {
     }
 }
 
-/// The one test that assigns the PROCESS-wide colours, so it is serialized, as
-/// `TerminalColorsProcessTests` is. It restores them at once: what is kept from
-/// the terminal's colours is dropped by the assignment, and every suite rendering
-/// beside this one reads the same record.
+/// The one test here that publishes the PROCESS-wide colours, so it does so in an
+/// exit test — see `ProcessWideState`. It used to assign them in this process
+/// and put them back, `.serialized`; but the assignment is the subject, it moves
+/// the generation every render cache in the process clears on, and every suite
+/// rendering beside this one reads the same record while it is in force. In the
+/// child nothing else runs, so nothing needs putting back.
+///
+/// The refresher publishes through its default, `publishProcessWide`, because
+/// that default is part of what is being tested.
 @MainActor
-@Suite("A late report reaches what was kept from the colours before it", .serialized)
+@Suite("A late report reaches what was kept from the colours before it")
 struct TerminalColorLatePublicationTests {
 
     typealias RGB = TerminalColors.RGB
@@ -295,10 +300,14 @@ struct TerminalColorLatePublicationTests {
     private static let pixel = RGBA(r: 220, g: 0, b: 0)
 
     @Test("Publishing a late report drops a memoised buffer and the sixteen matched before it")
-    func latePublicationReachesWhatWasKept() throws {
-        let saved = TerminalColors.current
-        defer { TerminalColors.current = saved }
+    func latePublicationReachesWhatWasKept() async {
+        await #expect(processExitsWith: .success) {
+            await MainActor.run { Self.publishALateReport() }
+        }
+    }
 
+    /// The whole test, run in the exit test's child.
+    private static func publishALateReport() {
         let cache = RenderCache()
         cache.store(
             identity: ViewIdentity(path: "late-reply"), view: 1, buffer: FrameBuffer(text: "a"),

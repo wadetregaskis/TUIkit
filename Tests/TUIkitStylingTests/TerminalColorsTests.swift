@@ -85,11 +85,20 @@ struct TerminalColorsTests {
     }
 }
 
-/// These read or write the PROCESS-wide colours, so they are serialized, the
-/// same treatment `TerminalWidthTraitsProcessTests` gets. Outside this suite only
-/// `TerminalColorLatePublicationTests` assigns the process value, and puts it
-/// back; a run loop a test drives publishes to its harness instead.
-@Suite("What the terminal reported about its colours, process-wide", .serialized)
+/// The PROCESS-wide colours: read here, written only in a process of their own
+/// — see `ProcessWideState`.
+///
+/// The assignment test used to run here, `.serialized`, and put the colours
+/// back. That ordered this suite's own tests and nothing else: every suite of
+/// every test target shares this process, and the assignment moved
+/// `TerminalColors.generation`, which `RenderCache.beginRenderPass()` compares
+/// and clears everything on. Not main-actor isolated, it was free to run
+/// between two frames of a main-actor test — the one test in the package that
+/// could move anything `beginRenderPass()` compares mid-test. Run between the
+/// second and third frames of `BackdropMemoTests/thePageBehindASheetIsServed()`
+/// it fails that test 10 times in 10 (the rows it expects served are all drawn
+/// again), which is the failure a full run showed on 2026-09-28.
+@Suite("What the terminal reported about its colours, process-wide")
 struct TerminalColorsProcessTests {
 
     private static let reported = TerminalColors(
@@ -133,21 +142,37 @@ struct TerminalColorsProcessTests {
         return seen.value
     }
 
+    /// An exit test, because assigning the process colours is the subject: the
+    /// body runs in a child process, where no other test's frame can see them
+    /// move.
     @Test("Changing the process colours bumps the generation; assigning the same value does not")
-    func generationTracksRealChanges() {
-        let saved = TerminalColors.current
-        defer { TerminalColors.current = saved }
+    func generationTracksRealChanges() async {
+        await #expect(processExitsWith: .success) {
+            let before = TerminalColors.generation
+
+            ProcessWideState.colours = Self.reported
+            let afterChange = TerminalColors.generation
+            #expect(afterChange == before + 1, "a real change must bump the generation once")
+            #expect(TerminalColors.current == Self.reported)
+
+            ProcessWideState.colours = Self.reported
+            #expect(
+                TerminalColors.generation == afterChange, "the same value must not invalidate every cache")
+
+            ProcessWideState.colours = .unknown
+            #expect(TerminalColors.generation == afterChange + 1, "going back to unknown is a change too")
+        }
+    }
+
+    /// The door's own check. Here, in the shared process, the assignment is
+    /// refused and recorded, and neither the colours nor the generation move.
+    @Test("An assignment from outside a process of its own is refused and recorded")
+    func assignmentOutsideAnExitTestIsRefused() {
         let before = TerminalColors.generation
-
-        TerminalColors.current = Self.reported
-        let afterChange = TerminalColors.generation
-        #expect(afterChange == before + 1, "a real change must bump the generation once")
-        #expect(TerminalColors.current == Self.reported)
-
-        TerminalColors.current = Self.reported
-        #expect(TerminalColors.generation == afterChange, "the same value must not invalidate every cache")
-
-        TerminalColors.current = .unknown
-        #expect(TerminalColors.generation == afterChange + 1, "going back to unknown is a change too")
+        withKnownIssue("refused: this is the shared test process") {
+            ProcessWideState.colours = Self.reported
+        }
+        #expect(TerminalColors.current == .unknown)
+        #expect(TerminalColors.generation == before)
     }
 }
