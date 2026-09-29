@@ -43,4 +43,18 @@ struct TerminalSizeFallbackTests {
         let terminal = Terminal()
         #expect(terminal.terminalDimension(fromEnvironment: "LINES", in: ["COLUMNS": "40"]) == nil)
     }
+
+    /// The tests above pose the parse on a dictionary, so they would all still
+    /// pass if the fallback stopped reading the real environment. This one sets
+    /// the variable for real — in a process of its own, since the environment
+    /// is the whole process's — and asks with the default.
+    @Test("With no dictionary given, the process environment is what is read")
+    func defaultReadsTheProcessEnvironment() async {
+        await #expect(processExitsWith: .success) {
+            await MainActor.run {
+                ProcessWideState.setEnvironment("LINES", to: "37")
+                #expect(Terminal().terminalDimension(fromEnvironment: "LINES") == 37)
+            }
+        }
+    }
 }

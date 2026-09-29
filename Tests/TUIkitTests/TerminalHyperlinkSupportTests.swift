@@ -10,12 +10,14 @@ import Testing
 
 /// Which hosts get OSC 8, and how the answer is reached.
 ///
-/// The ladder is asked on its inputs, and only the test that is about
-/// `simulated` reaching it sets anything: both knobs republish link support —
-/// and `simulated` the width traits — to the whole process, so that one runs
-/// in an exit test. See `ProcessWideState`. These used to set and restore the
-/// knobs in the shared process, `.serialized`, which kept out only this suite's
-/// own tests and other main-actor ones.
+/// The ladder is asked on its inputs. The two tests that set anything run in
+/// exit tests: the one about `simulated` reaching the ladder, and the one about
+/// the override leaving the host's detectors unread, which also seeds the
+/// discovered host into the environment. Both knobs republish link support —
+/// and `simulated` the width traits — to the whole process, and the
+/// environment is the whole process's. See `ProcessWideState`. These used to
+/// set and restore the knobs in the shared process, `.serialized`, which kept
+/// out only this suite's own tests and other main-actor ones.
 @Suite("Terminal hyperlink support")
 @MainActor
 struct TerminalHyperlinkSupportTests {
