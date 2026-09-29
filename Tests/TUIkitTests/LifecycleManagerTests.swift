@@ -254,20 +254,23 @@ struct LifecycleManagerTaskTests {
         let manager = LifecycleManager()
         let target = Cancellation()
         let bystander = Cancellation()
-        // Ten MINUTES, not the ten seconds the sibling below uses. Both tasks
-        // have to still be IN FLIGHT when the cancels land — a task that
-        // finished on its own reports `isCancelled == false` and says nothing
-        // about either half — and the wait before the first cancel is a
-        // main-actor `Task.sleep`, which a loaded parallel suite can starve for
-        // many seconds. The duration only has to outlast that starvation; both
+        // Both tasks have to still be IN FLIGHT when the cancels land — a task
+        // that finished on its own reports `isCancelled == false` and says
+        // nothing about either half — so they wait for their cancel and for
+        // nothing else. A deadline, however long, is a bet on how long the
+        // main actor stays starved, and it lost: this test used ten minutes,
+        // and on a slow CI runner, whose single `swift test` process queues
+        // thousands of main-actor tests, it ran for 640 s — both sleeps
+        // expired, the bystander recorded `false`, and the test failed
+        // (2026-09-29; reproduced in the suite with a 5 s deadline). Both
         // tasks are cancelled before the test returns, so nothing is left
         // running.
         manager.startTask(token: "task-1", priority: .medium) {
-            try? await Task.sleep(for: .seconds(600))
+            await waitUntilCancelled()
             await MainActor.run { target.record(Task.isCancelled) }
         }
         manager.startTask(token: "task-2", priority: .medium) {
-            try? await Task.sleep(for: .seconds(600))
+            await waitUntilCancelled()
             await MainActor.run { bystander.record(Task.isCancelled) }
         }
         try await Task.sleep(for: .milliseconds(20))
@@ -324,8 +327,9 @@ struct LifecycleManagerTaskTests {
         let manager = LifecycleManager()
         let observed = Cancellation()
         manager.startTask(token: "load", priority: .medium) {
-            // Stand-in for the decode: long enough to be cancelled mid-flight.
-            try? await Task.sleep(for: .seconds(10))
+            // Stand-in for the decode, still in flight when the cancel lands
+            // however starved the main actor is (see `cancelTask`).
+            await waitUntilCancelled()
             await MainActor.run { observed.record(Task.isCancelled) }
         }
         try await Task.sleep(for: .milliseconds(20))
@@ -421,6 +425,17 @@ struct LifecycleManagerRetentionTests {
         frameWith(false)  // leaves again
         #expect(fired == 2, "the release of a fired callback must not eat later cycles")
     }
+}
+
+/// Suspends until the calling task is cancelled, and only then — unlike a
+/// sleep, which also ends at its deadline and then reads as a task that
+/// "finished without being cancelled". The stream never yields or finishes;
+/// its iterator returns when the task is cancelled. The continuation is kept
+/// alive so the stream cannot finish on its own.
+private func waitUntilCancelled() async {
+    let (stream, continuation) = AsyncStream<Never>.makeStream()
+    for await _ in stream {}
+    withExtendedLifetime(continuation) {}
 }
 
 /// A main-actor-written flag a detached task can report into.
