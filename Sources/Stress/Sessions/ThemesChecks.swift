@@ -138,7 +138,7 @@ struct ContrastPromise {
 
     /// The first of the cells that falls under the floor, described.
     func problem(in frame: ThemeFrame) -> String? {
-        guard depths.contains(frame.depth) else { return nil }
+        guard depths.contains(frame.depth), !accepted(in: frame) else { return nil }
         for cell in cells(frame) {
             guard let ink = cell.foreground, let field = cell.background else { continue }
             let (a, b) = throughTheCube ? (ink.downsampledToPalette256(), field.downsampledToPalette256()) : (ink, field)
@@ -149,6 +149,19 @@ struct ContrastPromise {
                 + "(\(frame.rootPalette.name), the form in \(frame.formPalette.name), at \(frame.depth))"
         }
         return nil
+    }
+
+    /// The owner's accepted exceptions, as `PaletteContrastAuditTests` ledgers them:
+    /// the v5 row-fill design's calls (2026-09-29), where a shipped palette's
+    /// selected cursor row peaks under its text's 2:1 for the breath it keeps.
+    private static let acceptedAccentBreaths: Set<String> = [
+        "Red @ palette256", "Violet @ palette256", "Red Sands @ palette256", "Red Sands @ truecolor",
+    ]
+
+    /// Whether this promise, in this frame's look, is one the owner accepted short.
+    private func accepted(in frame: ThemeFrame) -> Bool {
+        name.contains("accent's breath") && isStatedShipped(frame.rootPalette)
+            && Self.acceptedAccentBreaths.contains("\(frame.rootPalette.name) @ \(frame.depth)")
     }
 
     /// Every promise the session holds its frames to.
@@ -235,7 +248,11 @@ extension ThemeFrame {
         let isSelected = session.board.selection == id
         guard !pages.contains(field) else { return .plain }
         guard isSelected else { return .washBreath }
-        guard case .fill(let tint) = rootPalette.selectedRowFill(), let drawnTint = drawn(tint) else {
+        // Asked at the frame's depth: at 256 colours a palette's tint is its own cube
+        // entry (`RowFills`), not the truecolour tint quantised.
+        guard case .fill(let tint) = ColorDepth.withCurrent(depth, operation: { rootPalette.selectedRowFill() }),
+            let drawnTint = drawn(tint)
+        else {
             return .accentBreath
         }
         return ScreenCell.name(drawnTint) == field ? .selectedTint : .accentBreath
