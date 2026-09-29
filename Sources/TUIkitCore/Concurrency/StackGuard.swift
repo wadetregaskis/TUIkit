@@ -136,7 +136,8 @@ public enum StackGuard {
     /// The frame just quietly comes back emptier, and faster.
     ///
     /// Costs the hot path nothing: ``hasHeadroom()`` only ever answers `false`
-    /// from its out-of-line slow path, so the counter lives there.
+    /// from its out-of-line slow path, so the counter lives there. A `false`
+    /// from `hasHeadroomUncounted()` stops no descent, and is not counted.
     @MainActor
     public static var truncationCount = 0
 
@@ -170,17 +171,35 @@ public enum StackGuard {
         // remains while the pointer is still above the reserved floor AND
         // still inside the stack that floor was computed for.
         if stackPointer > extent.floor && stackPointer < extent.high { return true }
-        return headroomSlowPath(stackPointer: stackPointer)
+        return headroomSlowPath(stackPointer: stackPointer, countsTruncation: true)
+    }
+
+    /// ``hasHeadroom()`` for a caller whose `false` gives up work that can be
+    /// done without — not a descent: the same answer, not counted in
+    /// ``truncationCount``, which counts only trees cut short.
+    ///
+    /// The per-pass memos' value hash asks this before it opens an existential:
+    /// a value too deep to hash goes unhashed, and the measure that asked for
+    /// the hash descends anyway, under its own guard, which counts if IT stops.
+    @inline(__always)
+    @MainActor
+    package static func hasHeadroomUncounted() -> Bool {
+        var probe: UInt = 0
+        let stackPointer = withUnsafeMutablePointer(to: &probe) { UInt(bitPattern: $0) }
+        let extent = cachedExtent
+        if stackPointer > extent.floor && stackPointer < extent.high { return true }
+        return headroomSlowPath(stackPointer: stackPointer, countsTruncation: false)
     }
 
     /// The out-of-line half of ``hasHeadroom()``: either genuinely out of
-    /// stack, or on a thread the cache does not describe.
+    /// stack, or on a thread the cache does not describe. A `false` is counted
+    /// in ``truncationCount`` when `countsTruncation`.
     ///
     /// Deliberately not inlined — it is the cold path, and keeping the
     /// procfs read out of the caller keeps the hot path small enough to inline
     /// into every `measureChild`/`renderChild`.
     @MainActor
-    private static func headroomSlowPath(stackPointer: UInt) -> Bool {
+    private static func headroomSlowPath(stackPointer: UInt, countsTruncation: Bool) -> Bool {
         // Checked before the containment test below, not after: `disabled`
         // spans the whole address space, so it would satisfy that test and
         // return `false` — inverting "the guard is off" into "nothing has
@@ -189,7 +208,7 @@ public enum StackGuard {
         // Inside the extent we already know about, but at or below its floor:
         // this is the guard doing its job on the expected thread.
         if stackPointer >= cachedExtent.low && stackPointer < cachedExtent.high {
-            truncationCount += 1
+            if countsTruncation { truncationCount += 1 }
             return false
         }
         // Outside it — a different thread than last time (or the very first
@@ -206,7 +225,7 @@ public enum StackGuard {
         derivationFailures = 0
         cachedExtent = extent
         let headroom = stackPointer > extent.floor && stackPointer < extent.high
-        if !headroom { truncationCount += 1 }
+        if !headroom && countsTruncation { truncationCount += 1 }
         return headroom
     }
 

@@ -17,6 +17,12 @@
 /// enum's inactive payload keeps what was there (measured 2026-09-28). What a
 /// type needs beyond "no padding" to hash soundly is the value-hash plan's
 /// business.
+///
+/// Blind, too, to a metatype stored thin: a field `Int.Type` takes no bytes and
+/// an `Int.Type?` one, where the runtime's sizes — which this adds up — are a
+/// pointer's, so the padding after one reads as covered. The value-hash plan
+/// bypasses every metatype for that reason; a type holding one is no evidence
+/// here either way.
 func interiorPadding(of type: Any.Type) -> [Range<Int>] {
     func size(_ type: Any.Type) -> Int {
         func measure<T>(_: T.Type) -> Int { MemoryLayout<T>.size }

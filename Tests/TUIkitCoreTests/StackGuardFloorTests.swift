@@ -292,6 +292,33 @@ struct StackGuardExtentCacheTests {
         #expect(StackGuard.truncationCount == savedCount + 1, "a trip is counted")
     }
 
+    /// The value hash asks before it opens an existential, and gives a value
+    /// too deep for the stack up unhashed — while the measure that asked
+    /// descends anyway, under its own guard. Counted, that read as a tree cut
+    /// short where nothing was cut.
+    @Test("A caller that gives up work rather than a descent gets the same answer, uncounted")
+    func uncountedTripIsNotCounted() {
+        let saved = StackGuard.cachedExtent
+        let savedCount = StackGuard.truncationCount
+        defer {
+            StackGuard.cachedExtent = saved
+            StackGuard.truncationCount = savedCount
+        }
+
+        // As above: inside the known stack, below its floor.
+        let stackPointer = currentStackPointer()
+        let megabyte: UInt = 1 << 20
+        StackGuard.cachedExtent = StackGuard.StackExtent(
+            low: stackPointer - megabyte,
+            floor: stackPointer + megabyte,
+            high: stackPointer + 2 * megabyte)
+        #expect(!StackGuard.hasHeadroomUncounted())
+        #expect(StackGuard.truncationCount == savedCount, "not counted")
+        // A foreign bound, re-derived: headroom, as ``hasHeadroom()`` says.
+        StackGuard.cachedExtent = StackGuard.StackExtent(low: 0x1000, floor: 0x2000, high: 0x3000)
+        #expect(StackGuard.hasHeadroomUncounted())
+    }
+
     /// The counter must not move when the guard is simply doing nothing, or a
     /// harness would read a healthy render as truncated.
     @Test("A render with headroom to spare counts no truncations")

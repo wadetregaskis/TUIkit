@@ -132,6 +132,77 @@ package enum RuntimeFields {
         of type: Any.Type, options: Options = [],
         body: (UnsafePointer<CChar>, Int, Any.Type, Kind) -> Bool
     ) -> Bool {
+        forEachListed(of: type, options: options) { name, offset, fieldType, kind, _ in
+            body(name, offset, fieldType, kind)
+        }
+    }
+
+    /// One stored field, as the runtime's field metadata lists it.
+    package struct Field {
+        /// The type the field belongs to, and its index there: where ``name``
+        /// is read back from.
+        private let owner: Any.Type
+        private let index: Int
+        /// Its byte offset from the start of the value.
+        package let offset: Int
+        /// Its declared type.
+        package let type: Any.Type
+        /// The runtime's kind for ``type``.
+        package let kind: Kind
+        /// Whether the field holds a value of ``type`` as itself: `false` for
+        /// a `weak`, `unowned` or `unowned(unsafe)` reference, whose storage is
+        /// a reference the runtime manages rather than the declared type's
+        /// value — a `weak var` declared `C?` does not hold a `C?` a reader
+        /// may load as one.
+        package let isStrong: Bool
+
+        init(owner: Any.Type, index: Int, offset: Int, type: Any.Type, kind: Kind, isStrong: Bool) {
+            self.owner = owner
+            self.index = index
+            self.offset = offset
+            self.type = type
+            self.kind = kind
+            self.isStrong = isStrong
+        }
+
+        /// The field's name, `""` where the runtime has none; a tuple's
+        /// unlabelled elements are `.0`, `.1`, ….
+        ///
+        /// Read from the runtime when asked, not when the field is listed: the
+        /// value-hash plan builder lists the fields of every type it plans and
+        /// wants a name only to say why a type bypasses.
+        package var name: String {
+            var field = RuntimeFieldMetadata()
+            _ = runtimeRecursiveFieldType(owner, index: index, fieldMetadata: &field)
+            defer { field.freeFunc?(field.name) }
+            return field.name.map { String(cString: $0) } ?? ""
+        }
+    }
+
+    /// `type`'s stored fields (not a class's), in declaration order — what
+    /// ``forEach(of:options:body:)`` lists, with whether each is held
+    /// strongly.
+    ///
+    /// Empty for a type whose module was built without reflection metadata,
+    /// as for one with no stored fields: the caller tells those apart by the
+    /// type's size.
+    package static func fields(of type: Any.Type) -> [Field] {
+        var found: [Field] = []
+        _ = forEachListed(of: type, options: []) { _, offset, fieldType, kind, isStrong in
+            found.append(
+                Field(
+                    owner: type, index: found.count, offset: offset, type: fieldType, kind: kind,
+                    isStrong: isStrong))
+            return true
+        }
+        return found
+    }
+
+    /// The one walk over the runtime's entry points both listings share.
+    private static func forEachListed(
+        of type: Any.Type, options: Options,
+        body: (UnsafePointer<CChar>, Int, Any.Type, Kind, Bool) -> Bool
+    ) -> Bool {
         guard Kind(of: type).isClass == options.contains(.classType) else { return false }
         for index in 0..<runtimeRecursiveFieldCount(type) {
             let offset = runtimeRecursiveFieldOffset(type, index: index)
@@ -139,7 +210,7 @@ package enum RuntimeFields {
             let fieldType = runtimeRecursiveFieldType(type, index: index, fieldMetadata: &field)
             defer { field.freeFunc?(field.name) }
             let listed = withUnnamedFallback(field.name) { name in
-                body(name, offset, fieldType, Kind(of: fieldType))
+                body(name, offset, fieldType, Kind(of: fieldType), field.isStrong)
             }
             guard listed else { return false }
         }

@@ -96,12 +96,16 @@ let package = Package(
         // forward (see also the per-target import guard it applies).
         .testTarget(
             name: "TUIkitTests",
-            dependencies: ["TUIkit"],
+            dependencies: ["TUIkit", "CTestSupport"],
             // Golden snapshots are read/written by path (#filePath-relative, see
             // TestHelpers/SnapshotTesting.swift), not via the resource bundle, so
             // exclude them from the build rather than declaring them as resources.
             exclude: ["__Snapshots__"]
         ),
+        // C declarations a test needs that only the C importer makes — a struct
+        // with bitfields, which the runtime's field list leaves out. Tests
+        // only; no product names it.
+        .target(name: "CTestSupport", path: "Tests/CTestSupport"),
 
         // The Example app's own views, where a test must hold the view the
         // app ships rather than a copy of its shape — a copy goes on passing

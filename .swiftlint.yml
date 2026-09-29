@@ -227,6 +227,9 @@ identifier_name:
     - _measureSelf
     - _explicitIDKey
     - _valueIsBoxed
+    # The value hash's typed reader (`_ValueHashing`), the same convention for
+    # a witness the framework calls and nothing else should.
+    - _mixValueHash
     # Idiomatic single-letter math / graphics / loop names: keeping
     # them short matches the surrounding domain (coordinates,
     # colour channels, dimensions, indices) better than renaming.
