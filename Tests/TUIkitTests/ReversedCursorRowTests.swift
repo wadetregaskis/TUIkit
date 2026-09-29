@@ -349,6 +349,19 @@ struct ReversedCursorRowTests {
         }
     }
 
+    /// Without colour a fill draws nothing, so a cursor row drawn as one was the same as
+    /// every other row: reverse video is an attribute, which such a terminal still draws.
+    @Test("Without colour the cursor row reverses, selected or not, and no other row does", arguments: Kind.allCases)
+    func noColourCursorRowReverses(_ kind: Kind) throws {
+        for selection in [Set<Int>(), [0]] {
+            let drawn = buffer(kind.view(selection: selection), palette: PaletteRegistry.all[0], depth: .noColor)
+            let cursor = fillCells(row(0, of: drawn))
+            #expect(!cursor.isEmpty, "\(kind), \(selection)")
+            #expect(cursor.allSatisfy { $0.state.reversesVideo }, "\(kind), \(selection): \(row(0, of: drawn).debugDescription)")
+            #expect(rowCells(row(1, of: drawn)).allSatisfy { !$0.state.reversesVideo }, "\(kind), \(selection)")
+        }
+    }
+
     /// A default wash is not what the row draws, so a tier the terminal decides does not
     /// reach it: the row fills measure, from the page, the ink and the accent.
     @Test("A default wash built from a tier the terminal decides leaves the row a fill", arguments: Kind.allCases)

@@ -2602,7 +2602,12 @@ xterm's. A menu's bar and a `DatePicker` cell hold the fill end still instead.
 What a host paints for it is what the card's rows A, B and D ask: UNMEASURED.
 
 The trigger is those colours and never the terminal's silence: a palette of
-ordinary RGB roles keeps its tints on a host that answers nothing. The ink and
+ordinary RGB roles keeps its tints on a host that answers nothing. The one other
+trigger is a terminal that draws no colour at all (`ColorDepth.noColor`, e.g.
+`TERM=dumb`), where a fill is nothing: there a list's or table's cursor row, a
+menu's or drop-down's bar, a date field's active component and a split view's
+divider reverse (since 2026-09-29; before, a cursor row there looked like every
+other row). The ink and
 the field are stated beside the 7 for the reason ECMA-48 gives below — a bare 7
 exchanges the pair IN FORCE, so a row's padding, which follows its content's
 last reset, would fill with the terminal's own foreground on a page the palette

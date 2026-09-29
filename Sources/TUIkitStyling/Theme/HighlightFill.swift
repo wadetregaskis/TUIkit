@@ -81,7 +81,8 @@ extension Palette {
 
     /// The emphasis a focused, selected row shows: the accent's fill breath
     /// (``Palette/accentFillPulse(over:)``), or reverse video where the accent or the
-    /// ground has no RGB.
+    /// ground has no RGB, and on a terminal that draws no colour at all (`.noColor`),
+    /// where a fill is nothing and the row would not say where the cursor is.
     ///
     /// Such a breath is two equal ends held at the bright one (§79), which for an opaque
     /// accent is a solid half-strength accent under content nobody can check for
@@ -91,7 +92,9 @@ extension Palette {
     /// - Parameter surface: What the fill sits on, when that is not the page.
     package func emphasisFill(over surface: Color? = nil) -> HighlightFill {
         let ground = surface ?? background
-        guard accent.rgbComponents != nil, ground.rgbComponents != nil else {
+        // Without colour a fill draws nothing at all; reverse video is an attribute,
+        // which such a terminal still draws.
+        guard accent.rgbComponents != nil, ground.rgbComponents != nil, ColorDepth.current > .noColor else {
             return .reversed(ink: foreground, field: ground)
         }
         let (dim, bright) = accentFillPulse(over: surface)
@@ -101,13 +104,15 @@ extension Palette {
     /// The still wash of a row merely under the cursor — the cursor row of a focused
     /// list or table, on a row the selection does not include, wherever it does not
     /// breathe (``focusWashEmphasis(appearsActive:)``): ``focusBackground``, or
-    /// reverse video where that wash cannot be measured.
+    /// reverse video where that wash cannot be measured or no colour is drawn.
     ///
     /// The default wash is the tertiary tier at 30% over the page, and a share below
     /// half of a colour the terminal decides is the page itself (Opacity as
     /// composition §75): it measures, and shows nothing. So where the palette has not
     /// stated a wash of its own, the tier it is built from is asked as well.
     package func focusWashFill() -> HighlightFill {
+        // Without colour a fill draws nothing at all (see `emphasisFill(over:)`).
+        guard ColorDepth.current > .noColor else { return .reversed(ink: foreground, field: background) }
         // A shipped palette's cursor row rests on the F dim end chosen for it
         // (see `RowFills`), not on its `focusBackground`.
         if let fills = rowFills() { return .fill(fills.focusDim) }
