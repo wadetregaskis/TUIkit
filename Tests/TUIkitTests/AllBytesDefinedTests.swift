@@ -108,6 +108,11 @@ struct AllBytesDefinedTests {
             { $0.pointee = .bezier(p1x: 0.1, p1y: 0.2, p2x: 0.3, p2y: 0.4) },
             { $0.pointee = .spring(omega: 12, zeta: 0.5) },
         ]),
+        Conformer(StatedColor.self, [{ $0.pointee = .unstated }, { $0.pointee = .stated(.rgb(1, 2, 3)) }]),
+        Conformer(StatedLineLimit.self, [{ $0.pointee = .unstated }, { $0.pointee = .stated(.lines(4)) }]),
+        Conformer(StatedFont.self, [
+            { $0.pointee = .unstated }, { $0.pointee = .statedNone }, { $0.pointee = .stated(.headline) },
+        ]),
         Conformer(Animation.Repeat.self, [
             { $0.pointee = .count(2, autoreverses: true) }, { $0.pointee = .forever(autoreverses: false) },
         ]),

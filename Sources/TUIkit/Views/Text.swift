@@ -432,11 +432,19 @@ struct TextStyle: Sendable, Equatable {
 
     // The stored properties are declared widest alignment first, so the
     // struct has no padding between them: the per-pass memos key a view by its
-    // raw bytes (`viewValueHash`), and a padding byte is whatever the memory
-    // held before — two equal styles can differ there. Linux did, and a
-    // button's caps missed the memo on every probe. `lineLimit` (8-byte
-    // aligned) comes first; everything after it is byte-aligned.
+    // bytes (`viewValueHash`), and a padding byte is whatever the memory held
+    // before — two equal styles can differ there. Linux did, and a button's
+    // caps missed the memo on every probe. `statedLineLimit` (8-byte aligned)
+    // comes first; everything after it is byte-aligned.
     // `TextLayoutPaddingTests` pins it.
+    //
+    // And the optionals whose payload is several fields — the line limit, the
+    // two colours, the font — are stored as enums of this module's own
+    // (`TextStyleStatements.swift`), so every byte of a `Text` is always
+    // written and the value hash reads it whole. As `Optional`s, a `nil` stored
+    // by generic code writes only the field whose spare values spell it, and
+    // the hash has to read each one's case first: four typed steps on every
+    // measured `Text`.
 
     /// How many lines the text may occupy, or `nil` to inherit `\.lineLimit`
     /// from the environment.
@@ -446,13 +454,25 @@ struct TextStyle: Sendable, Equatable {
     /// (``LineLimit/unlimited``), not the absence of one — otherwise
     /// `Text(x).lineLimit(nil)` inside a `.lineLimit(2)` subtree could not say
     /// "not me" and the inherited cap would be unresettable.
-    var lineLimit: LineLimit?
+    var lineLimit: LineLimit? {
+        get { statedLineLimit.value }
+        set { statedLineLimit = StatedLineLimit(newValue) }
+    }
+    private var statedLineLimit = StatedLineLimit.unstated
 
     /// The foreground color of the text.
-    var foregroundColor: Color?
+    var foregroundColor: Color? {
+        get { statedForegroundColor.value }
+        set { statedForegroundColor = StatedColor(newValue) }
+    }
+    private var statedForegroundColor = StatedColor.unstated
 
     /// The background color of the text.
-    var backgroundColor: Color?
+    var backgroundColor: Color? {
+        get { statedBackgroundColor.value }
+        set { statedBackgroundColor = StatedColor(newValue) }
+    }
+    private var statedBackgroundColor = StatedColor.unstated
 
     // The five flags a STYLE CASCADE can also state are tri-state, and for the
     // reason ``StyleAttributes`` is: `nil` is "this `Text` never said", which a
@@ -490,7 +510,11 @@ struct TextStyle: Sendable, Equatable {
     /// indistinguishable from silence, and an inherited `.font(.headline)` could
     /// not be escaped from: the hole the tri-state flags above close for
     /// emphasis, reopened in the one place a font can open it.
-    var font: Font??
+    var font: Font?? {
+        get { statedFont.value }
+        set { statedFont = StatedFont(newValue) }
+    }
+    private var statedFont = StatedFont.unstated
 
     /// Whether the text blinks.
     var isBlink: Bool = false

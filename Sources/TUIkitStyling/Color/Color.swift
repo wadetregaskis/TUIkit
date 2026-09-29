@@ -34,6 +34,15 @@
 /// ```
 import Foundation  // `String(format:)` / `trimmingCharacters` — stated, not borrowed from a sibling file (SE-0444)
 
+// `@frozen`, as its value is: `Text` keeps a colour in an enum of TUIkit's
+// own (`StatedColor`) that the per-pass memos' value hash reads whole, which
+// is sound only because every byte of it is written — and that holds only
+// where the enum's layout, so this struct's, is known. In a build without
+// library evolution, which is how TUIkit is built, it always is, and this
+// changes nothing; with it, TUIkit would see this struct resiliently and
+// build a `StatedColor` with no colour through the runtime's inject witness,
+// which leaves the colour's bytes as they were.
+@frozen
 public struct Color: Sendable, Hashable {
     /// The internal color value.
     public let value: ColorValue
