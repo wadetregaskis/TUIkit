@@ -149,9 +149,10 @@ extension NavigationCoordinator {
 
 extension NavigationCoordinator {
 
-    /// Registers the view to show for pushed values of type `D`.
-    func register<D: Hashable>(_ type: D.Type, builder: @escaping (D) -> AnyView) {
-        builders[ObjectIdentifier(type)] = { erased in
+    /// Registers the view to show for pushed values of the type `type`
+    /// identifies, read as `D`.
+    func register<D: Hashable>(_ type: ObjectIdentifier, builder: @escaping (D) -> AnyView) {
+        builders[type] = { erased in
             guard let value = erased.base as? D else { return AnyView(EmptyView()) }
             return builder(value)
         }

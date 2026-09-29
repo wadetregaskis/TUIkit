@@ -38,7 +38,7 @@ extension View {
         for data: D.Type,
         @ViewBuilder destination: @escaping (D) -> C
     ) -> some View {
-        NavigationDestinationModifier(content: self, data: data, destination: destination)
+        NavigationDestinationModifier(content: self, dataType: ObjectIdentifier(data), destination: destination)
     }
 }
 
@@ -48,7 +48,17 @@ extension View {
 /// its content unchanged.
 struct NavigationDestinationModifier<Content: View, D: Hashable, C: View>: View {
     let content: Content
-    let data: D.Type
+    /// The type of value this presents, named as the coordinator files it.
+    ///
+    /// Not the `D.Type` it arrives as, though that names the same type: the
+    /// per-pass memos key no view that holds a metatype. Swift stores one in
+    /// no bytes where its type has a single value and as a pointer where it
+    /// may have more (a type parameter's, like this), the runtime reports
+    /// every one as the pointer, and the value hash cannot tell which layout
+    /// it would be reading — so it hashes neither. Held as a metatype, this
+    /// modifier went unkeyed, and so did every view holding it: the
+    /// navigation stack whose root it sits on, and whatever holds the stack.
+    let dataType: ObjectIdentifier
     let destination: (D) -> C
 
     var body: Never {
@@ -68,7 +78,7 @@ extension NavigationDestinationModifier: Renderable {
         // that stays true while a screen is pushed.
         if !context.isMeasuring, let coordinator = context.environment.navigationCoordinator {
             let build = destination
-            coordinator.register(data) { AnyView(build($0)) }
+            coordinator.register(dataType) { AnyView(build($0)) }
         }
         return TUIkit.renderToBuffer(content, context: context)
     }

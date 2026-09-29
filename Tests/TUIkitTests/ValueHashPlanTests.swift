@@ -483,6 +483,13 @@ struct ValueHashPlanTests {
         }
     }
 
+    @Test("A navigation destination names its type by identifier, not by a metatype, and is read whole")
+    func navigationDestination() {
+        let modified = EmptyView().navigationDestination(for: Int.self) { _ in EmptyView() }
+        let found = plan(type(of: modified))
+        #expect(found.shape == .dense, "\(found.bypassReason ?? "")")
+    }
+
     /// The property the plans exist for, over a corpus of the framework's own
     /// view types: no run a plan loads overlaps a byte that no field covers.
     @Test("No plan reads a padding byte")
