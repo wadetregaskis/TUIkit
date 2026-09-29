@@ -36,6 +36,47 @@ enum RowBackground {
     /// whose fill cannot be measured (``HighlightFill``).
     case reversed(ink: Color, field: Color)
 
+    /// A breath with one end in reverse video, the other a fill: a 16-colour row whose
+    /// terminal has too few colours to tell every row's state apart (`RowFills`). The
+    /// reversed end is the palette's pair exchanged, with every colour the row's
+    /// content states dropped, so the whole row is the text's colour with its content
+    /// in the page's (``ANSIRenderer/applyReversedPair(_:ink:field:)``).
+    ///
+    /// Only ever animating: a cycle that does not animate is still, and holds its
+    /// bright end as ``fixed(_:)`` or ``reversed(ink:field:)``.
+    case pulsingReversal(SelectionEmphasisCycle, dim: Paint, bright: Paint)
+
+    /// How one frame of a breathing row paints its line.
+    enum Paint {
+        case fill(Color)
+        case reversed(ink: Color, field: Color)
+
+        /// `line`, a row's finished line, painted this way. A fill is left in force at
+        /// the end, as ``String/withPersistentBackground(_:)`` leaves it.
+        func painting(_ line: String) -> String {
+            switch self {
+            case .fill(let colour): line.withPersistentBackground(colour)
+            case .reversed(let ink, let field):
+                ANSIRenderer.applyReversedPair(line, ink: ink.opaqueSpelling, field: field.opaqueSpelling)
+            }
+        }
+
+        /// A row's lines this way, from a renderer that draws them over a colour:
+        /// over the fill, or over none and then reversed.
+        func lines(_ render: (Color?) -> [String]) -> [String] {
+            switch self {
+            case .fill(let colour): render(colour)
+            case .reversed: render(nil).map(painting)
+            }
+        }
+
+        /// The colour the row is filled with, or `nil` for a reversal.
+        var fill: Color? {
+            guard case .fill(let colour) = self else { return nil }
+            return colour
+        }
+    }
+
     /// `.fixed`, or `.none` for no colour — for the callers whose other branches
     /// produce an optional.
     init(_ color: Color?) {
@@ -98,8 +139,17 @@ enum RowBackground {
     /// cycle, and anything else still.
     @MainActor
     private static func breathing(_ highlight: HighlightFill, in context: RenderContext) -> Self {
-        guard case .pulse(let dim, let bright) = highlight else { return still(highlight) }
-        return .pulsing(context.environment.selectionEmphasis.cycle(true), dim: dim, bright: bright)
+        switch highlight {
+        case .pulse(let dim, let bright):
+            return .pulsing(context.environment.selectionEmphasis.cycle(true), dim: dim, bright: bright)
+        case .reversingPulse(let dim, let bright, let ink, let field):
+            let cycle = context.environment.selectionEmphasis.cycle(true)
+            guard cycle.isAnimating else { return bright.map(Self.fixed) ?? .reversed(ink: ink, field: field) }
+            let reversal = Paint.reversed(ink: ink, field: field)
+            return .pulsingReversal(cycle, dim: dim.map(Paint.fill) ?? reversal, bright: bright.map(Paint.fill) ?? reversal)
+        case .fill, .reversed:
+            return still(highlight)
+        }
     }
 
     /// The fill of a highlight that only ever TINTS — a selected row that is not the
@@ -124,6 +174,8 @@ enum RowBackground {
         case .fill(let color): return .fixed(color)
         case .pulse(_, let bright): return .fixed(bright)
         case .reversed(let ink, let field): return .reversed(ink: ink, field: field)
+        case .reversingPulse(_, let bright, let ink, let field):
+            return bright.map(Self.fixed) ?? .reversed(ink: ink, field: field)
         }
     }
 
@@ -137,7 +189,25 @@ enum RowBackground {
         case .fixed(let color): return color
         case .pulsing(let cycle, let dim, let bright):
             return cycle.colorNow(dim: dim, bright: bright)
+        case .pulsingReversal: return paintNow?.fill
         }
+    }
+
+    /// Every frame of the breath, in cycle order — ``pulseColors`` as fills, or a
+    /// reversing breath's frames — or `nil` when this background does not animate.
+    @MainActor
+    var framePaints: [Paint]? {
+        if case .pulsingReversal(let cycle, let dim, let bright) = self {
+            return cycle.brightFrames().map { $0 ? bright : dim }
+        }
+        return pulseColors?.map(Paint.fill)
+    }
+
+    /// The frame of ``framePaints`` being rendered now.
+    @MainActor
+    private var paintNow: Paint? {
+        guard let paints = framePaints, !paints.isEmpty else { return nil }
+        return paints[stepNow % paints.count]
     }
 
     /// `line` — a row's finished line, already padded to its width — drawn over this
@@ -156,6 +226,7 @@ enum RowBackground {
     /// is never handed a colour that still states one.
     @MainActor
     func painting(_ line: String) -> String {
+        if case .pulsingReversal = self, let paint = paintNow { return paint.painting(line) }
         guard case .reversed(let ink, let field) = self else {
             return line.withPersistentBackground(claimableFill?.opaqueSpelling ?? colorNow)
         }
@@ -173,6 +244,7 @@ enum RowBackground {
     /// - Parameter render: Draws the row's lines over the colour it is given.
     @MainActor
     func stillLines(_ render: (Color?) -> [String]) -> [String] {
+        if case .pulsingReversal = self, let paint = paintNow { return paint.lines(render) }
         guard case .reversed = self else {
             return render(claimableFill?.opaqueSpelling ?? colorNow)
         }
@@ -185,7 +257,7 @@ enum RowBackground {
     /// visible effect). A pulse between two equal ends is still too, whatever its
     /// cycle: `accentFillPulse` returns one where the accent or the page has no RGB.
     @MainActor
-    var pulseColors: [Color]? {
+    private var pulseColors: [Color]? {
         guard case .pulsing(let cycle, let dim, let bright) = self,
             cycle.isAnimating(dim: dim, bright: bright)
         else { return nil }
@@ -195,17 +267,26 @@ enum RowBackground {
     /// The frame duration and clock ``pulseColors`` step on, or `nil` exactly when
     /// that is `nil`: what a run built from those colours is built with.
     var pulseTiming: IndicatorCycleTiming? {
-        guard case .pulsing(let cycle, let dim, let bright) = self,
-            cycle.isAnimating(dim: dim, bright: bright)
-        else { return nil }
-        return cycle.timing
+        switch self {
+        case .pulsing(let cycle, let dim, let bright) where cycle.isAnimating(dim: dim, bright: bright):
+            return cycle.timing
+        case .pulsingReversal(let cycle, _, _):
+            return cycle.timing
+        default:
+            return nil
+        }
     }
 
-    /// Which colour of ``pulseColors`` the frame being rendered now shows.
+    /// Which frame of ``pulseColors`` or ``framePaints`` the frame being rendered now
+    /// shows.
     @MainActor
     var stepNow: Int {
-        guard case .pulsing(let cycle, _, _) = self, !cycle.frames.isEmpty else { return 0 }
-        return cycle.step % cycle.frames.count
+        switch self {
+        case .pulsing(let cycle, _, _), .pulsingReversal(let cycle, _, _):
+            return cycle.frames.isEmpty ? 0 : cycle.step % cycle.frames.count
+        default:
+            return 0
+        }
     }
 
     /// The fill a claim would be about, or `nil` where there is nothing to claim.

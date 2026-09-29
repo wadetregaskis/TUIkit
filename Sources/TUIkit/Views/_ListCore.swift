@@ -3652,9 +3652,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         }
         // Two equal ends are a still row, however many frames the cycle has — see
         // `RowBackground.pulseColors`.
-        guard case .pulsing(let cycle, let dim, let bright) = background,
-            cycle.isAnimating(dim: dim, bright: bright)
-        else {
+        guard let paints = background.framePaints, let timing = background.pulseTiming else {
             let fill = background.claimableFill
             // A reversal states its own pair and closes itself, so its lines are painted
             // rather than handed a colour to persist under their resets; everything else
@@ -3688,8 +3686,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             forNextStepOf: childRuns.map { ($0.clock, $0.frameTicks) })
         // Transposed to line-major, because that is how the runs are asked for:
         // one run per LINE, carrying that line at every point of the cycle.
-        let perStep = cycle.colors(dim: dim, bright: bright).map { lines(over: $0) }
-        let step = cycle.step % max(1, perStep.count)
+        // Each frame over its fill, or reversed (a 16-colour breath's other end).
+        let perStep = paints.map { $0.lines { lines(over: $0) } }
+        let step = background.stepNow % max(1, perStep.count)
         // A breathing fill claims nothing and needs to: `accentFillPulse` spends a
         // translucent tint's alpha against the page at both ends (§29), so every
         // frame states a concrete colour. The MARK still claims — it is drawn into
@@ -3705,7 +3704,7 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         return RenderedRow(
             lines: perStep[step],
             pulseFrames: (0..<row.buffer.lines.count).map { line in perStep.map { $0[line] } },
-            pulseTiming: cycle.timing,
+            pulseTiming: timing,
             claims: claims(over: nil),
             contentClaims: content.claims(leaving: droppedRunClaims + childRuns.flatMap(\.leftBehind)))
     }

@@ -460,6 +460,7 @@ enum DropdownMenu {
         case .fill(let color): return color
         case .pulse(_, let bright): return bright
         case .reversed: return nil
+        case .reversingPulse: return fillColor(highlight.stillFill)
         }
     }
 

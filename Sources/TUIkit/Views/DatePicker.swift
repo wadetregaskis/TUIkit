@@ -400,6 +400,7 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
             case .fill(let color), .pulse(_, let color):
                 style.backgroundColor = color
                 style.foregroundColor = palette.foreground.opaqueSpelling
+            case .reversingPulse: return activeCell(text, on: block.stillFill)
             }
             return ANSIRenderer.render(text, with: style.resolved(with: palette))
         }

@@ -103,6 +103,10 @@ struct ListRowContent {
             // row never draws, and every tick put a faded spinner on the dim wash in
             // a bright row.
             return cycle.colorNow(dim: dim, bright: bright)
+        case .pulsingReversal:
+            // This frame's fill, or none on a reversed frame, whose content's colours
+            // are dropped anyway.
+            return background.colorNow
         case .none, .fixed, .reversed:
             return nil
         }

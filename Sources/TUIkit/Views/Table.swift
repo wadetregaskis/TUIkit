@@ -1893,10 +1893,10 @@ where Value.ID: Hashable {
         lines.reserveCapacity(layout.height)
         // Only a breathing row needs its lines kept bare: everything else would
         // be an array built per row per frame and thrown away.
-        let pulseColors = visual.background.pulseColors
+        let framePaints = visual.background.framePaints
         // Hoisted out of the per-line loop: `claimableFill` is a switch, and both the
         // claim and the fill below want the same answer for every line of the row.
-        let claimableFill = pulseColors == nil ? visual.background.claimableFill : nil
+        let claimableFill = framePaints == nil ? visual.background.claimableFill : nil
         /// The same lines WITHOUT their background, kept so a pulse can be
         /// applied to each of them per step (see the single-line path).
         var bareLines: [String] = []
@@ -1959,7 +1959,7 @@ where Value.ID: Hashable {
             }
             guard case .none = visual.background else {
                 content.append(contentsOf: asciiSpaces(rowWidth - content.strippedLength))
-                if pulseColors != nil { bareLines.append(content) }
+                if framePaints != nil { bareLines.append(content) }
                 lines.append(visual.background.painting(content))
                 continue
             }
@@ -1967,12 +1967,10 @@ where Value.ID: Hashable {
         }
         // Same recolour-the-finished-line trick the single-line path uses: one
         // recolouring per step, not one render of the row per step.
-        guard let pulseColors else { return RenderedRow(lines: lines, claims: claims) }
+        guard let framePaints else { return RenderedRow(lines: lines, claims: claims) }
         return RenderedRow(
             lines: lines,
-            pulseFrames: bareLines.map { bare in
-                pulseColors.map { bare.withPersistentBackground($0) }
-            },
+            pulseFrames: bareLines.map { bare in framePaints.map { $0.painting(bare) } },
             pulseTiming: visual.background.pulseTiming,
             claims: claims)
     }
@@ -4010,10 +4008,10 @@ where Value.ID: Hashable {
             // selected or focused row of every frame.
             content.append(contentsOf: asciiSpaces(rowWidth - cellColumn))
             let fill = visualState.background.claimableFill
-            guard let colors = visualState.background.pulseColors else {
+            guard let paints = visualState.background.framePaints else {
                 return (visualState.background.painting(content), nil, nil, claims(fill: fill))
             }
-            let frames = colors.map { content.withPersistentBackground($0) }
+            let frames = paints.map { $0.painting(content) }
             // The pulse's own frames need no spelling and earn no fill claim: both
             // ends of `accentFillPulse` spend a translucent tint's alpha against the
             // page, so every frame states a concrete colour (§29). The INK claim

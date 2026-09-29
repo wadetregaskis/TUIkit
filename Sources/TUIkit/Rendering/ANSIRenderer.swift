@@ -197,6 +197,77 @@ extension ANSIRenderer {
         return opening + restating(opening, afterResetsIn: string) + reset
     }
 
+    /// `string` in reverse video over the palette's pair and nothing else: every
+    /// colour its own content states is dropped first, so each cell draws `field`'s
+    /// colour on `ink`'s — text, secondary text, marks and badges alike.
+    ///
+    /// The frame a 16-colour row's breath shows where it has run out of colours to
+    /// tell its states apart (`RowFills`). ``applyPersistentReverse(_:ink:field:)``
+    /// alone reverses each child's OWN pair, so a label in the accent became an
+    /// accent-coloured block and the row several colours at once; here the row is one
+    /// colour, as a fill would make it, with its content in one other.
+    static func applyReversedPair(_ string: String, ink: Color, field: Color) -> String {
+        applyPersistentReverse(droppingColours(string), ink: ink, field: field)
+    }
+
+    /// `string` with every colour its SGR sequences state removed — foreground,
+    /// background and underline colours, and reverse video — and every other
+    /// attribute (bold, dim, italic, underline, resets) kept where it was.
+    ///
+    /// A sequence left with nothing to say is removed whole: an empty `ESC[m` would be
+    /// a reset.
+    static func droppingColours(_ string: String) -> String {
+        guard string.utf8.contains(0x1B) else { return string }
+        var output = ""
+        output.reserveCapacity(string.utf8.count)
+        var rest = Substring(string)
+        while let start = rest.range(of: csi) {
+            output += rest[..<start.lowerBound]
+            let afterIntroducer = rest[start.upperBound...]
+            guard let final = afterIntroducer.firstIndex(where: { ("@"..."~").contains($0) }) else {
+                output += rest[start.lowerBound...]
+                return output
+            }
+            let body = afterIntroducer[..<final]
+            if afterIntroducer[final] == "m", !body.isEmpty {
+                let kept = keptAttributes(body.split(separator: ";", omittingEmptySubsequences: false))
+                if !kept.isEmpty { output += "\(csi)\(kept.joined(separator: ";"))m" }
+            } else {
+                output += rest[start.lowerBound...final]
+            }
+            rest = afterIntroducer[afterIntroducer.index(after: final)...]
+        }
+        output += rest
+        return output
+    }
+
+    /// The SGR parameters of `parameters` that are not colours.
+    private static func keptAttributes(_ parameters: [Substring]) -> [Substring] {
+        var kept: [Substring] = []
+        var index = 0
+        while index < parameters.count {
+            let parameter = parameters[index]
+            index += 1
+            // `38:2::r:g:b` and its kin: one parameter, its arguments after colons.
+            if let colon = parameter.firstIndex(of: ":") {
+                if !["38", "48", "58"].contains(parameter[..<colon]) { kept.append(parameter) }
+                continue
+            }
+            let code = Int(parameter) ?? 0
+            switch code {
+            case 38, 48, 58:
+                // `38;5;n` or `38;2;r;g;b`: the arguments are parameters of their own.
+                let form = index < parameters.count ? Int(parameters[index]) : nil
+                index += form == 5 ? 2 : form == 2 ? 4 : 0
+            case 7, 27, 30...37, 39, 40...47, 49, 59, 90...97, 100...107:
+                continue
+            default:
+                kept.append(parameter)
+            }
+        }
+        return kept
+    }
+
     /// `ESC[0;<params>m` spelled as `ESC[0m ESC[<params>m`, so that a
     /// re-injection keyed on the literal reset sees every reset.
     ///

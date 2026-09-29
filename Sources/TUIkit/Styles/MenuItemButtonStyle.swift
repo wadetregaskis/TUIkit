@@ -116,7 +116,8 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
             ANSIRenderer.applyPersistentBackground(line, color: color) + ANSIRenderer.reset
         }
 
-        switch emphasis {
+        // A reversing breath is a list or table row's alone (`HighlightFill.stillFill`).
+        switch emphasis.stillFill {
         case .reversed(let ink, let field):
             // Steady: a reversal has no phase to advance, so the row is drawn once and
             // leaves no run — and with no run there is no clock for the loop to wake
@@ -144,6 +145,9 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
             buffer = buffer.resolvingOpacity(onReversal: ink.opaqueSpelling, palette: palette)
         case .fill(let color):
             buffer = Self.bar(under: buffer, lines: plain, in: color, palette: palette, buildingRuns: true)
+        case .reversingPulse:
+            // Never: `stillFill` holds a reversing breath as a fill or a reversal.
+            break
         case .pulse(let dim, let bright):
             let cycle = context.environment.selectionEmphasis.cycle(true)
             let now = cycle.colorNow(dim: dim, bright: bright)

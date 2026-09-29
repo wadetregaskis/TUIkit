@@ -31,6 +31,13 @@ package enum HighlightFill: Equatable, Sendable {
     /// (`Documentation/Terminal-compatibility.md`, "Reverse video (SGR 7)").
     case reversed(ink: Color, field: Color)
 
+    /// A breath with one end in reverse video, the other a fill (`nil` is the reversed
+    /// end): a 16-colour list or table row whose terminal has too few colours to tell
+    /// every row's state apart (``RowFills``). The reversal is `ink` and `field`
+    /// exchanged, with every colour of the row's own content dropped. Only a row asks
+    /// for one; any other site holds the fill end still (``stillFill``).
+    case reversingPulse(dim: Color?, bright: Color?, ink: Color, field: Color)
+
     /// Whether this is a reversal — for a site that already knows the pair it would
     /// paint and only needs telling whether to state it beside an SGR 7.
     ///
@@ -40,6 +47,13 @@ package enum HighlightFill: Equatable, Sendable {
     package var isReversed: Bool {
         if case .reversed = self { return true }
         return false
+    }
+
+    /// This highlight for a site that cannot draw a reversing breath: its fill end,
+    /// held still. Every other highlight is returned as it is.
+    package var stillFill: Self {
+        guard case .reversingPulse(let dim, let bright, let ink, let field) = self else { return self }
+        return (bright ?? dim).map(Self.fill) ?? .reversed(ink: ink, field: field)
     }
 }
 
@@ -190,7 +204,9 @@ extension HighlightFill {
     fileprivate func stilled(
         to still: @autoclosure () -> HighlightFill, unless appearsActive: Bool
     ) -> HighlightFill {
-        guard case .pulse = self, !appearsActive else { return self }
-        return still()
+        switch self {
+        case .pulse, .reversingPulse: return appearsActive ? self : still()
+        case .fill, .reversed: return self
+        }
     }
 }

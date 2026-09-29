@@ -401,6 +401,19 @@ public struct SelectionEmphasisCycle: Sendable, Equatable {
     /// The modulo matters: the clock's tick count is unbounded and keeps
     /// running while nothing is focused, so `step` routinely exceeds the
     /// cycle's length.
+    /// For each frame, whether it shows the bright end of a breath between two ends
+    /// that cannot be mixed — a 16-colour row breath with one end in reverse video.
+    ///
+    /// The steps a two-shade ramp takes (``Color/breathStep(atPhase:of:)``), whatever
+    /// the depth, and whatever this cycle does with its two ends: a blink shows each
+    /// in turn, and a cycle that holds still holds its bright end.
+    func brightFrames() -> [Bool] {
+        // Markers, not ink: two colours told apart, never drawn.
+        // swiftlint:disable:next framework_colour_literal
+        let (dim, bright) = (Color.rgb(0, 0, 0), Color.rgb(255, 255, 255))
+        return frames.map { $0.color(dim: dim, bright: bright, ramp: [dim, bright]) == bright }
+    }
+
     @MainActor
     public func colorNow(dim: Color, bright: Color) -> Color {
         frames[step % frames.count].color(
