@@ -366,10 +366,8 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
                 let size: ViewSize
                 if let equatableElement = element as? any Equatable {
                     rowContext.renderCache?.markActive(rowContext.identity)
-                    size = measureChild(
-                        _MemoizedRow(
-                            element: AnyEquatableBox(equatableElement),
-                            source: element, build: content),
+                    size = Self.measureMemoizedRow(
+                        keyedBy: equatableElement, element: element, build: content,
                         proposal: proposal, context: rowContext)
                 } else {
                     size = measureChild(content(element), proposal: proposal, context: rowContext)
@@ -411,11 +409,8 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
                     let badge: BadgeValue? =
                         viewTypeCarriesBadge(Content.self)
                         ? extractBadgeValue(from: content(element)) : nil
-                    let buffer = TUIkit.renderToBuffer(
-                        _MemoizedRow(
-                            element: AnyEquatableBox(equatableElement),
-                            source: element, build: content),
-                        context: rowContext)
+                    let buffer = Self.renderMemoizedRow(
+                        keyedBy: equatableElement, element: element, build: content, context: rowContext)
                     return (buffer, badge)
                 }
                 // Non-equatable elements cannot memoize, so the view is built for
@@ -423,6 +418,25 @@ extension ForEach: ListRowExtractor, WindowedListRowExtractor {
                 let view = content(element)
                 return (TUIkit.renderToBuffer(view, context: rowContext), extractBadgeValue(from: view))
             })
+    }
+
+    /// `element`'s row, memoised by `rowKey` — the element opened from its
+    /// `any Equatable`, so the memo's key is the element's own type — and
+    /// measured. See `ForEach.memoizedChild(keyedBy:element:key:)` for why.
+    private static func measureMemoizedRow<RowKey: Equatable>(
+        keyedBy rowKey: RowKey, element: Data.Element, build: @escaping (Data.Element) -> Content,
+        proposal: ProposedSize, context: RenderContext
+    ) -> ViewSize {
+        measureChild(_MemoizedRow(element: rowKey, source: element, build: build), proposal: proposal, context: context)
+    }
+
+    /// ``measureMemoizedRow(keyedBy:element:build:proposal:context:)``'s twin
+    /// for the render.
+    private static func renderMemoizedRow<RowKey: Equatable>(
+        keyedBy rowKey: RowKey, element: Data.Element, build: @escaping (Data.Element) -> Content,
+        context: RenderContext
+    ) -> FrameBuffer {
+        TUIkit.renderToBuffer(_MemoizedRow(element: rowKey, source: element, build: build), context: context)
     }
 
     /// The element at a 0-based offset (O(1) — `Data` is `RandomAccessCollection`).

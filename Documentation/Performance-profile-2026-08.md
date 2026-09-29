@@ -2048,6 +2048,15 @@ nobody got to.
    **silently** lost. The one shape not foreclosed is moving the question off
    the element and onto the row-memo maker, resolved once per `ForEach` at
    `init` where `Data.Element` is still concrete.
+   **The box half is gone (2026-09-29):** the cast stays, and the row is keyed
+   by what it found, opened — `_MemoizedRow<Int, Int, Row>` over a range, not
+   `_MemoizedRow<AnyEquatableBox, Int, Row>` — so a probe is the memo's one
+   cast of the stored key and the element's own `==`, where the box added an
+   opening and a second cast — on `fanout`, `AnyEquatableBox.==` was 10.6% of
+   the profile, `RenderCache.lookupHeldSize` 14.2% → 5.3% and
+   `RenderCache.lookupEntry` 6.3% → 2.1% inclusive — and the row holds no
+   existential for the value hash to open. `ForEach.makeChild` and
+   `ListRowExtractor`'s two thunks.
 4. **The identity trio — PARTLY ADDRESSED.** The three key-side sites are fixed:
    `0217d67e` took the identity chain out of `MeasureKey`, `21c3675b` folded
    every composite key to one word before hashing, and `7db94fe9` moved `SizeKey`

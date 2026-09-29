@@ -114,8 +114,8 @@ struct LazyChildViewsTests {
                 lazyChild.identity(under: context) == eager[ordinal].identity(under: context),
                 "ordinal \(ordinal) must carry the identical identity either way")
             // Equatable elements memo-wrap on both paths (identity-transparent).
-            #expect(lazyChild.wrappedView is _MemoizedRow<AnyEquatableBox, String, Text>)
-            #expect(eager[ordinal].wrappedView is _MemoizedRow<AnyEquatableBox, String, Text>)
+            #expect(lazyChild.wrappedView is _MemoizedRow<String, String, Text>)
+            #expect(eager[ordinal].wrappedView is _MemoizedRow<String, String, Text>)
         }
     }
 

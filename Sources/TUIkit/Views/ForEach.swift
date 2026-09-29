@@ -236,18 +236,41 @@ extension ForEach: ChildViewProvider {
             && !Content._providesZIndex
             && !Content._isSpacer
         if memoisable, let equatableElement = element as? any Equatable {
-            // The row view is NOT built here. `_MemoizedRow` takes the element
-            // and this `ForEach`'s content closure and builds the row only if
-            // the memo misses — which, in steady state, it mostly does not.
-            // Building it here instead cost `fanout` 21% of its frame in row
-            // views that the very next cache hit discarded.
-            return ChildView(
-                _MemoizedRow(
-                    element: AnyEquatableBox(equatableElement), source: element, build: content),
-                identityType: Content.self,
-                key: key)
+            return memoizedChild(keyedBy: equatableElement, element: element, key: key)
         }
         return ChildView(content(element), identityType: Content.self, key: key)
+    }
+
+    /// The row for `element`, memoised by `rowKey`: the element again, as the
+    /// `any Equatable` the cast found, OPENED — so the memo's key is the
+    /// element as its own type (`_MemoizedRow<Int, Int, Row>` over a range),
+    /// not an `AnyEquatableBox` around it.
+    ///
+    /// The box compared two keys by opening one and casting the other to its
+    /// type, under the memo's own cast of the stored key back to the box: two
+    /// casts and an opening per probe, where a key of the element's type is one
+    /// cast and its `==`. And a row whose key is a box holds an existential,
+    /// which the per-pass memos' value hash must open to hash — every row,
+    /// every measure (`fanout`: 8,000 a frame) — where a row keyed by an `Int`
+    /// is plain words. Equality is unchanged: the box's `==` was "the same
+    /// dynamic type, and equal", and two keys of different types are now rows
+    /// of different types, which the memo's cast already tells apart.
+    ///
+    /// The row's metadata is instantiated from the opened type here, where it
+    /// was from `AnyEquatableBox` — this function runs unspecialised either
+    /// way (`ForEach` is generic, and its caller in another module), so it was
+    /// a runtime lookup already.
+    ///
+    /// The row view is NOT built here. `_MemoizedRow` takes the element and this
+    /// `ForEach`'s content closure and builds the row only if the memo misses —
+    /// which, in steady state, it mostly does not. Building it here instead cost
+    /// `fanout` 21% of its frame in row views that the very next cache hit
+    /// discarded.
+    private func memoizedChild<RowKey: Equatable>(
+        keyedBy rowKey: RowKey, element: Data.Element, key: String
+    ) -> ChildView {
+        ChildView(
+            _MemoizedRow(element: rowKey, source: element, build: content), identityType: Content.self, key: key)
     }
 }
 

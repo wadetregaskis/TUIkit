@@ -32,10 +32,10 @@ import TUIkitCore
 //
 //  Generic functions taking the key by value, rather than a protocol with a
 //  `var memoKey` requirement. A get-only property requirement returns `@out`,
-//  and the production key on the row path is `AnyEquatableBox`, which stores an
-//  `any Equatable` and is therefore address-only — so every probe would
-//  materialise a copy and a destroy of the existential where a generic parameter
-//  is `@in_guaranteed` and borrows the caller's field. Both callers are in this
+//  and the production key on the row path is the row's element as its own type
+//  — found at run time, so address-only here — so every probe would
+//  materialise a copy and a destroy of it where a generic parameter is
+//  `@in_guaranteed` and borrows the caller's field. Both callers are in this
 //  module and built whole-module, so each gets a specialization in which the
 //  closures inline and nothing is allocated.
 

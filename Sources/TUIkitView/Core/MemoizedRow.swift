@@ -8,14 +8,16 @@ import TUIkitCore
 
 // MARK: - Type-erased Equatable
 
-/// A type-erased `Equatable` value, so a value-memo can key on a `ForEach`
-/// element whose static type is not statically known to conform to `Equatable`.
+/// A type-erased `Equatable` value, for a comparison whose operands' type is
+/// not statically known to conform to `Equatable`: a `List`'s or `Table`'s
+/// data compared frame to frame, a lifecycle modifier's `id`.
 ///
-/// `ForEach<Data, ID, Content>` does not constrain `Data.Element: Equatable`, so
-/// auto-wiring the row memo recovers the conformance at runtime
-/// (`element as? any Equatable`) and wraps it here. Comparing two boxes is an
-/// `Element == Element` only when the dynamic types match; a type mismatch
-/// compares unequal (so a heterogeneous collection simply never hits).
+/// Comparing two boxes is an `Element == Element` only when the dynamic types
+/// match; a type mismatch compares unequal. Not a row memo's key any longer:
+/// `ForEach` recovers the conformance at run time (`element as? any
+/// Equatable`) and keys the row by the element OPENED from that, as its own
+/// type, which compares with one cast and its own `==` and hashes as plain
+/// words (see `ForEach.memoizedChild(keyedBy:element:key:)`).
 public struct AnyEquatableBox: Equatable {
     @usableFromInline let value: any Equatable
 
@@ -27,11 +29,11 @@ public struct AnyEquatableBox: Equatable {
         // Open `lhs`'s existential to its concrete type, then compare against
         // `rhs` cast to that same type. This is exactly the old stored `isEqual`
         // closure — `(rhs as? typeof(lhs)) == lhs` — but without allocating a
-        // heap closure per box: a `ForEach`/`List` row builds one box per
-        // element every frame, so that per-row closure allocation was pure churn
-        // on the hottest general path. A dynamic-type mismatch (a heterogeneous
-        // collection) casts to nil and compares unequal, so a mixed collection
-        // still never produces a false cache hit.
+        // heap closure per box: a `ForEach`/`List` row built one box per
+        // element every frame, when rows were keyed by it, so that per-row
+        // closure allocation was pure churn on the hottest general path. A
+        // dynamic-type mismatch casts to nil and compares unequal, so values of
+        // two types never produce a false cache hit.
         func equal<L: Equatable>(_ lhsValue: L) -> Bool {
             (rhs.value as? L) == lhsValue
         }

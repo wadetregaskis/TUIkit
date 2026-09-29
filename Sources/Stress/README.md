@@ -369,7 +369,10 @@ does not, and it sums every frame of a `--cold` run where the totals see only
 the last frame's cache. They are deterministic — the same build and scenario
 give the same numbers on any machine, loaded or not — so a change to how the
 memos key a view is judged on them first: it must serve as often or more before
-its cost is worth timing on a quiet box.
+its cost is worth timing on a quiet box. (`churn` is the exception: its hits
+move by about ±1.5% from run to run, the extra ones all on a `Text` rebuilt
+within a pass whose string buffer the allocator happened to hand back at the
+old address — the memos key a value by its bytes, an address among them.)
 
 ```sh
 swift build -c release --product Stress -Xswiftc -g
