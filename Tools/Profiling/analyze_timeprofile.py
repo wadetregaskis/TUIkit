@@ -24,7 +24,8 @@ attributed correctly.
 
 Usage:
     analyze_timeprofile.py TRACE [--run N] [--top N] [--thread main|all]
-                                 [--state running|all]
+                                 [--state running|all] [--within PATTERN]
+                                 [--blame [PATTERN]] [--callers PATTERN]
 
 All weights are nanoseconds in the trace; reported as milliseconds.
 """
@@ -78,7 +79,7 @@ def is_app(path: str) -> bool:
 
 
 def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: str,
-            callers_of=None, process_filter=None, blame=None):
+            callers_of=None, process_filter=None, blame=None, within=None):
     xml = export_table(trace, run, "time-profile")
 
     # Global id -> value maps. Instruments shares ONE id namespace across
@@ -103,6 +104,11 @@ def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: st
     callers_matched_ms = 0.0
 
     total_ms = 0.0
+    # With `within`, every sample the other filters keep, so a percentage
+    # still reads as a share of the whole profile; `total_ms` is then only
+    # the samples with a matching frame on the stack.
+    all_ms = 0.0
+    within_re = re.compile(within) if within else None
     rows = 0
 
     def resolve_weight(el):
@@ -207,6 +213,9 @@ def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: st
         if not frames:
             continue
 
+        all_ms += ms
+        if within_re is not None and not any(within_re.search(name) for name, _bn, _bp in frames):
+            continue
         total_ms += ms
         thread_ms[thread.split(" (")[0] or "?"] += ms
 
@@ -259,7 +268,7 @@ def analyze(trace: str, run: int, top: int, thread_filter: str, state_filter: st
                 app_incl_ms[name] += ms
 
     return {
-        "rows": rows, "total_ms": total_ms, "thread_ms": thread_ms,
+        "rows": rows, "total_ms": total_ms, "all_ms": all_ms, "thread_ms": thread_ms,
         "self_ms": self_ms, "self_n": self_n, "incl_ms": incl_ms,
         "mod_ms": mod_ms, "app_self_ms": app_self_ms, "app_incl_ms": app_incl_ms,
         "callers_ms": callers_ms, "callers_matched_ms": callers_matched_ms,
@@ -305,6 +314,11 @@ def main():
                          "name), only samples that bottomed out there — e.g. "
                          "--blame 'swift_(retain|release)|malloc|Metadata' answers "
                          "'which of OUR functions is generating this runtime traffic'.")
+    ap.add_argument("--within", metavar="PATTERN", default=None,
+                    help="keep only samples with a frame whose name matches PATTERN (a "
+                         "regex) anywhere on the stack, and rank what they spent it on — "
+                         "'what is viewValueHash's inclusive time made of?'. Percentages "
+                         "stay shares of the WHOLE profile, so they compare across traces")
     ap.add_argument("--callers", metavar="PATTERN", default=None,
                     help="also aggregate the immediate CALLERS of every frame whose "
                          "name contains PATTERN — answers 'who is invoking this hot "
@@ -315,7 +329,7 @@ def main():
         sys.exit(f"no such trace: {args.trace}")
 
     r = analyze(args.trace, args.run, args.top, args.thread, args.state, blame=args.blame,
-                callers_of=args.callers, process_filter=args.process)
+                callers_of=args.callers, process_filter=args.process, within=args.within)
 
     print("=" * 78)
     print(f"Time Profiler analysis: {args.trace}")
@@ -324,9 +338,13 @@ def main():
     print("per-thread on-CPU ms: " + ", ".join(
         f"{t}={ms:.0f}" for t, ms in
         sorted(r["thread_ms"].items(), key=lambda kv: kv[1], reverse=True)[:6]))
+    if args.within is not None:
+        share = (r["total_ms"] / r["all_ms"] * 100) if r["all_ms"] else 0
+        print(f"within {args.within!r}: {r['total_ms']:.0f} ms of {r['all_ms']:.0f} ms "
+              f"({share:.1f}%); percentages below are of the whole {r['all_ms']:.0f} ms")
     print("=" * 78)
 
-    t = r["total_ms"]
+    t = r["all_ms"] if args.within is not None else r["total_ms"]
     print_table("Self time — leaf frames (where the CPU actually was)",
                 r["self_ms"], t, r["top"], counts=r["self_n"])
     print_table("Inclusive time — every function on the stack",

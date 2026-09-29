@@ -283,6 +283,23 @@ as given and kept. `python3 Tools/Profiling/test_drive.py` checks both.
 > actionable; `--blame` said environment access 15.8%, `AnyIterator.next()`
 > 9.2%, identity nodes 3.8%, string building 3.3% and array regrowth 3.0%.
 
+**`--within PATTERN`** is the other way round: it keeps only the samples with
+a frame matching PATTERN (a regex) somewhere on the stack, and ranks what
+THEY spent their time on — what one function's inclusive time is made of,
+leaves and all. Percentages stay shares of the whole profile, so the same
+command over a before and an after trace compares directly:
+
+```sh
+python3 Tools/Profiling/analyze_timeprofile.py t.trace --within 'viewValueHash' --top 30
+```
+
+On the value hash's wiring (`fanout`, 2026-09-29) it said that 238 ms of the
+hash's 422 — more than half — was the main actor's executor check
+(`swift_task_isCurrentExecutor`, `Actor.unownedExecutor`, `MainActor.shared`,
+the metadata accessors under them), which the inclusive view spreads across
+every closure the hash passes to `withUnsafeBytes`, and no leaf ranking puts
+together.
+
 **Profiling the live app, emission included.** Instruments cannot `--launch`
 a PTY app and `--attach` is denied here, but `xcrun xctrace record
 --all-processes --time-limit 8s` records everything on the machine while
