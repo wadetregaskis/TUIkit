@@ -339,6 +339,15 @@ the render. This exists because a render cache buys CPU by keeping buffers, and
 until it did, nothing priced that side of the trade: `ab_bench.py` now prints
 the peak beside the timing verdict.
 
+And one line of **counts**, per frame over the timed loop: the per-pass measure
+memo's lookups, hits, misses and stores, and the child-views memo's lookups and
+hits (`memos/frame:`). The totals line above it includes the warm-up; this one
+does not, and it sums every frame of a `--cold` run where the totals see only
+the last frame's cache. They are deterministic — the same build and scenario
+give the same numbers on any machine, loaded or not — so a change to how the
+memos key a view is judged on them first: it must serve as often or more before
+its cost is worth timing on a quiet box.
+
 ```sh
 swift build -c release --product Stress -Xswiftc -g
 BIN="$(swift build -c release --product Stress --show-bin-path)/Stress"

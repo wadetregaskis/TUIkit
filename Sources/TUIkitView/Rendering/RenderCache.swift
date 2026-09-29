@@ -339,6 +339,18 @@ public final class RenderCache: @unchecked Sendable {
     /// engaged and did not pay (this memo shipped inert once already).
     public private(set) var measureMemoTotals: (hits: Int, misses: Int) = (0, 0)
 
+    /// Cumulative measure-memo stores across every pass this cache has served:
+    /// the misses whose answer was kept, where ``measureMemoTotals`` says only
+    /// how many missed.
+    public private(set) var measureMemoStores = 0
+
+    /// Cumulative child-views memo counts across every pass this cache has
+    /// served — `resolveChildViews(from:context:)`, for content that asks to be
+    /// remembered. The twin of ``measureMemoTotals``, for the same reason: a
+    /// memo that never engages looks exactly like one that engages and does not
+    /// help.
+    public private(set) var childViewsMemoTotals: (hits: Int, misses: Int) = (0, 0)
+
     /// This pass's ``VolatileReadTracker``, mirrored here from the environment by
     /// ``EnvironmentValues/installVolatileReadTracker(_:)``.
     ///
@@ -1035,6 +1047,7 @@ extension RenderCache {
         size: ViewSize,
         lease: ObservationLease?
     ) {
+        measureMemoStores += 1
         var leaseIndex: Int32 = -1
         if let lease {
             leaseIndex = Int32(truncatingIfNeeded: passLeases.count)
@@ -1060,7 +1073,12 @@ extension RenderCache {
     /// The children a stack resolved earlier this pass for the same content
     /// value, or `nil`. See `resolveChildViews(from:context:)`.
     public func lookupChildViews(key: ChildViewsKey) -> [ChildView]? {
-        childViewEntries[key]
+        guard let children = childViewEntries[key] else {
+            childViewsMemoTotals.misses += 1
+            return nil
+        }
+        childViewsMemoTotals.hits += 1
+        return children
     }
 
     /// Remembers a stack's resolved children for the rest of the pass.

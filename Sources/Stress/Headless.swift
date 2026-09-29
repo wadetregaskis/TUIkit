@@ -358,6 +358,7 @@ enum Headless {
         // number — and it is deliberately OUTSIDE the timed region, so the
         // CPU and wall figures still measure exactly the render.
         var memory = ProcessMemory.Samples()
+        var memoCounts = MemoCounts()
         // `--census`: installed after the warm-up, so the loop is all it counts.
         let observation = BenchObservationCounter(
             requested: countsObservation, cold: cold, cache: warm.renderCache)
@@ -368,6 +369,7 @@ enum Headless {
             // A driven scenario's write, outside the timed region; what it
             // invalidates is paid in the frame, where an app pays it.
             driven?.advance(clock.tick)
+            let countsBefore = MemoCounts(warm.renderCache)
             let cpuStart = threadCPUNanoseconds()
             let frameStart = DispatchTime.now()
             // The live loop's per-pass lifecycle, timed as part of the frame
@@ -393,6 +395,7 @@ enum Headless {
                 cpuNs &+= cpuEnd &- cpuStart
                 cpuMeasured = true
             }
+            memoCounts.add(from: countsBefore, to: MemoCounts(warm.renderCache))
             checksum = checksum &+ contentChecksum(buffer)
             if isBlank(buffer) { blankFrames += 1 }
         }
@@ -435,6 +438,7 @@ enum Headless {
             }
         }
         printMemoTotals(warm.renderCache, channels: channels, frames: iterations)
+        print(memoCounts.report(frames: iterations))
         observation?.report(frames: iterations)
         // `TUIKIT_VERIFY_MEASURE_MEMO=1` re-measures every memo hit and reports
         // any the fresh measurement disagrees with — the direct check on the
