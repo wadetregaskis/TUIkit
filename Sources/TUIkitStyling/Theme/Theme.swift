@@ -100,9 +100,12 @@ public protocol Palette: Cyclable {
     /// Background color for the cursor row of a focused list or table, on a row
     /// the selection does not include.
     ///
-    /// Not for the shipped palettes' own rows: those draw the fills chosen for
-    /// them at coding time (`RowFills`), whatever this says. It is what a custom
-    /// palette's rows use.
+    /// A palette that states this has its cursor rows drawn in it as stated, at
+    /// truecolour; on a 256-colour terminal its cube entries are kept wherever the
+    /// other rows' fills stay distinguishable from them. Left to the default, the
+    /// cursor row's fill is chosen with the selected rows' (`RowFills`). Not for the
+    /// shipped palettes' own rows: those draw the fills chosen for them at coding
+    /// time, whatever this says.
     ///
     /// Where the list has the keys the row breathes up from this colour
     /// (``focusWashPulse()``); where it does not — its window has lost the
@@ -985,6 +988,11 @@ extension Palette {
     /// against — the pair `PaletteContrastAuditTests` measures. A mark drawn IN
     /// the accent has nothing on top of it and can go all the way.
     ///
+    /// Over the page, the ends are the palette's row fills, B (``RowFills``): a
+    /// shipped palette's, chosen at coding time, and any other palette's from the
+    /// row-fill rule, which places B with the selected row and the cursor row so the
+    /// three stay distinguishable. Over any other surface, the shares below.
+    ///
     /// Those two shares are where the breath starts, not always where it ends. A
     /// 256-colour terminal draws the shades the cube can show between them, and the
     /// cube moves those and the text alike, so the shares are chosen as it draws them:
@@ -1006,8 +1014,8 @@ extension Palette {
     /// - Parameter surface: What the fill sits on, when that is not the page.
     public func accentFillPulse(over surface: Color? = nil) -> (dim: Color, bright: Color) {
         let ground = surface ?? background
-        // A shipped palette's B, chosen at coding time over its page (see
-        // `RowFills`). Over any other surface the rule below still runs.
+        // The palette's B over its page (see `RowFills`). Over any other surface the
+        // walk below still runs.
         if ground == background, let fills = rowFills() { return (fills.emphasisDim, fills.emphasisBright) }
         // `Color.breathEnds(dimmedTo:over:)`'s rule for a side with no RGB, applied to
         // this pair's own bright end, which stops short of the accent.
@@ -1026,8 +1034,14 @@ extension Palette {
     /// accent's hue, so it is the row's selection mark that tells the two apart. A list
     /// that draws none breathes this all the same: the focus indicator always moves.
     ///
-    /// The dim end is the wash itself, ``focusBackground`` — the look such a row has
-    /// wherever it does not breathe. The bright end is twice as far from the page:
+    /// The ends are the palette's row fills, F (``RowFills``): a shipped palette's,
+    /// chosen at coding time; else, where the palette leaves ``focusBackground`` to its
+    /// default, the row-fill rule's. A wash a palette states is its own choice, and is
+    /// drawn as stated: at truecolour it is the dim end — the look such a row has
+    /// wherever it does not breathe — and on 256 colours its cube entries are kept
+    /// wherever they still hold the rule's invariants beside the other rows' fills.
+    ///
+    /// A stated wash's bright end is twice as far from the page:
     /// the colour the wash is a half-strength composite of, over the page. That is
     /// how the accent's breath stands to the still tint of an unfocused selection
     /// (``ViewConstants/selectedBackground`` is half of
@@ -1047,21 +1061,27 @@ extension Palette {
     /// the floor the top of the accent's breath is held to, since the two tops are the
     /// same moment of the same cycle. Not the 3:1 a label resting on a face gets, which
     /// is what this was floored at first: it squeezed the breath on the palettes whose
-    /// wash already sits near their text. Novel's moved 1.04:1 and Ocean's held one
-    /// colour on 256 colours; at the accent's floor they breathe 1.54:1 and 1.34:1,
-    /// and of the sixteen shipped palettes only Novel's top is floored at all.
-    /// `PaletteContrastAuditTests` measures the bright end, in truecolor and — as the
-    /// terminal draws the breath, through ``Color/pulseRamp(from:to:depth:samples:)`` —
-    /// on 256 colours.
+    /// wash already sits near their text. `PaletteContrastAuditTests` measures the
+    /// bright end, in truecolor and — as the terminal draws the breath, through
+    /// ``Color/pulseRamp(from:to:depth:samples:)`` — on 256 colours.
     ///
     /// Where the wash or the page has no RGB, both ends are the wash: there is no
-    /// distance to double, and a breath between two equal ends is still.
+    /// distance to double, and a breath between two equal ends is still. Below 256
+    /// colours, every palette's wash breathes this way, for now.
     public func focusWashPulse() -> (dim: Color, bright: Color) {
-        // A shipped palette's F, chosen at coding time (see `RowFills`), whatever
-        // `focusBackground` it states: every shipped palette states one, and the
-        // wash is what left Amber's cursor row all but still.
+        // The palette's row fills (see `RowFills`) wherever it has them: a shipped
+        // palette's F, chosen at coding time whatever `focusBackground` it states (every
+        // shipped palette states one, and the wash is what left Amber's cursor row all
+        // but still); a runtime palette's stated wash, as `washPulse(_:)` breathes it;
+        // else the rule's.
         if let fills = rowFills() { return (fills.focusDim, fills.focusBright) }
-        let dim = focusBackground.spendingAlpha(over: background)
+        return washPulse(focusBackground)
+    }
+
+    /// The breath of a wash a palette states: the wash itself, and twice as far from
+    /// the page, floored for the row's text — see ``focusWashPulse()``.
+    func washPulse(_ wash: Color) -> (dim: Color, bright: Color) {
+        let dim = wash.spendingAlpha(over: background)
         guard let wash = dim.rgbComponents, let page = background.rgbComponents else {
             return (dim, dim)
         }

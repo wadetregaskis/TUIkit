@@ -318,11 +318,11 @@ struct PaletteContrastAuditTests {
     /// colours (#0397FF for #27A6FF), and Pro's top came in from #A4A4A4 to #8D8D8D.
     @Test("The wash's breath is floored no harder than the accent's")
     func focusWashFlooredLikeTheAccent() {
-        // The rule, over the shipped palettes' colours: their own rows read
-        // constants (`RowFills`).
-        for palette in Self.statedPalettes.map({ RuleDrawnPalette(source: $0) }) {
-            #expect(palette.rowFills(at: .truecolor) == nil, "\(palette.name) still reads its constants")
-            let ends = palette.focusWashPulse()
+        // A stated wash's breath (`Palette.washPulse(_:)`), over the shipped palettes'
+        // washes: their own rows read constants, and any other palette that states one
+        // breathes it this way (`RowFills`).
+        for palette in Self.statedPalettes {
+            let ends = palette.washPulse(palette.focusBackground)
             guard let wash = ends.dim.rgbComponents,
                 let page = palette.background.rgbComponents
             else { continue }
@@ -339,6 +339,27 @@ struct PaletteContrastAuditTests {
             #expect(
                 ends.bright == floored,
                 "\(palette.name): the top is \(Self.hex(ends.bright)); at the accent's floor it is \(Self.hex(floored))")
+        }
+    }
+
+    /// The row-fill rule keeps the row's text at 2:1 on every fill it places, at
+    /// truecolour and on 256 colours (both as the terminal draws them) — over the shipped palettes' colours, with their
+    /// accents moved out of the table's reach so the rule places them.
+    @Test("The rule's fills keep the row's text at 2:1")
+    func ruleFillsKeepTheText() throws {
+        for palette in Self.statedPalettes.map({ RuleDrawnPalette(source: $0) }) {
+            for depth in [ColorDepth.truecolor, .palette256] {
+                let fills = try #require(palette.rowFills(at: depth))
+                // The text as the terminal draws it beside those fills.
+                let text = depth == .palette256 ? palette.foreground.downsampledToPalette256() : palette.foreground
+                for (label, fill) in [
+                    ("S", fills.selection), ("F dim", fills.focusDim), ("F top", fills.focusBright),
+                    ("B dim", fills.emphasisDim), ("B top", fills.emphasisBright),
+                ] {
+                    let ratio = text.contrastRatio(against: fill)
+                    #expect(ratio >= 2, "\(palette.name) at \(depth): text on \(label) \(Self.hex(fill)) is \(ratio):1")
+                }
+            }
         }
     }
 

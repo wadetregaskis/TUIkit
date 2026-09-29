@@ -98,14 +98,18 @@ than signal.
 The cursor row of a control that has the keys breathes, selected or
 not: motion is what says where the keys go, on a list as on every other
 focused control. Selected, it breathes the accent; not selected, the neutral
-focus wash, from `focusBackground` up to twice its distance from the page
-(``Palette/focusWashPulse()``). The shipped palettes breathe fills chosen
-for them at coding time instead, at truecolour and 256 colours: each breath's
-dim end sits a little above what it extends — the page, or the selected-row
-tint — and a selected cursor row peaks brighter than either an unselected one
-or a selected row. A custom palette, a `.tint` subtree and 16 colours keep the
-rule. The ● is what tells the two apart: most palettes' wash shares the
-accent's hue. A control drawn with `.rowSelectionIndicator(.hidden)` has no ●,
+focus wash (``Palette/focusWashPulse()``). At truecolour and 256 colours the
+fills are chosen together, so each state stays distinguishable from the
+others: each breath's dim end sits a little above what it extends — the page,
+or the selected-row tint — and a selected cursor row peaks brighter than
+either an unselected one or a selected row. The shipped palettes' fills were
+chosen at coding time; every other palette's — a custom one, the terminal's
+own colours, a `.tint` subtree — come from a rule that places them the same
+way. A `focusBackground` a palette states is drawn as stated: at truecolour
+the unselected cursor row breathes up from it to twice its distance from the
+page, and on 256 colours its entries are kept wherever the selected rows
+still stand apart from it. 16 colours keep the older rule for now. The ● is
+what tells the two apart: most palettes' wash shares the accent's hue. A control drawn with `.rowSelectionIndicator(.hidden)` has no ●,
 and its cursor row breathes all the same, selected or not: the focus indicator
 always visibly breathes. A control that does not have the keys draws no
 breath: unfocused, it has no cursor row; focused in a window that has lost the

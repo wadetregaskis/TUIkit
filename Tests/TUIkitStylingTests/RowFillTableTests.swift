@@ -72,8 +72,17 @@ struct RowFillTableTests {
         let (red, green, blue) = try #require(amber.accent.rgbComponents)
         let nudged = CopiedPalette(source: amber, accent: .rgb(red, green &+ 1, blue))
         #expect(nudged.rowFills(at: .truecolor) == amber.rowFills(at: .truecolor))
-        // A `.tint(.orange)` subtree over Amber: the fills were not chosen for it.
+        // A `.tint(.orange)` subtree over Amber: the fills were not chosen for it, so
+        // the rule places them (`RowFillRuleTests`).
+        func packed(_ colour: Color) throws -> UInt32 {
+            let (red, green, blue) = try #require(colour.rgbComponents)
+            return UInt32(red) << 16 | UInt32(green) << 8 | UInt32(blue)
+        }
+        let entry = RowFills.entry(
+            page: try packed(amber.background), text: try packed(amber.foreground),
+            secondary: try packed(amber.foregroundSecondary), accent: 0xFF8000)
+        #expect(entry == nil)
         let tinted = CopiedPalette(source: amber, accent: .rgb(0xFF, 0x80, 0x00))
-        #expect(tinted.rowFills(at: .truecolor) == nil)
+        #expect(tinted.rowFills(at: .truecolor) != amber.rowFills(at: .truecolor))
     }
 }

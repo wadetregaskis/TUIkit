@@ -103,8 +103,10 @@ extension Palette {
     }
 
     /// The still tint a selected row shows while the list it is in does not hold the
-    /// keys: the accent at ``ViewConstants/selectedBackground`` over the page, or
-    /// reverse video where that tint cannot be measured.
+    /// keys: the palette's S (``RowFills``) — chosen at coding time for a shipped
+    /// palette, else by the row-fill rule — and below 256 colours the accent at
+    /// ``ViewConstants/selectedBackground`` over the page, or reverse video where that
+    /// tint cannot be measured.
     ///
     /// The quiet counterpart of ``emphasisFill(over:)``: the same accent, about half
     /// the strength of its peak, and still. `PaletteContrastAuditTests` measures the

@@ -57,8 +57,10 @@ struct ReversedRowTerminalPairPalette: Palette {
 }
 
 /// An RGB page, ink and accent whose tertiary tier is the terminal's own foreground:
-/// the focus wash is 30% of that tier over the page, which below half is the page
-/// itself. The fill measures and shows nothing, so the tier it is built from decides.
+/// the DEFAULT focus wash is 30% of that tier over the page, which below half is the
+/// page itself, and measures and shows nothing. A palette that leaves the wash to its
+/// default has its cursor row placed with its other row fills instead, from the page,
+/// the ink and the accent, so this one's row draws a fill it can measure.
 private struct ReversedRowTerminalTierPalette: Palette {
     let id = "reversed-row-terminal-tier"
     let name = "Terminal tier"
@@ -333,7 +335,7 @@ struct ReversedCursorRowTests {
         arguments: Kind.allCases)
     func focusOnlyCursorRowReverses(_ kind: Kind) {
         TerminalColors.withCurrent(.unknown) {
-            for palette in [ReversedRowTerminalPairPalette(), ReversedRowTerminalTierPalette()] as [any Palette] {
+            for palette in [ReversedRowTerminalPairPalette()] as [any Palette] {
                 let line = row(0, of: buffer(kind.view(selection: []), palette: palette))
                 let cells = fillCells(line)
                 #expect(!cells.isEmpty, "\(kind), \(palette.id): \(line.debugDescription)")
@@ -344,6 +346,19 @@ struct ReversedCursorRowTests {
                     cells.allSatisfy { $0.state.reversesVideo },
                     "\(kind), \(palette.id): \(line.debugDescription)")
             }
+        }
+    }
+
+    /// A default wash is not what the row draws, so a tier the terminal decides does not
+    /// reach it: the row fills measure, from the page, the ink and the accent.
+    @Test("A default wash built from a tier the terminal decides leaves the row a fill", arguments: Kind.allCases)
+    func defaultWashFromATerminalTierIsAFill(_ kind: Kind) {
+        TerminalColors.withCurrent(.unknown) {
+            let line = row(0, of: buffer(kind.view(selection: []), palette: ReversedRowTerminalTierPalette()))
+            let cells = rowCells(line)
+            #expect(!cells.isEmpty, "\(kind): \(line.debugDescription)")
+            #expect(cells.allSatisfy { !$0.state.reversesVideo }, "\(kind): \(line.debugDescription)")
+            #expect(cells.allSatisfy { $0.state.namesBackground }, "\(kind): \(line.debugDescription)")
         }
     }
 
