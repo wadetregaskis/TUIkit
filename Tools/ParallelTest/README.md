@@ -78,7 +78,10 @@ suite runs there had grown from 120–290 s (early 2026-09) to 290–650 s, and 
 2026-09-28 the trunk lane's 640.6 s run outlasted a test's 600 s `Task.sleep`
 and failed it (`LifecycleManagerTests`, fixed in `a3bb5790`). The Windows lanes
 still run `swift test`: they are advisory for tests, and the harness does not
-support Windows.
+support Windows. The harness's own unit tests (`python3 -m unittest discover
+-s Tools/ParallelTest -p 'test_*.py'`, ~1 s) run once per CI run, on the
+macOS 26 · Xcode 26 lane just before its Test step, so a broken harness fails
+as itself.
 
 `-j 4` is an experiment, to be tuned from the lanes' own timings. GitHub's
 arm64 macOS runners have 3 M1 cores and 7 GB, the Linux ones 4 cores and

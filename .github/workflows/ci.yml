@@ -375,6 +375,16 @@ jobs:
       # $SWIFT the harness reads. `--full-failing-logs`: a failing process's
       # whole log is printed (folded) into this job log, because the harness's
       # own files under .build do not outlive the runner.
+      # The harness's own rules — partition proof, summary parsing, the
+      # environment it mirrors per toolchain, the CI annotations — on
+      # hand-written inputs: no build, ~1 s. Before the Test step, so a broken
+      # harness fails as itself rather than as a red suite; once per run, like
+      # the profiling driver's tests below, as nothing in it depends on the
+      # lane's toolchain.
+      - name: Parallel test harness tests
+        if: matrix.smoke == 'full'
+        run: python3 -m unittest discover -s Tools/ParallelTest -p 'test_*.py'
+
       - name: Test
         run: python3 Tools/ParallelTest/parallel_test.py -j 4 --no-build --full-failing-logs
 
