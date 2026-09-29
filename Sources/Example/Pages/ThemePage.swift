@@ -26,6 +26,8 @@ struct ThemePage: View {
     /// The six editable characters of the custom border (single chars, typeable
     /// in ASCII; box-drawing glyphs come from the preset buttons). Default to an
     /// ASCII set so the fields start usable.
+    /// The selected row of the live preview's list.
+    @State private var sampleSelection: Int? = 2
     @State private var borderTL = "+"
     @State private var borderTR = "+"
     @State private var borderBL = "+"
@@ -370,6 +372,14 @@ struct ThemePage: View {
                             Text("page.theme.bodyText")
                                 .foregroundStyle(.palette.foregroundSecondary)
                         }
+                        // The row fills the palette draws, live: a selected row, the
+                        // cursor row, and the two at once as the cursor reaches it.
+                        Text("page.theme.rowFillsCaption")
+                            .foregroundStyle(.palette.foregroundSecondary)
+                        List(selection: $sampleSelection) {
+                            ForEach(1...4, id: \.self) { Text(verbatim: "#\($0)") }
+                        }
+                        .frame(width: 24, height: 6)
                     }
                 }
 
