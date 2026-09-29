@@ -203,9 +203,14 @@ struct ValueHashPlanBuilder {
     }
 
     let listFields: FieldLister
+    /// The openers the table was made with, by the static type they open.
+    let openers: [ObjectIdentifier: ValueHashOpener]
 
-    init(listFields: @escaping FieldLister = { RuntimeFields.fields(of: $0) }) {
+    init(
+        listFields: @escaping FieldLister = { RuntimeFields.fields(of: $0) }, openers: [ValueHashOpener] = []
+    ) {
         self.listFields = listFields
+        self.openers = Dictionary(openers.map { (ObjectIdentifier($0.type), $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     /// The parts of `type`'s plan, or why it bypasses.
@@ -297,7 +302,7 @@ struct ValueHashPlanBuilder {
         case .enum:
             throw Bypass(reason: "\(path()): a payload enum")
         case .existential:
-            items.append(.step(.init(offset: base, action: .existential(ExistentialField(type)))))
+            items.append(.step(.init(offset: base, action: .existential(ExistentialField(type, openers: openers)))))
         default:
             throw Bypass(reason: "\(path()): a kind the walk does not know (\(kind))")
         }

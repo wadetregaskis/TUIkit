@@ -69,8 +69,10 @@ package final class ValueHashPlans {
     /// frames measure before it first grows.
     private static let initialCapacity = 256
 
-    package convenience init() {
-        self.init(builder: ValueHashPlanBuilder())
+    /// An empty table, which opens an existential of a static type it has an
+    /// `opener` for directly — see ``ValueHashOpener``.
+    package convenience init(openers: [ValueHashOpener] = []) {
+        self.init(builder: ValueHashPlanBuilder(openers: openers))
     }
 
     init(builder: ValueHashPlanBuilder) {
@@ -86,7 +88,11 @@ package final class ValueHashPlans {
         for index in 0...current.mask {
             guard let plan = current.slots[index].plan else { continue }
             UnsafeMutableBufferPointer(mutating: plan.pointee.runs).deallocate()
-            UnsafeMutableBufferPointer(mutating: plan.pointee.steps).deallocate()
+            // A step can hold an opener's closure, so the steps are torn down,
+            // not just freed: `copied(_:)` initialised them, retaining it.
+            let steps = UnsafeMutableBufferPointer(mutating: plan.pointee.steps)
+            _ = steps.deinitialize()
+            steps.deallocate()
             plan.deinitialize(count: 1)
             plan.deallocate()
         }

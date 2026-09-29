@@ -71,6 +71,19 @@ extension AnyLayout: AxisPublishingLayout {
 
 // MARK: - Erasure
 
+extension AnyLayout {
+    /// The value hash's opener for the erased box (see `ValueHashOpener`):
+    /// declared here because the box's protocol is private to this file, and
+    /// `nonisolated` because the value hash runs off the main actor, which a
+    /// layout's members are otherwise isolated to.
+    nonisolated static var valueHashOpener: ValueHashOpener {
+        .init((any AnyLayoutBox).self) { pointer, hash, plans in
+            func open<Box: AnyLayoutBox>(_ box: Box) -> Bool { mixOpened(box, into: &hash, plans: plans) }
+            return open(pointer.assumingMemoryBound(to: (any AnyLayoutBox).self).pointee)
+        }
+    }
+}
+
 /// The existential the erased layout is called through. `Cache` is `Any` here
 /// and cast back at each entry point — the cast cannot fail, because the only
 /// thing that ever produced the value is this same box.

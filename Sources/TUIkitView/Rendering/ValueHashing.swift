@@ -89,19 +89,28 @@ private func isNone<Wrapped>(_ value: borrowing Wrapped?) -> Bool {
 /// How the value hash opens an existential field: through its static type,
 /// loaded as that type and opened by Swift, never by reading the container.
 ///
-/// The few static types TUIkit stores are opened directly — a typed load and
-/// Swift's own opening, a few nanoseconds. Any other (`any P` an app declares)
-/// is loaded as its static type through a metatype and opened by casting to the
-/// dynamic type `type(of:)` finds, which costs a dynamic cast.
-enum ExistentialField {
+/// The static types this module can name are opened directly — a typed load
+/// and Swift's own opening, a few nanoseconds — and so is any a plan table was
+/// given a ``ValueHashOpener`` for: TUIkit's style protocols, which a view
+/// holds in every `.buttonStyle(_:)`. Any other (`any P` an app declares) is
+/// loaded as its static type through a metatype and opened by casting to the
+/// dynamic type `type(of:)` finds: a box for the `Any` and a dynamic cast,
+/// measured at 2.2% of a `menus` frame when TUIkit's styles went this way.
+/// Every way mixes the same words — the payload's type, then the payload by
+/// its plan — so which one a table uses changes what a hash costs, never what
+/// it is.
+enum ExistentialField: CustomStringConvertible {
     case any
     case view
     case equatable
     case hashable
+    case palette
+    case opener(ValueHashOpener)
     case other(Any.Type)
 
-    /// The opener for a field whose static type is `type`, an existential.
-    init(_ type: Any.Type) {
+    /// The opener for a field whose static type is `type`, an existential,
+    /// given the openers a plan table was made with.
+    init(_ type: Any.Type, openers: [ObjectIdentifier: ValueHashOpener] = [:]) {
         if type == Any.self {
             self = .any
         } else if type == (any View).self {
@@ -110,8 +119,24 @@ enum ExistentialField {
             self = .equatable
         } else if type == (any Hashable).self {
             self = .hashable
+        } else if type == (any Palette).self {
+            self = .palette
+        } else if let opener = openers[ObjectIdentifier(type)] {
+            self = .opener(opener)
         } else {
             self = .other(type)
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .any: "any"
+        case .view: "view"
+        case .equatable: "equatable"
+        case .hashable: "hashable"
+        case .palette: "palette"
+        case .opener(let opener): "opened by \(opener)"
+        case .other(let type): "cast from \(type)"
         }
     }
 
@@ -129,6 +154,11 @@ enum ExistentialField {
         case .hashable:
             return mixOpenedHashable(
                 pointer.assumingMemoryBound(to: (any Hashable).self).pointee, into: &hash, plans: plans)
+        case .palette:
+            return mixOpenedPalette(
+                pointer.assumingMemoryBound(to: (any Palette).self).pointee, into: &hash, plans: plans)
+        case .opener(let opener):
+            return opener.mix(pointer, &hash, plans)
         case .other(let staticType):
             return mixExistential(at: pointer, staticType: staticType, into: &hash, plans: plans)
         }
@@ -156,7 +186,9 @@ enum ExistentialField {
 /// is the stack guard's, read by the entry that began this hash
 /// (``ValueHashPlans/armStackCheck()``): the guard's state is the main
 /// actor's, and nothing here is isolated to it.
-func mixOpened<Payload>(_ value: Payload, into hash: inout UInt64, plans: ValueHashPlans) -> Bool {
+///
+/// `package`, for a ``ValueHashOpener`` of a module above this one.
+package func mixOpened<Payload>(_ value: Payload, into hash: inout UInt64, plans: ValueHashPlans) -> Bool {
     guard plans.hasStackHeadroom else { return false }
     hash = mixHashWord(hash, UInt64(UInt(bitPattern: ObjectIdentifier(Payload.self))))
     return plans.mixValue(value, into: &hash)
@@ -181,6 +213,13 @@ private func mixOpenedEquatable<Payload: Equatable>(
 
 /// ``mixOpened(_:into:plans:)`` for an `any Hashable`, opened.
 private func mixOpenedHashable<Payload: Hashable>(
+    _ value: Payload, into hash: inout UInt64, plans: ValueHashPlans
+) -> Bool {
+    mixOpened(value, into: &hash, plans: plans)
+}
+
+/// ``mixOpened(_:into:plans:)`` for an `any Palette`, opened.
+private func mixOpenedPalette<Payload: Palette>(
     _ value: Payload, into hash: inout UInt64, plans: ValueHashPlans
 ) -> Bool {
     mixOpened(value, into: &hash, plans: plans)
@@ -216,6 +255,38 @@ private func mixDynamic<Existential>(_ value: Existential, into hash: inout UInt
         return mixOpened(payload, into: &hash, plans: plans)
     }
     return _openExistential(type(of: value as Any), do: cast)
+}
+
+// MARK: - Openers
+
+/// Opens the existentials of one static type directly, for a plan table: a
+/// protocol of a module above this one, which the value hash cannot name —
+/// TUIkit's `ButtonStyle`, say, held by every `.buttonStyle(_:)`'s modifier.
+/// Without one, such a field is opened by a cast (``ExistentialField``).
+///
+/// `mix` is handed the field's address, loads it as `Existential` and passes
+/// it to a generic function CONSTRAINED to the protocol, which is what makes
+/// Swift open it, and that calls ``mixOpened(_:into:plans:)`` with the payload
+/// — the same words the cast would have mixed. (Passed to an unconstrained
+/// one, an existential binds the parameter to itself, and its payload's type
+/// is never seen.) A test holds every opener TUIkit registers to the cast's
+/// answer. Nonisolated, as every step is: a closure written where it is
+/// isolated to the main actor would check the executor on every call (see
+/// ``ValueHashPlans``).
+package struct ValueHashOpener: CustomStringConvertible {
+    /// The existential's static type.
+    let type: Any.Type
+    let mix: (UnsafeRawPointer, inout UInt64, ValueHashPlans) -> Bool
+
+    /// An opener for fields of static type `type`, an existential.
+    package init<Existential>(
+        _ type: Existential.Type, mix: @escaping (UnsafeRawPointer, inout UInt64, ValueHashPlans) -> Bool
+    ) {
+        self.type = type
+        self.mix = mix
+    }
+
+    package var description: String { "\(type)" }
 }
 
 // MARK: - Colours
