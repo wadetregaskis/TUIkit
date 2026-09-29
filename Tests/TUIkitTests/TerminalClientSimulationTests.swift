@@ -81,18 +81,29 @@ struct TerminalClientSimulationTests {
         }
     }
 
+    /// Whether `line` still carries a Fitzpatrick modifier.
+    private static func keepsTheTone(_ line: String) -> Bool {
+        line.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) }
+    }
+
+    /// tmux, not Apple Terminal, as the program: Apple Terminal has separated
+    /// tones (base, ZWNJ, modifier) rather than stripped them since
+    /// 2026-08-28, so under it the modifier survived whichever model won and
+    /// this test could not fail. tmux still strips 🤙's tone, which the first
+    /// expectation checks, so that it cannot go vacuous the same way again.
     @Test("Hand-built quirks outrank a simulated program")
     func quirksOutrankProgram() async {
         await #expect(processExitsWith: .success) {
             await MainActor.run {
                 let writer = Self.unidentified
-                ProcessWideState.simulated = .appleTerminal
-                // Apple Terminal strips skin tones; a hand-built set that keeps
-                // them must win, or the exploration is arguing with a model it
-                // is trying to replace.
+                ProcessWideState.simulated = .tmux
+                #expect(
+                    !Self.keepsTheTone(Self.row("🤙🏽X", on: writer)),
+                    "the fixture: the simulated program strips this tone")
+                // A hand-built set that keeps tones must win, or the
+                // exploration is arguing with a model it is trying to replace.
                 ProcessWideState.simulatedQuirks = TerminalQuirks(skinTones: .keep)
-                let line = Self.row("🤙🏽X", on: writer)
-                #expect(line.unicodeScalars.contains { (0x1F3FB...0x1F3FF).contains($0.value) })
+                #expect(Self.keepsTheTone(Self.row("🤙🏽X", on: writer)))
             }
         }
     }
