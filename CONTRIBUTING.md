@@ -265,11 +265,12 @@ test's 600 s sleep (see the comment on the macOS Test step in
 runners' 7 GB is the thing to watch). The Windows lanes still run `swift
 test`. The harness runs every test, and fails loudly unless the union of test
 IDs returned by its processes matches the enumerated suite exactly, so a
-process that quietly ran nothing cannot be mistaken for a pass. That identity check held in all 25 full-suite runs behind this section:
-7,591 tests, 1,082 suites, 21 known issues, nothing missing, extra or
-duplicated. Two of the 25 did print a reconciliation problem, but it was a gap
-in how the harness parsed a summary line — since closed, and recorded in its
-README — and not a test that failed to run.
+process that quietly ran nothing cannot be mistaken for a pass. That identity
+check held in all 25 full-suite runs behind this section: 7,591 tests, 1,082
+suites, 21 known issues, nothing missing, extra or duplicated. Two of the 25
+did print a reconciliation problem, but it was a gap in how the harness parsed
+a summary line — since closed, and recorded in its README — and not a test
+that failed to run.
 
 Because the tests are spread differently, anything depending on the
 interleaving one process happens to give it can behave differently — that is a
