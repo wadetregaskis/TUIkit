@@ -51,7 +51,7 @@ extension Color {
     /// Apple Terminal.
     ///
     /// Walking this list at even intervals of time (not of the cosine phase —
-    /// see ``breathStep(atPhase:of:)``) instead gives every shade the same
+    /// see `Color.breathStep(atPhase:of:)`) instead gives every shade the same
     /// screen time, so the animation is as smooth as the palette permits and
     /// never off-hue. Truecolor callers should keep the continuous lerp — there
     /// the ramp is effectively infinite.

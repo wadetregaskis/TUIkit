@@ -987,7 +987,7 @@ extension Palette {
     /// `PaletteContrastAuditTests` measures. A mark drawn IN the accent has nothing on
     /// top of it and can go all the way.
     ///
-    /// The ends are the palette's row fills, B (``RowFills``), over what the fill sits
+    /// The ends are the palette's row fills, B (`RowFills`), over what the fill sits
     /// on: a shipped palette's over its page, chosen at coding time; any other
     /// palette's, and any palette's over another surface, placed by the row-fill rule
     /// with that surface as its page. The rule places B above the selected row and the
@@ -1023,7 +1023,7 @@ extension Palette {
     /// accent's hue, so it is the row's selection mark that tells the two apart. A list
     /// that draws none breathes this all the same: the focus indicator always moves.
     ///
-    /// The ends are the palette's row fills, F (``RowFills``): a shipped palette's,
+    /// The ends are the palette's row fills, F (`RowFills`): a shipped palette's,
     /// chosen at coding time; else, where the palette leaves ``focusBackground`` to its
     /// default, the row-fill rule's. A wash a palette states is its own choice, and is
     /// drawn as stated: at truecolour it is the dim end — the look such a row has
