@@ -9,6 +9,7 @@
 //  Created by Wade Tregaskis
 //  License: MIT
 
+import Foundation
 import TUIkitCore
 import TUIkitStyling
 
@@ -74,6 +75,26 @@ extension Optional: _ValueHashing {
         }
         hash = mixHashWord(hash, ValueHashMark.some)
         return plans.mix(at: pointer, type: Wrapped.self, into: &hash)
+    }
+}
+
+// MARK: - UUID
+
+/// Its sixteen bytes, through the public `uuid` tuple, whatever Foundation keeps
+/// them in. Its storage is Foundation's to change, and does: swift-foundation on
+/// the Swift 6.5 development toolchain holds them in a fixed-size array, a
+/// metadata kind the walk does not read (0x308), so a view holding a UUID
+/// bypassed the value hash there. The tuple is sixteen `UInt8`s, every byte
+/// written.
+extension UUID: _ValueHashing {
+    package static func _mixValueHash(
+        at pointer: UnsafeRawPointer, into hash: inout UInt64, plans: ValueHashPlans
+    ) -> Bool {
+        withUnsafeBytes(of: pointer.assumingMemoryBound(to: Self.self).pointee.uuid) { bytes in
+            hash = mixHashWord(hash, bytes.loadUnaligned(as: UInt64.self))
+            hash = mixHashWord(hash, bytes.loadUnaligned(fromByteOffset: 8, as: UInt64.self))
+        }
+        return true
     }
 }
 

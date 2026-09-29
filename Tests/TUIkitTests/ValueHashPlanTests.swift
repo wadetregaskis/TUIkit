@@ -536,6 +536,19 @@ struct ValueHashPlanTests {
         }
     }
 
+    /// Hashed by its bytes, not its storage, which Foundation changes between
+    /// versions: two UUIDs hash alike exactly when their bytes are alike.
+    @Test("A UUID hashes by its sixteen bytes")
+    func uuidHashesItsBytes() throws {
+        let first = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+        let same = UUID(uuidString: "e621e1f8-c36c-495a-93fc-0c247a3e6e5f")!
+        let other = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E60")!
+        func hash(_ uuid: UUID) -> Int? { withUnsafePointer(to: uuid) { plans.valueHash(at: $0) } }
+        let firstHash = try #require(hash(first))
+        #expect(hash(same) == firstHash)
+        #expect(hash(other) != firstHash)
+    }
+
     @Test("A navigation destination names its type by identifier, not by a metatype, and is read whole")
     func navigationDestination() {
         let modified = EmptyView().navigationDestination(for: Int.self) { _ in EmptyView() }
