@@ -126,11 +126,32 @@ extension TerminalClient {
     /// diagnostic that renders as Apple Terminal gets Apple Terminal's answer,
     /// which is the point of the setting.
     @MainActor public static var hyperlinksSupported: Bool {
-        if let hyperlinkSupport { return hyperlinkSupport }
-        switch ProcessInfo.processInfo.environment["TUIKIT_HYPERLINKS"] {
+        hyperlinksSupported(
+            override: hyperlinkSupport, environment: ProcessInfo.processInfo.environment,
+            program: effective.program)
+    }
+
+    /// The ladder behind ``hyperlinksSupported``, posed on its inputs — the
+    /// shape `ColorDepth.detect(environment:)` has — so it can be asked without
+    /// setting anything a whole process reads.
+    ///
+    /// `program` is an autoclosure, read only in the arm that needs it, and
+    /// that is load-bearing rather than an economy. The live answer passes
+    /// `effective.program`, which reads every `TerminalHost` detector, and
+    /// those are `static let`s that keep their first answer. An app that sets
+    /// ``hyperlinkSupport`` in its `init` runs this before `AppRunner` has
+    /// seeded the host it identified, and the override answers by itself
+    /// there. Reading the program anyway would freeze each detector against an
+    /// environment the seed has not reached yet: an Apple Terminal behind ssh
+    /// would lose its compensation for good.
+    static func hyperlinksSupported(
+        override: Bool?, environment: [String: String], program: @autoclosure () -> Program
+    ) -> Bool {
+        if let override { return override }
+        switch environment["TUIKIT_HYPERLINKS"] {
         case "1": return true
         case "0": return false
-        default: return honoursHyperlinks(effective.program)
+        default: return honoursHyperlinks(program())
         }
     }
 }

@@ -92,11 +92,24 @@ extension TerminalClient {
     /// claim that the terminal actually in front of the user has stopped being
     /// able to draw. The override is how a diagnostic turns pictures off.
     @MainActor public static var graphicsSupported: Bool {
-        if let graphicsSupport { return graphicsSupport }
-        switch ProcessInfo.processInfo.environment["TUIKIT_GRAPHICS"] {
+        graphicsSupported(
+            override: graphicsSupport, environment: ProcessInfo.processInfo.environment,
+            detected: detectedGraphics)
+    }
+
+    /// The ladder behind ``graphicsSupported``, posed on its inputs — the
+    /// shape `ColorDepth.detect(environment:)` has — so it can be asked without
+    /// setting anything a whole process reads. It takes no program, which is
+    /// the asymmetry with `hyperlinksSupported(override:environment:program:)`
+    /// described above.
+    static func graphicsSupported(
+        override: Bool?, environment: [String: String], detected: Bool?
+    ) -> Bool {
+        if let override { return override }
+        switch environment["TUIKIT_GRAPHICS"] {
         case "1": return true
         case "0": return false
-        default: return detectedGraphics ?? false
+        default: return detected ?? false
         }
     }
 

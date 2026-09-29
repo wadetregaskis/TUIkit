@@ -79,13 +79,20 @@ extension TerminalClient {
     /// the environment's kill switch, then the override, then the environment's
     /// opt-in, then `false`.
     @MainActor public static var urlOpeningEnabled: Bool {
-        let environment = ProcessInfo.processInfo.environment["TUIKIT_OPEN_URLS"]
+        urlOpeningEnabled(override: urlOpeningSupport, environment: ProcessInfo.processInfo.environment)
+    }
+
+    /// The ladder behind ``urlOpeningEnabled``, posed on its inputs — the shape
+    /// `ColorDepth.detect(environment:)` has — so it can be asked without
+    /// setting anything a whole process reads.
+    static func urlOpeningEnabled(override: Bool?, environment: [String: String]) -> Bool {
+        let environment = environment["TUIKIT_OPEN_URLS"]
         // `=0` FIRST, ahead of the app's own answer. A user who exported it is
         // saying "not on this machine", and the app cannot know better: it is
         // the one party here that does not know where it is running. (This
         // arm used to sit BEHIND the override, where it could never fire.)
         if environment == "0" { return false }
-        if let urlOpeningSupport { return urlOpeningSupport }
+        if let override { return override }
         // `=1` answers for the user only where the app has not answered: an
         // app that said `false` had a reason, and opening a browser is the
         // one direction to err away from.
