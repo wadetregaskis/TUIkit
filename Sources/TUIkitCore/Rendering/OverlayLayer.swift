@@ -183,6 +183,27 @@ public struct OverlayLayer: Sendable, Equatable {
     /// loudly is the safer one.
     public var isOpaque: Bool = true
 
+    /// Whether this layer holds the input while it is drawn: a menu, a
+    /// drop-down, a popover — a surface with a dismiss backdrop that takes
+    /// every press outside it, and, for the menus, the keyboard.
+    ///
+    /// What it decides is what a `ScrollView` does with the layer once the
+    /// content has moved its anchor, and all of it, out of the viewport. A
+    /// layer that holds the input is pinned inside the viewport at the edge
+    /// its anchor left by, because culling it hid a live presentation: Down
+    /// and Return walked and ran a menu nobody could see. Every other layer
+    /// goes with its anchor — a displaced piece of the view (`.offset`), and a
+    /// tooltip, which is a surface (``isOpaque``) but takes nothing: pinned, the
+    /// tooltips of every row out of view under `.tooltips(.always)` stacked up
+    /// at the viewport's edge over the rows that were in it.
+    ///
+    /// Not ``isOpaque``, which is about what shows through the layer, and not
+    /// ``isScreenLevel``, which is about where it is placed: a tooltip is an
+    /// opaque anchored surface exactly as a menu is, and differs only in this.
+    /// It defaults to `false` so a new kind of layer is culled with its anchor
+    /// unless its presenter says otherwise — the old behaviour of every layer.
+    public var holdsInput: Bool = false
+
     /// Creates an overlay layer.
     ///
     /// - Parameters:
@@ -200,6 +221,8 @@ public struct OverlayLayer: Sendable, Equatable {
     ///     ``clampsToScreen``.
     ///   - isOpaque: Whether the layer is a surface that hides what is behind
     ///     it (default: `true`) — see ``isOpaque``.
+    ///   - holdsInput: Whether the layer holds the input while it is drawn
+    ///     (default: `false`) — see ``holdsInput``.
     public init(
         offsetX: Int,
         offsetY: Int,
@@ -210,10 +233,12 @@ public struct OverlayLayer: Sendable, Equatable {
         centered: Bool = false,
         dimsBackground: Bool = false,
         clampsToScreen: Bool = true,
-        isOpaque: Bool = true
+        isOpaque: Bool = true,
+        holdsInput: Bool = false
     ) {
         self.clampsToScreen = clampsToScreen
         self.isOpaque = isOpaque
+        self.holdsInput = holdsInput
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.content = content

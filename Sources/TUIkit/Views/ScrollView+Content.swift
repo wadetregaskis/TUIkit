@@ -542,7 +542,7 @@ extension _ScrollViewCore {
         // content ones: `offsetY + dy + h > 0` is `offsetY + h > scrollOffset`.
         let topY = overlay.offsetY + dy - overlay.anchorHeight
         let bottomY = overlay.offsetY + dy + overlay.content.height
-        guard bottomY > 0, topY < height else { return nil }
+        guard bottomY > 0, topY < height else { return pinnedAtTheEdge(overlay, shiftedByX: dx, y: dy, height: height) }
         let shifted = overlay.shifted(byX: dx, y: dy)
         // A scroll view clips its CONTENT to its bounds, as SwiftUI's does
         // — `View.scrollClipDisabled(_:)` is the modifier that turns that
@@ -558,6 +558,36 @@ extension _ScrollViewCore {
         // needs `anchorHeight`.
         guard !shifted.isOpaque else { return shifted }
         return shifted.clipped(toWidth: width, height: height)
+    }
+
+    /// A layer whose anchor, and all of it, the content has moved out of the
+    /// viewport: a surface that holds the input pinned inside it, at the edge
+    /// its anchor left by — or, for anything else, nothing.
+    ///
+    /// A surface that holds the input (``OverlayLayer/holdsInput``) is only
+    /// ever emitted while it is presented — a menu, a drop-down, a combo box's
+    /// suggestions, a popover — and takes the keyboard or every press outside
+    /// it. Culled with its anchor, it went on holding them unseen: a
+    /// context menu open on the last visible row of a list, when a document
+    /// arrived above, was gone from the screen while Down and Return walked
+    /// and ran it, and came back when its row did. It is a window over the
+    /// page, not a piece of the content it scrolls (the reason it escapes the
+    /// clip above), so it stays, flush with the viewport's edge on the side
+    /// its anchor went: its top at the top when the anchor went up, its bottom
+    /// at the bottom when it went down. Its anchor is not beside it any more,
+    /// so it declares none, and the compositor does not flip it off one.
+    ///
+    /// Not every surface: a tooltip is opaque and takes nothing, and pinned,
+    /// the tooltips of every row out of view under `.tooltips(.always)`
+    /// stacked up at the edge over the rows in it. It goes with its anchor, as
+    /// a displaced piece of the content (`.offset`) does.
+    func pinnedAtTheEdge(_ overlay: OverlayLayer, shiftedByX dx: Int, y dy: Int, height: Int) -> OverlayLayer? {
+        guard overlay.holdsInput else { return nil }
+        var pinned = overlay.shifted(byX: dx, y: dy)
+        let anchorWentUp = overlay.offsetY + dy + overlay.content.height <= 0
+        pinned.offsetY = anchorWentUp ? 0 : max(0, height - overlay.content.height)
+        pinned.anchorHeight = 0
+        return pinned
     }
 
     // MARK: Indicators

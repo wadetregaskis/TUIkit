@@ -543,7 +543,7 @@ func presentMenuPopover<Items: View>(
     base.overlays.append(
         OverlayLayer(
             offsetX: offsetX, offsetY: anchor.y, content: menuBuffer,
-            level: .popover, anchorHeight: anchor.controlHeight))
+            level: .popover, anchorHeight: anchor.controlHeight, holdsInput: true))
 }
 
 /// Gives the open menu the whole keyboard: the arrows, the jump gestures every
