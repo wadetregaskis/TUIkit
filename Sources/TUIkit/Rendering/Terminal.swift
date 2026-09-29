@@ -305,8 +305,15 @@ extension Terminal {
 
     /// Parses an environment variable as a terminal dimension, accepting only a
     /// positive count; `nil` when unset, unparseable, or non-positive.
-    func terminalDimension(fromEnvironment name: String) -> Int? {
-        guard let raw = ProcessInfo.processInfo.environment[name],
+    ///
+    /// `environment` is the process's own unless a caller poses the question
+    /// on a dictionary, as `ColorDepth.detect(environment:)` does, which asks
+    /// it without writing the one environment every thread reads.
+    func terminalDimension(
+        fromEnvironment name: String,
+        in environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Int? {
+        guard let raw = environment[name],
             let value = Int(raw),
             value > 0
         else { return nil }
