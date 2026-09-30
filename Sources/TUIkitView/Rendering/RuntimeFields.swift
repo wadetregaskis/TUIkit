@@ -99,6 +99,9 @@ package enum RuntimeFields {
         case metatype = 0x304
         case objcClassWrapper = 0x305
         case existentialMetatype = 0x306
+        /// `Builtin.FixedArray`, the storage of an `InlineArray`: `count` elements
+        /// of one type, laid out at its stride (``RuntimeFields/fixedArray(_:)``).
+        case fixedArray = 0x308
         case unknown = 0xffff
 
         /// Any kind of class: what the runtime's `swift_isClassType` answers,
@@ -116,6 +119,29 @@ package enum RuntimeFields {
         package init(of type: Any.Type) {
             self = Self(rawValue: runtimeMetadataKind(type)) ?? .unknown
         }
+    }
+
+    /// A fixed-size array's element count and element type, or `nil` for any other
+    /// kind — read from its metadata, which the runtime lays out as its kind, then
+    /// the count (a pointer-sized signed integer), then the element's metadata
+    /// (`TargetFixedArrayTypeMetadata`, swift/ABI/Metadata.h).
+    ///
+    /// Checked against the array's own layout before it is believed: `count`
+    /// elements at the element's stride must be what the array occupies, or it is
+    /// not what this reads it as, and the caller bypasses.
+    package static func fixedArray(_ type: Any.Type) -> (count: Int, element: Any.Type)? {
+        guard Kind(of: type) == .fixedArray else { return nil }
+        let metadata = unsafeBitCast(type, to: UnsafeRawPointer.self)
+        let word = MemoryLayout<Int>.size
+        let count = metadata.load(fromByteOffset: word, as: Int.self)
+        let elementMetadata = metadata.load(fromByteOffset: 2 * word, as: UnsafeRawPointer.self)
+        let element = unsafeBitCast(elementMetadata, to: Any.Type.self)
+        guard count >= 0 else { return nil }
+        let size = _openExistential(type, do: fixedArraySize)
+        let (elementSize, elementStride) = _openExistential(element, do: sizeAndStride)
+        let expected = count == 0 ? 0 : (count - 1) * elementStride + elementSize
+        guard size == expected || size == count * elementStride else { return nil }
+        return (count, element)
     }
 
     /// Lists `type`'s stored fields to `body` — name (`""` where the runtime
@@ -225,3 +251,9 @@ package enum RuntimeFields {
         return "".withCString(body)
     }
 }
+
+/// `T`'s size, for ``RuntimeFields/fixedArray(_:)``.
+private func fixedArraySize<T>(_: T.Type) -> Int { MemoryLayout<T>.size }
+
+/// `T`'s size and stride, for ``RuntimeFields/fixedArray(_:)``.
+private func sizeAndStride<T>(_: T.Type) -> (Int, Int) { (MemoryLayout<T>.size, MemoryLayout<T>.stride) }

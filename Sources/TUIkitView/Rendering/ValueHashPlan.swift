@@ -145,6 +145,10 @@ package struct ValueHashPlan {
 ///   its static type and opens it — see ``ExistentialField``. Never its
 ///   container's words: the unused ones are undefined, and a boxed payload's
 ///   box address says nothing about the payload.
+/// - **A fixed-size array** (an `InlineArray`'s storage): its elements by their
+///   own plan at the element's stride — one run of bytes for the whole array
+///   where the element is all bytes with no padding after it; element by element
+///   (at most ``fixedArrayElementLimit``) otherwise.
 /// - **Anything else**: bypass — a payload enum that has not opted in (an
 ///   app's, a generic one such as `Result`), a constrained existential (the
 ///   runtime reports it as a kind the walk does not know), any unknown kind.
@@ -303,8 +307,42 @@ struct ValueHashPlanBuilder {
             throw Bypass(reason: "\(path()): a payload enum, \(type)")
         case .existential:
             items.append(.step(.init(offset: base, action: .existential(ExistentialField(type, openers: openers)))))
+        case .fixedArray:
+            try describeFixedArray(type, at: base, size: size, path: path, into: &items)
         default:
             throw Bypass(reason: "\(path()): a kind the walk does not know (\(kind))")
+        }
+    }
+
+    /// The most elements of a fixed-size array whose element is not all bytes that a
+    /// plan describes one by one: a plan is kept for the life of the table, and this
+    /// bounds what one type can make it hold.
+    static let fixedArrayElementLimit = 256
+
+    /// An `InlineArray`'s storage: its elements, each by its own plan, at the
+    /// element's stride — the gap after each is the element's own alignment padding.
+    /// An element read whole as bytes, with no padding after it, makes the whole
+    /// array one run of bytes, whatever its count.
+    private func describeFixedArray(
+        _ type: Any.Type, at base: Int, size: Int, path: () -> String, into items: inout [Item]
+    ) throws {
+        guard let (count, element) = RuntimeFields.fixedArray(type) else {
+            throw Bypass(reason: "\(path()): a fixed-size array whose metadata does not match its layout")
+        }
+        let layout = Self.layout(of: element)
+        // Swift's stride: the size rounded up to the alignment, and never zero.
+        let stride = max(1, (layout.size + layout.alignment - 1) / layout.alignment * layout.alignment)
+        var first: [Item] = []
+        try describe(element, at: 0, path: { "\(path())[0]" }, into: &first)
+        if case .bytes(0, layout.size, let leaf)? = first.first, first.count == 1, layout.size == stride {
+            items.append(.bytes(offset: base, count: size, leaf: leaf))
+            return
+        }
+        guard count <= Self.fixedArrayElementLimit else {
+            throw Bypass(reason: "\(path()): a fixed-size array of \(count) elements that are not all bytes")
+        }
+        for index in 0..<count {
+            try describe(element, at: base + index * stride, path: { "\(path())[\(index)]" }, into: &items)
         }
     }
 

@@ -536,6 +536,34 @@ struct ValueHashPlanTests {
         }
     }
 
+    /// An `InlineArray`'s storage is a fixed-size array, a metadata kind of its own
+    /// (0x308) that the walk used to refuse, so any view holding one bypassed. Its
+    /// elements are read by their own plan: all bytes, one run for the whole array;
+    /// padded, the runs around the padding; a type that bypasses, a bypass.
+    ///
+    /// The type exists at runtime from macOS 26 and on every Linux; on an older
+    /// macOS there is nothing to plan. Verified locally under WebAssembly (wasmkit)
+    /// on 2026-09-30, where this machine's macOS 15 cannot run it.
+    @Test("An InlineArray is read by its elements' plans")
+    func inlineArrayElements() throws {
+        guard #available(macOS 26, iOS 26, tvOS 26, watchOS 26, visionOS 26, *) else { return }
+        struct Bytes {
+            var id = 7
+            var bytes: InlineArray<4, UInt8> = [1, 2, 3, 4]
+        }
+        struct Padded {
+            var pairs: InlineArray<2, (UInt8, Int)> = [(1, 2), (3, 4)]
+        }
+        #expect(plan(Bytes.self).shape == .dense, "\(plan(Bytes.self).bypassReason ?? "")")
+        #expect(plan(Padded.self).shape == .runs, "\(plan(Padded.self).bypassReason ?? "")")
+        func hash<T>(_ value: T) -> Int? { withUnsafePointer(to: value) { plans.valueHash(at: $0) } }
+        var other = Bytes()
+        other.bytes[2] = 9
+        let first = try #require(hash(Bytes()))
+        #expect(hash(Bytes()) == first)
+        #expect(hash(other) != first)
+    }
+
     /// Hashed by its bytes, not its storage, which Foundation changes between
     /// versions: two UUIDs hash alike exactly when their bytes are alike.
     @Test("A UUID hashes by its sixteen bytes")
