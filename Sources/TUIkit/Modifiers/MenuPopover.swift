@@ -47,8 +47,9 @@ func renderMenuColumn(
     // replace its first and last visible rows, which around the border would
     // eat the border itself. The content renders at its full height inside the
     // viewport, which is what lets the reveal bring an off-screen item back
-    // (`ScrollViewReveal`).
+    // (`ScrollViewReveal`). Its rows are the focus stops, never the scroller.
     let scrolled = ScrollView(.vertical) { menuColumnBody(items) }
+        .withoutFocusStop()
         .frame(height: max(1, capHeight - 2))
         .bordered(style: nil, colour: borderColor.map(AnimatedColor.init), width: 1)
     return renderToBuffer(scrolled, context: plan.sized.withAvailableHeight(capHeight))

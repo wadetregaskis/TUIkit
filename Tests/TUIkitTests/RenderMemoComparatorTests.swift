@@ -111,6 +111,7 @@ struct RenderMemoComparatorTests {
                 ("content", ScrollView { Text("b") }),
                 ("explicitFocusID", base.focusID("elsewhere")),
                 ("isDisabled", base.disabled()),
+                ("isFocusStop", base.withoutFocusStop()),
             ])
         expectDistinguishes(
             "ViewThatFits", ViewThatFits { Text("a") }, identical: ViewThatFits { Text("a") },

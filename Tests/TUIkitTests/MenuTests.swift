@@ -324,6 +324,40 @@ struct MenuTests {
             "the focused item must be scrolled into view: \(out)")
     }
 
+    /// The scroller a tall inline menu draws its rows in was a focus stop of its
+    /// own, after the last row: Down from the last row moved the focus off every
+    /// row onto the container, where the cursor vanished, Return opened nothing
+    /// and the arrows scrolled the rows instead of walking them. Found by the
+    /// PTY walk of the Example's menu, which read the container's breathing bar
+    /// as a row it had moved to.
+    @Test("Down from the last row of a tall inline menu keeps the focus on a row")
+    func inlineTallMenuKeepsTheFocusOnItsRows() throws {
+        let (tui, context) = harness(height: 10)
+        let view = Menu("Menu") {
+            ForEach(0..<20, id: \.self) { index in
+                Button("Item \(index)") {}.focusID("item-\(index)")
+            }
+        }
+        .menuStyle(.inline)
+        let focusManager = try #require(context.environment.focusManager)
+
+        _ = renderArmed(view, tui: tui, context: context)
+        focusManager.focus(id: "item-19")
+        _ = renderArmed(view, tui: tui, context: context)
+        // The ring's own arrow, as the run loop hands it an arrow no view took.
+        #expect(focusManager.dispatchKeyEvent(KeyEvent(key: .down)))
+        _ = renderArmed(view, tui: tui, context: context)
+        #expect(
+            focusManager.currentFocusedID?.hasPrefix("item-") == true,
+            "the focus left the rows for \(focusManager.currentFocusedID ?? "nothing")")
+
+        // Tab still wraps, to the first row, and the menu scrolls back to it.
+        focusManager.focusNext()
+        let out = lines(renderArmed(view, tui: tui, context: context))
+        #expect(focusManager.currentFocusedID == "item-0")
+        #expect(out.contains { $0.contains("Item 0") }, "the first row scrolled back into view: \(out)")
+    }
+
     // MARK: - Automatic (pop-up) style
 
     @Test("A pop-up menu is CLOSED until it is activated")

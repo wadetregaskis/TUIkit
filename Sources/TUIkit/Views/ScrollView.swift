@@ -87,6 +87,10 @@ public struct ScrollView<Content: View>: View {
     /// Whether the scroll view is disabled.
     var isDisabled: Bool
 
+    /// Whether the scroll view is a focus stop of its own when it overflows —
+    /// see ``withoutFocusStop()``.
+    var isFocusStop = true
+
     /// Creates a scroll view.
     ///
     /// - Parameters:
@@ -125,7 +129,8 @@ public struct ScrollView<Content: View>: View {
             axes: axes,
             content: content,
             explicitFocusID: explicitFocusID,
-            isDisabled: isDisabled
+            isDisabled: isDisabled,
+            isFocusStop: isFocusStop
         )
         .disabled(isDisabled)
     }
@@ -157,6 +162,22 @@ extension ScrollView {
         copy.isDisabled = disabled
         return copy
     }
+
+    /// This scroll view, never a focus stop of its own: its content's controls
+    /// are the stops, and the reveal scrolls to whichever holds the focus.
+    ///
+    /// For a scroller that is chrome around a column of rows — a menu too tall
+    /// for its space. As a stop it sat after the last row, so Down from the last
+    /// row moved the focus off every row onto the container: the cursor
+    /// vanished, Return did nothing, and the arrows scrolled the rows instead
+    /// of walking them. Not `.focusable(false)`, which takes the content out of
+    /// the ring with it. The wheel still scrolls it; it answers the pointer,
+    /// not the focus.
+    func withoutFocusStop() -> ScrollView<Content> {
+        var copy = self
+        copy.isFocusStop = false
+        return copy
+    }
 }
 
 // MARK: - Equatable
@@ -167,6 +188,7 @@ extension ScrollView: @preconcurrency Equatable where Content: Equatable {
             && lhs.content == rhs.content
             && lhs.explicitFocusID == rhs.explicitFocusID
             && lhs.isDisabled == rhs.isDisabled
+            && lhs.isFocusStop == rhs.isFocusStop
     }
 }
 
@@ -221,6 +243,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
     let content: Content
     let explicitFocusID: String?
     let isDisabled: Bool
+    var isFocusStop = true
 
     var body: Never { fatalError("_ScrollViewCore renders via Renderable") }
 
@@ -285,11 +308,11 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
             for: handlerKey,
             default: ScrollViewHandler(
                 focusID: persistedFocusID,
-                canBeFocused: !isDisabled(in: context)
+                canBeFocused: isFocusStop && !isDisabled(in: context)
             )
         )
         let handler = handlerBox.value
-        handler.canBeFocused = !isDisabled(in: context)
+        handler.canBeFocused = isFocusStop && !isDisabled(in: context)
         handler.shiftStepMultiplier = context.environment.shiftStepMultiplier
         // Captured at render so a USER scroll can release a bound anchor to
         // `.window` at event time (the environment is out of reach there).
@@ -548,7 +571,7 @@ struct _ScrollViewCore<Content: View>: View, Renderable, Layoutable {
         // view drops out of the Tab ring for the same reason a non-overflowing
         // one does: a stop that can do nothing is only an obstacle.
         handler.canBeFocused =
-            !isDisabled(in: context) && handler.isScrollEnabled
+            isFocusStop && !isDisabled(in: context) && handler.isScrollEnabled
             && (hasVerticalOverflow || hasHorizontalOverflow)
 
         // Register so the dispatchKeyEvent → handler chain is wired up; the
