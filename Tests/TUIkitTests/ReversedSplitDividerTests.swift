@@ -260,4 +260,37 @@ struct ReversedSplitDividerTests {
         }
         #expect(try #require(unknown) == (try #require(reported)), "\(fixture): the grip moved")
     }
+    // MARK: - A breath with reverse video in it
+
+    /// Per frame of `run`: whether all its cells are reversed, and whether any is bold.
+    private func breath(of run: AnimatedCellRun, depth: ColorDepth) -> (reversed: [Int], bold: [Int]) {
+        ColorDepth.withCurrent(depth) {
+            let states = run.frames.map { frame in cellStates(frame).map(\.state) }
+            let reversed = states.indices.filter { !states[$0].isEmpty && states[$0].allSatisfy(\.reversesVideo) }
+            let bold = states.indices.filter { states[$0].contains(where: \.isBold) }
+            return (reversed, bold)
+        }
+    }
+
+    @Test("On 16 colours a focused divider breathes into reverse video on its dim frames")
+    func sixteenColourDividerReverses() throws {
+        try TerminalColors.withCurrent(.unknown) {
+            let palette = try #require(PaletteRegistry.palette(withName: "Red Sands"))
+            let drawn = try focusedSplit(palette: palette, depth: .basic16)
+            let breaths = drawn.animatedCells.map { breath(of: $0, depth: .basic16).reversed }
+            #expect(breaths.contains(Array(5...11)), "\(breaths)")
+        }
+    }
+
+    @Test("Without colour a focused divider breathes by weight, reversed throughout")
+    func noColourDividerBreathesByWeight() throws {
+        try TerminalColors.withCurrent(.unknown) {
+            try TerminalClient.$drawsBoldPin.withValue(true) {
+                let drawn = try focusedSplit(palette: PaletteRegistry.all[0], depth: .noColor)
+                let breaths = drawn.animatedCells.map { breath(of: $0, depth: .noColor) }
+                #expect(!breaths.isEmpty, "the divider does not breathe")
+                #expect(breaths.allSatisfy { $0.reversed == Array(0..<16) && $0.bold == [0, 1, 2, 3, 4, 12, 13, 14, 15] }, "\(breaths)")
+            }
+        }
+    }
 }

@@ -287,4 +287,48 @@ struct ReversedDateComponentTests {
         let reported = TerminalColors.withCurrent(Self.reported) { field(palette: palette).stripped }
         #expect(unknown == reported, "\(fixture): \(unknown.debugDescription)")
     }
+    // MARK: - A breath with reverse video in it
+
+    /// Per frame of `run`: whether all its cells are reversed, and whether any is bold.
+    private func breath(of run: AnimatedCellRun, depth: ColorDepth) -> (reversed: [Int], bold: [Int]) {
+        ColorDepth.withCurrent(depth) {
+            let states = run.frames.map { frame in cells(frame).map(\.state) }
+            let reversed = states.indices.filter { !states[$0].isEmpty && states[$0].allSatisfy(\.reversesVideo) }
+            let bold = states.indices.filter { states[$0].contains(where: \.isBold) }
+            return (reversed, bold)
+        }
+    }
+
+    private func breathingField(palette: any Palette, depth: ColorDepth) -> FrameBuffer {
+        let context = makeRenderContext(width: 24, height: 2) { environment, _ in
+            environment.palette = palette
+        }
+        let view = DatePicker(selection: .constant(Self.instant), displayedComponents: .date) {
+            EmptyView()
+        }
+        return ColorDepth.withCurrent(depth) { renderToBuffer(view, context: context) }
+    }
+
+    @Test("On 16 colours the active component breathes into reverse video on its dim frames")
+    func sixteenColourComponentReverses() throws {
+        try TerminalColors.withCurrent(.unknown) {
+            let palette = try #require(PaletteRegistry.palette(withName: "Red Sands"))
+            let drawn = breathingField(palette: palette, depth: .basic16)
+            let run = try #require(drawn.animatedCells.first, "the component does not breathe")
+            #expect(breath(of: run, depth: .basic16).reversed == Array(5...11))
+        }
+    }
+
+    @Test("Without colour the active component breathes by weight, reversed throughout")
+    func noColourComponentBreathesByWeight() throws {
+        try TerminalColors.withCurrent(.unknown) {
+            try TerminalClient.$drawsBoldPin.withValue(true) {
+                let drawn = breathingField(palette: PaletteRegistry.all[0], depth: .noColor)
+                let run = try #require(drawn.animatedCells.first, "the component does not breathe")
+                let (reversed, bold) = breath(of: run, depth: .noColor)
+                #expect(reversed == Array(0..<16))
+                #expect(bold == [0, 1, 2, 3, 4, 12, 13, 14, 15])
+            }
+        }
+    }
 }

@@ -202,6 +202,16 @@ public struct SelectionEmphasis: Equatable, Sendable {
     /// animation and hold), which is what lets a cycle ask its first frame.
     var readsRamp: Bool { isFocused && (animation == .pulse || isHeld) }
 
+    /// Whether this frame shows the bright end of a breath between two ends that
+    /// cannot be mixed — a 16-colour breath with one end in reverse video: the steps a
+    /// two-shade ramp takes (``Color/breathStep(atPhase:of:)``), whatever the depth.
+    var showsBrightEnd: Bool {
+        // Markers, not ink: two colours told apart, never drawn.
+        // swiftlint:disable:next framework_colour_literal
+        let (dim, bright) = (Color.rgb(0, 0, 0), Color.rgb(255, 255, 255))
+        return color(dim: dim, bright: bright, ramp: [dim, bright]) == bright
+    }
+
     /// The colour this frame.
     ///
     /// - `dim`: the "off"/recessive endpoint (e.g. the element's own colour, so
@@ -408,10 +418,7 @@ public struct SelectionEmphasisCycle: Sendable, Equatable {
     /// the depth, and whatever this cycle does with its two ends: a blink shows each
     /// in turn, and a cycle that holds still holds its bright end.
     func brightFrames() -> [Bool] {
-        // Markers, not ink: two colours told apart, never drawn.
-        // swiftlint:disable:next framework_colour_literal
-        let (dim, bright) = (Color.rgb(0, 0, 0), Color.rgb(255, 255, 255))
-        return frames.map { $0.color(dim: dim, bright: bright, ramp: [dim, bright]) == bright }
+        frames.map(\.showsBrightEnd)
     }
 
     @MainActor

@@ -318,6 +318,36 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         return ANSIRenderer.render(text, with: style.resolved(with: palette))
     }
 
+    /// The active component's cell on a breath with reverse video in it — at 16
+    /// colours where the palette's picks run out, and without colour, by weight
+    /// (`RowBackground.reversingEnds(of:)`): the frame drawn now, and the run that
+    /// replays every frame. Nothing is claimed: a reversal claims nothing, and the
+    /// fill end is an opaque slot.
+    @MainActor
+    private static func reversingCell(
+        _ text: String, ends: (dim: RowBackground.Paint, bright: RowBackground.Paint),
+        cycle: SelectionEmphasisCycle, at column: Int, underlined: Bool, palette: any Palette
+    ) -> (drawn: String, run: AnimatedCellRun?) {
+        func drawn(_ paint: RowBackground.Paint) -> String {
+            var style = TextStyle()
+            style.isUnderlined = underlined
+            switch paint {
+            case .fill(let colour):
+                style.backgroundColor = colour
+                style.foregroundColor = palette.foreground.opaqueSpelling
+            case .reversed(let ink, let field, let bold):
+                style.isInverted = true
+                style.isBold = bold
+                style.foregroundColor = ink.opaqueSpelling
+                style.backgroundColor = field.opaqueSpelling
+            }
+            return ANSIRenderer.render(text, with: style.resolved(with: palette))
+        }
+        let frames = cycle.brightFrames().map { drawn($0 ? ends.bright : ends.dim) }
+        let run = cycle.run(drawn: frames, offsetX: column, offsetY: 0).flatMap { $0.isAnimating ? $0 : nil }
+        return (frames[cycle.step % max(1, frames.count)], run)
+    }
+
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let isDisabled = self.isDisabled || !context.environment.isEnabled
         let palette = context.environment.palette
@@ -402,9 +432,15 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         // whether or not it's applied.
         let emphasis = palette.emphasisFill()
         let showsActive = isFocused && !context.isMeasuring
-        // No cycle is built for a reversal: it has no phase to advance, and building
-        // one is sixteen frames and a pulse ramp for a picture that cannot change.
-        let breathes = showsActive && !emphasis.isReversed
+        // A breath with reverse video in it — at 16 colours where the palette's picks
+        // run out, and without colour, by weight — as a list's cursor row draws it.
+        let reversing =
+            showsActive
+            ? RowBackground.reversingEnds(of: palette.highlightedRowFill(appearsActive: true, reversing: true)) : nil
+        // No cycle is built for a still reversal: it has no phase to advance, and
+        // building one is sixteen frames and a pulse ramp for a picture that cannot
+        // change.
+        let breathes = showsActive && (!emphasis.isReversed || reversing != nil)
         let cycle = context.environment.selectionEmphasis.cycle(breathes)
         let (dimBlock, brightBlock) = palette.accentFillPulse()
 
@@ -439,7 +475,13 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
                 // cannot be measured the cell is reversed instead, which is steady:
                 // no run to leave, and nothing to claim, since both sides are stated
                 // opaque.
-                if breathes {
+                if let ends = reversing, cycle.isAnimating {
+                    let (drawn, run) = Self.reversingCell(
+                        cell.text, ends: ends, cycle: cycle, at: line.strippedLength, underlined: !isDisabled,
+                        palette: palette)
+                    if let run { runs.append(run) }
+                    line += drawn
+                } else if breathes && !emphasis.isReversed {
                     if let run = cycle.run(
                         dim: dimBlock, bright: brightBlock, offsetX: line.strippedLength, offsetY: 0,
                         draw: { Self.activeCell(cell.text, on: .fill($0), underlined: !isDisabled, palette: palette) })

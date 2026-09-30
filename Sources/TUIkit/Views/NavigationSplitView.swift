@@ -869,6 +869,11 @@ extension _NavigationSplitViewCore {
         // has no RGB, so there is nothing between them to fill with (`Documentation/Opacity
         // as composition.md` §75) — reverse video over the palette's own pair (§90).
         let highlight = palette.emphasisFill()
+        // A breath with reverse video in it — at 16 colours where the palette's picks
+        // run out, and without colour, by weight — as a list's cursor row draws it.
+        let reversing =
+            info.isActive
+            ? RowBackground.reversingEnds(of: palette.highlightedRowFill(appearsActive: true, reversing: true)) : nil
 
         /// One divider cell as it looks at a given point in the pulse, with the
         /// claim its colours owe.
@@ -879,6 +884,19 @@ extension _NavigationSplitViewCore {
         /// to reproduce exactly what was drawn here, not an approximation of it.
         func cell(row: Int, at emphasis: SelectionEmphasis) -> ClaimingRow {
             let mark = glyph(row)
+            var fill: Color?
+            if info.isActive, let reversing {
+                switch emphasis.showsBrightEnd ? reversing.bright : reversing.dim {
+                case .reversed(let ink, let field, let bold):
+                    var reversed = ClaimingRow()
+                    reversed.append(
+                        mark ?? " ", cells: 1, ink: ink.opaqueSpelling, field: field.opaqueSpelling, bold: bold,
+                        inverted: true)
+                    return reversed
+                case .fill(let colour):
+                    fill = colour
+                }
+            }
             // An active divider whose fill cannot be measured reverses the palette's pair
             // instead, cell by cell. A reversed cell has only two colours, so the dot comes
             // through in the page's colour on a bar of the foreground's — which is what
@@ -899,7 +917,7 @@ extension _NavigationSplitViewCore {
             // Background: pulses across the whole divider while focused /
             // dragging (same min/max the List focus-pulse uses).
             let background: Color? = info.isActive
-                ? emphasis.color(dim: pulse.dim, bright: pulse.bright)
+                ? fill ?? emphasis.color(dim: pulse.dim, bright: pulse.bright)
                 : nil
             // Each cell is a self-contained styled string — it ends with a
             // reset — so the pulsing background stays scoped to the divider's

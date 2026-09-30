@@ -35,9 +35,9 @@ package enum HighlightFill: Equatable, Sendable {
     /// end): a 16-colour list or table row whose terminal has too few colours to tell
     /// every row's state apart (``RowFills``). The reversal is `ink` and `field`
     /// exchanged, with every colour of the row's own content dropped. A list's or
-    /// table's cursor row, a menu's bar and a drop-down's highlighted row ask for one;
-    /// any other site (a date field's component, a split view's divider) holds the
-    /// fill end still (``stillFill``).
+    /// table's cursor row, a menu's bar, a drop-down's highlighted row, a date field's
+    /// active component and a split view's active divider ask for one; any other site
+    /// holds the fill end still (``stillFill``).
     case reversingPulse(dim: Color?, bright: Color?, ink: Color, field: Color)
 
     /// Whether this is a reversal — for a site that already knows the pair it would
@@ -165,7 +165,8 @@ extension Palette {
     ///     (`EnvironmentValues.appearsActive`).
     ///   - reversing: Whether the site can draw a breath with one end in reverse
     ///     video (``HighlightFill/reversingPulse(dim:bright:ink:field:)``) — a list's
-    ///     or table's cursor row, a menu's bar, a drop-down's highlighted row.
+    ///     or table's cursor row, a menu's bar, a drop-down's highlighted row, a date
+    ///     field's active component, a split view's active divider.
     ///     Elsewhere such a breath's fill end is held still.
     package func highlightedRowFill(appearsActive: Bool, reversing: Bool = false) -> HighlightFill {
         let breath = reversing ? reversingBreath(\.reversedEmphasisEnd, \.emphasisDim, \.emphasisBright) : nil
