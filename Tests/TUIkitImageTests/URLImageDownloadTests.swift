@@ -109,6 +109,17 @@ private final class Tarpit {
     enum TarpitError: Error { case failed(String) }
 }
 
+/// Whether a task has finished, readable without awaiting it — awaiting an
+/// unstructured task's value cannot be cancelled.
+private final class EndedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var ended = false
+
+    var value: Bool { lock.withLock { ended } }
+
+    func set() { lock.withLock { ended = true } }
+}
+
 /// Runs `body` against a tarpit that is guaranteed to still be listening for
 /// the whole call.
 ///
@@ -170,17 +181,24 @@ struct URLImageDownloadTests {
             let loader = PlatformImageLoader()
             let url = tarpit.urlString
 
-            let task = Task<Bool, Never> {
+            // How the load ended: cancelled, or anything else, said in words. A
+            // load that ended on its own before the cancel below means the tarpit
+            // did not hold the connection, which is the test's premise failing,
+            // not the loader — and a bare `false` could not say which (one failure
+            // on CI's macOS trunk-snapshot lane, 2026-09-29, told us nothing more).
+            let ended = EndedFlag()
+            let task = Task<(cancelled: Bool, how: String), Never> {
+                defer { ended.set() }
                 do {
                     _ = try await loader.loadImage(fromURL: url, timeout: 30)
-                    return false  // the tarpit cannot serve an image
+                    return (false, "the load returned an image")  // the tarpit cannot serve one
                 } catch is CancellationError {
-                    return true
+                    return (true, "cancelled")
                 } catch {
                     // A cancelled transfer may also surface as URLError.cancelled
                     // if the check races; either way the load gave up early, which
                     // is what this test is about.
-                    return Task.isCancelled
+                    return (Task.isCancelled, "\(error)")
                 }
             }
 
@@ -189,11 +207,18 @@ struct URLImageDownloadTests {
             try await Task.sleep(for: .milliseconds(250))
             let clock = ContinuousClock()
             let begin = clock.now
+            // Whether the load was still running when it was cancelled: the premise.
+            let endedFirst = ended.value
             task.cancel()
-            let cancelled = await task.value
+            let outcome = await task.value
             let elapsed = clock.now - begin
 
-            #expect(cancelled, "a cancelled download reports cancellation, not a network failure")
+            #expect(
+                outcome.cancelled,
+                """
+                a cancelled download reports cancellation, not a network failure: it ended \
+                "\(outcome.how)"\(endedFirst ? ", on its own before the cancel — the tarpit did not hold it" : "")
+                """)
             // What this test discriminates is "gave up now" from "waited out
             // the 30 s timeout", so the bound only has to sit clear of both —
             // see `Self.promptly`. One second was a bound the tests never
