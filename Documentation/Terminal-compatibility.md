@@ -2602,8 +2602,23 @@ xterm's. A menu's bar, a drop-down's highlighted row, a date field's active
 component and a split view's active divider breathe the same way (the selected
 cursor row's breath, which on Red Sands reverses).
 What a host paints for it is what the card's rows A, B and D ask, and what
-`Tools/TerminalProbes/breath_card.py` shows with the exact frames: UNMEASURED
-(the card was launched on all four hosts 2026-09-30 and could not be captured).
+`Tools/TerminalProbes/breath_card.py` shows with the exact frames. **Read
+2026-09-30** on Apple Terminal 455.1, iTerm2, Ghostty 1.3.1 and Warp, each in its
+own profile, from full-screen captures (a window capture timed out on every
+host):
+
+| Host | Reversed frame | Fill frame | Verdict |
+|---|---|---|---|
+| Apple Terminal 455.1 (Basic) | one light-grey band, every glyph (●, secondary text) red | the blue fill, white text, the ● yellow | as intended |
+| iTerm2 | one light-grey band, every glyph red | the blue fill; the secondary text (bright black) is faint on iTerm2's lighter blue | as intended; the faint secondary is the fill frame's, not the reversal's |
+| Warp | one near-white band, every glyph Warp's magenta | a light blue fill, and Warp recolours ALL its text dark, the ● included — its own contrast handling, not the frames | legible both ways |
+| Ghostty 1.3.1, default config | one light-grey band, every glyph red | xterm's picks: slot 4 is Tomorrow Night's steel blue `#81a2be` and the white text on it all but vanishes | xterm's picks do not hold here — but they are not what TUIkit draws on Ghostty, which reports its sixteen (OSC 4) and so gets fills placed against them. `breath_card.py --host ghostty` shows rule.py's picks for that table (page bright red, text white; F = bright black ↔ reverse, B = reverse ↔ black; blue unused), and those read cleanly: text 3.4:1 on the bright-black fill, 9.8:1 on the black |
+
+Without colour, every host tells the bold+reversed frame from the reversed one at
+a glance (a heavier glyph on all four; iTerm2's is also whiter), and both stand
+apart from a plain row. Not read: an app actually capped to 16 colours on Ghostty
+drawing these rows — the Ghostty rows on the card are derived from rule.py, not
+captured from the framework.
 
 The trigger is those colours and never the terminal's silence: a palette of
 ordinary RGB roles keeps its tints on a host that answers nothing. The one other
@@ -2617,8 +2632,8 @@ breathe by weight — reversed on every frame, bold on the
 bright ones — on every host TUIkit identifies, since each
 draws bold visibly (the bold/bright card above: iTerm2 brightens, Apple Terminal,
 Ghostty and Warp thicken, tmux passes it through). On an unidentified host it holds
-still, reversed. How a host paints bold under reverse video WITHOUT colour is
-unmeasured. The ink and
+still, reversed. How a host paints bold under reverse video without colour
+was read on the same card (above): heavier on all four. The ink and
 the field are stated beside the 7 for the reason ECMA-48 gives below — a bare 7
 exchanges the pair IN FORCE, so a row's padding, which follows its content's
 last reset, would fill with the terminal's own foreground on a page the palette

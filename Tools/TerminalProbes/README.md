@@ -54,8 +54,13 @@ when unset), the visual/aspect probes print to the terminal.
   colour, reversal on every frame and bold on the bright ones. The rows are the
   bytes the framework emits (captured 2026-09-30, Red Sands on xterm's sixteen),
   so it needs nothing built; `--animate` plays each breath at its 50 ms cadence.
-  **UNREAD**: launched on all four hosts 2026-09-30, but window capture was
-  unavailable to the session, so no host's painting is recorded yet.
+  `--host ghostty` swaps in the frames for a default-config Ghostty's own
+  sixteen (derived from rule.py, not captured): a host that reports its table
+  gets fills placed against it, and xterm's picks replayed there mislead. Read
+  on all four hosts 2026-09-30 — see "A 16-colour row breath" in
+  `Documentation/Terminal-compatibility.md`. Launch it from outside `~/Documents`
+  in Ghostty (copy it to a temporary directory first): Ghostty has no access to
+  that folder here, and the script's own open waits on a consent prompt.
 - `overhang_card.py` — does a chrome glyph's INK stay inside its cell? Each of
   the 29 `chrome_key`/`chrome_glyph` corpus rows is drawn in ONE cell between
   two flanks of solid magenta; ink on a flank is overhang, and which flank says

@@ -24,6 +24,16 @@ say "this row" against the plain row beside them.
 
     python3 Tools/TerminalProbes/breath_card.py            # the card
     python3 Tools/TerminalProbes/breath_card.py --animate  # each breath at its cadence, 10 s
+    python3 Tools/TerminalProbes/breath_card.py --host ghostty   # Ghostty's own sixteen
+
+**Which sixteen.** The 16-colour rows are placed against xterm's sixteen, which
+is what a terminal that does not report its own is assumed to paint. A host that
+reports them (OSC 4) gets fills placed against ITS table, and replaying xterm's
+picks there says nothing about what TUIkit draws: on a default-config Ghostty
+(Tomorrow Night) xterm's blue fill is a pale steel blue and the text on it all
+but vanishes. `--host ghostty` shows the frames for Ghostty's default table
+instead — rule.py's picks for Red Sands there (`rule_16`), spelled as the
+framework spells the xterm rows above; derived, not captured.
 """
 import sys
 import time
@@ -51,15 +61,45 @@ FRAMES = {
         f"{E}7mOpen ⌘O{E}0m",
     ),
 }
+# Red Sands against a default-config Ghostty's sixteen (`ghostty +show-config
+# --default`, 1.3.1): rule_16 picks page = bright red (101), text = white (37),
+# secondary = green (32), ● = bright yellow (93); F = (bright black, reverse),
+# B = (reverse, black) — blue is not used at all. Frame 0 is each breath's top.
+GHOSTTY_FRAMES = {
+    "16 colours on Ghostty · selected cursor row (B)": (
+        f"{E}40m{E}93m●{E}0m{E}40m{E}37mrow 0{E}0m{E}40m {E}32mdim{E}0m{E}40m                  {E}0m",
+        f"{E}7;37;101m●{E}0m{E}7;37;101mrow 0{E}0m{E}7;37;101m dim{E}0m{E}7;37;101m                  {E}0m",
+    ),
+    "16 colours on Ghostty · unselected cursor row (F)": (
+        f"{E}7;37;101m row 0{E}0m{E}7;37;101m dim{E}0m{E}7;37;101m                  {E}0m",
+        f"{E}100m {E}37mrow 0{E}0m{E}100m {E}32mdim{E}0m{E}100m                  {E}0m",
+    ),
+    "16 colours on Ghostty · menu bar (B)": (
+        f"{E}40m{E}37mOpen{E}0m{E}40m {E}32m⌘O{E}0m{E}40m{E}0m",
+        f"{E}7;37;101mOpen{E}0m{E}7;37;101m ⌘O{E}0m{E}7;37;101m{E}0m",
+    ),
+}
+HOSTS = {"ghostty": GHOSTTY_FRAMES}
+
 # Which frames of the 16 show frame 0's end (the bright end): SelectionEmphasis's
 # equal-time two-step walk.
 BRIGHT = {0, 1, 2, 3, 4, 12, 13, 14, 15}
 
 
+def frames():
+    """The card's rows: xterm's sixteen, or `--host NAME`'s, then the no-colour rows."""
+    host = sys.argv[sys.argv.index("--host") + 1] if "--host" in sys.argv else None
+    if host is None:
+        return FRAMES
+    rows = dict(HOSTS[host])
+    rows.update((label, pair) for label, pair in FRAMES.items() if label.startswith("no colour"))
+    return rows
+
+
 def card():
     print(f"{E}2J{E}H", end="")
     print("TUIkit reversing breath card\n")
-    for label, (bright, dim) in FRAMES.items():
+    for label, (bright, dim) in frames().items():
         print(label)
         print(f"  frame 0:  {bright}")
         print(f"  frame 8:  {dim}")
@@ -71,13 +111,14 @@ def card():
 def animate(seconds=10.0, frame_seconds=0.05):
     print(f"{E}2J{E}H", end="")
     print("TUIkit reversing breath card — animated\n")
-    labels = list(FRAMES)
+    rows = frames()
+    labels = list(rows)
     end = time.time() + seconds
     frame = 0
     while time.time() < end:
         print(f"{E}3;1H", end="")
         for label in labels:
-            bright, dim = FRAMES[label]
+            bright, dim = rows[label]
             print(f"{E}2K{label}\n{E}2K  {bright if frame % 16 in BRIGHT else dim}\n")
         sys.stdout.flush()
         time.sleep(frame_seconds)
