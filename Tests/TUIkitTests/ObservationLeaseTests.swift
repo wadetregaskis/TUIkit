@@ -234,8 +234,14 @@ struct ObservationLeaseTests {
         switch rule {
         case .never, .perReader:
             #expect(live >= 300, "\(rule): one per row ever drawn, \(live)")
-        case .perReaderAndPrune, .leases:
+        case .perReaderAndPrune:
             #expect(live <= 25, "\(rule): bounded by the window, \(live)")
+        case .leases:
+            // Three a row the window keeps: the row's body, and the kept
+            // render and kept measure around it (`observingKeptResult`), each
+            // cancelled when its entry goes. 40 at frame 100 and still 40 at
+            // frame 900.
+            #expect(live <= 45, "\(rule): bounded by the window, \(live)")
         }
     }
 
@@ -257,7 +263,9 @@ struct ObservationLeaseTests {
         let model = LeaseModel()
         let (tui, census) = leaseContext(rule, readers: [DrawnReader.self])
         for _ in 0..<50 { _ = observedFrame(HeldReader(model: model).equatable(), tui: tui) }
-        if rule == .leases { #expect(census.snapshot.live == 1, "the served entry's one scope: \(census.snapshot.live)") }
+        // The body's scope, and the kept render's and kept measure's around it
+        // (`observingKeptResult`): three, however many frames serve them.
+        if rule == .leases { #expect(census.snapshot.live == 3, "the served entry's scopes: \(census.snapshot.live)") }
         model.shared = 7
         let warm = observedFrame(HeldReader(model: model).equatable(), tui: tui)
         #expect(warm.first?.hasPrefix("shared 7") == true, "\(rule): \(warm)")
@@ -282,10 +290,16 @@ struct ObservationLeaseTests {
     /// HOLE 1. The hug walks each row under its own context and keeps the
     /// width; the rows are drawn under the list's. A later frame that draws the
     /// rows but is served the hug re-arms only the drawn reads, so the naive
-    /// rule cancels the hug's — and a write to what only the hug read is lost.
+    /// rule cancels the hug's — and a write to what only the hug read was lost.
+    ///
+    /// No longer under the naive rule either: the kept width observes the walk
+    /// that found it at the LIST (`observingKeptResult`), a scope armed only
+    /// when the hug is walked, and so never cancelled by a later frame's
+    /// re-arm of the labels. The hole was the rule's; this shape now has a
+    /// second observer the rule does not reach.
     @Test(
         "Hole 1: a reader evaluated in two contexts whose results are kept separately",
-        arguments: [(Rule.never, true), (.perReader, false), (.leases, true)])
+        arguments: [(Rule.never, true), (.perReader, true), (.leases, true)])
     func twoContexts(rule: Rule, sound: Bool) {
         let model = LeaseModel()
         let result = twin(

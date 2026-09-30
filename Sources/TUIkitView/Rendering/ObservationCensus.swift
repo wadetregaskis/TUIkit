@@ -67,6 +67,11 @@ package final class ObservationCensus: Sendable {
         case bindingRender
         /// A control's `Binding`, read while measuring.
         case bindingMeasure
+        /// A render whose buffer the cache keeps: everything read beneath it,
+        /// bodies and the reads outside them alike (``observingKeptResult(of:kind:context:_:)``).
+        case keptRender
+        /// A measure whose size the cache keeps, likewise.
+        case keptMeasure
 
         package var description: String {
             switch self {
@@ -76,6 +81,8 @@ package final class ObservationCensus: Sendable {
             case .styleMeasure: "style-measure"
             case .bindingRender: "binding-render"
             case .bindingMeasure: "binding-measure"
+            case .keptRender: "kept-render"
+            case .keptMeasure: "kept-measure"
             }
         }
     }

@@ -365,6 +365,39 @@ package func observedChange(
     }
 }
 
+/// Runs `compute` — a render or a measure whose result the cache keeps — under
+/// observation tracking at `context`'s identity, so a write to anything read
+/// beneath it drops what was kept.
+///
+/// A body's own reads are observed where it is evaluated
+/// (``evaluateCompositeBody(of:context:)``), and those reach a memo above it,
+/// since an invalidation takes the reader's ancestors. What no body reads is
+/// not: a control reads its `Binding` while it DRAWS, in its core, after the
+/// body that made the binding has returned; a `Table` calls its cells' closures
+/// while it scans a column. Unobserved, a toggle bound to an `@Observable`
+/// under an `.equatable()` view kept the buffer it was drawn with after the
+/// property changed — the view compares equal, since it holds the same model,
+/// and nothing else asked. An enclosing tracking scope collects every read
+/// made inside it, nested scopes' included, so one here observes all of them.
+///
+/// Call it inside the computation's lease (after
+/// ``ObservationLeases/beginComputation()``), so the scope is cancelled when
+/// the kept result lets go: its sentinel is that computation's. A scope that
+/// reads nothing arms nothing and costs no registration.
+@inline(__always)
+@MainActor
+package func observingKeptResult<T>(
+    of reader: Any.Type, kind: ObservationCensus.Kind, context: RenderContext, _ compute: () -> T
+) -> T {
+    let sentinel = context.renderCache?.scopeSentinel(forReader: reader, at: context.identity)
+    return withObservationTracking(
+        {
+            sentinel?.touch()
+            return compute()
+        },
+        onChange: observedChange(of: context, kind: kind, reader: reader, sentinel: sentinel))
+}
+
 /// Where an observed body's change goes: to the cache the body was drawn
 /// with, as an invalidation at the body's identity, through the cache's link;
 /// to the whole-cache fallback when it was drawn with no cache; and nowhere

@@ -3444,11 +3444,13 @@ where Value.ID: Hashable {
         let tracker = existingTracker ?? VolatileReadTracker()
         let unsafeBefore = tracker.cacheUnsafeCount
         // What the scan observed lives as long as the width it found is kept
-        // (see `ObservationLeases`). Cells are `String` closures, which no scope
-        // observes, so today the lease is always `nil`; a column that measured
-        // views would keep what they read.
+        // (see `ObservationLeases`). Cells are `String` closures, and one that
+        // reads an `@Observable` is read here and nowhere a body is: observed
+        // at the table, so a write drops the width it fitted.
         let leaseMark = context.renderCache?.leases.beginComputation()
-        let fitted = scanForFitWidth(of: column, cappedAt: cap, context: context)
+        let fitted = observingKeptResult(of: Self.self, kind: .keptMeasure, context: context) {
+            scanForFitWidth(of: column, cappedAt: cap, context: context)
+        }
         let lease = context.renderCache?.leases.endComputation(leaseMark)
 
         if let memo, tracker.cacheUnsafeCount == unsafeBefore,

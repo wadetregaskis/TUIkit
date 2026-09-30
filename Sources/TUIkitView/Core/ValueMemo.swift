@@ -181,7 +181,9 @@ func renderValueMemoized<Key: Equatable, Row>(
     // long as that is kept — and, stored or not, by what encloses this memo
     // (see `ObservationLeases`).
     let leaseMark = cache.leases.beginComputation()
-    let buffer = render(build(), renderContext)
+    let buffer = observingKeptResult(of: Key.self, kind: .keptRender, context: context) {
+        render(build(), renderContext)
+    }
     let lease = cache.leases.endComputation(leaseMark)
 
     if RenderCache.isStorable(
@@ -406,7 +408,9 @@ func measureValueMemoized<Key: Equatable, Row>(
     // The scopes this measure arms are kept alive by the size it stores — see
     // the buffer half.
     let leaseMark = cache.leases.beginComputation()
-    let size = measure(build(), measureContext)
+    let size = observingKeptResult(of: Key.self, kind: .keptMeasure, context: context) {
+        measure(build(), measureContext)
+    }
     let lease = cache.leases.endComputation(leaseMark)
     // The uncomparable-environment clause. A non-Equatable environment value in
     // force cannot be seen by the key, so a change to it could never invalidate a

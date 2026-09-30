@@ -570,7 +570,9 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         // hug's own context — live as long as the width they found is kept,
         // however the rows are drawn meanwhile (see `ObservationLeases`).
         let leaseMark = context.renderCache?.leases.beginComputation()
-        let widest = walkForWidestRow(source)
+        let widest = observingKeptResult(of: Self.self, kind: .keptMeasure, context: context) {
+            walkForWidestRow(source)
+        }
         let lease = context.renderCache?.leases.endComputation(leaseMark)
         // Kept until the clock next moves a row's timeline, when that is all
         // that stood in the way: refused, a list of "5 min ago" rows would walk
