@@ -462,4 +462,30 @@ struct ReversedMenuHighlightTests {
             }
         }
     }
+
+    /// A label faded below one half on a reversed frame of the breath is spent against
+    /// the reversal, as a still reversal spends it and as the fill frames spend it:
+    /// not drawn at full strength in the page's colour like the words around it.
+    @Test("A faded label on a reversed frame of a menu bar's breath is spent against the reversal")
+    func fadedLabelOnAReversedFrame() throws {
+        try TerminalColors.withCurrent(.unknown) {
+            let context = makeRenderContext(width: 24, height: 2) { environment, _ in
+                environment.palette = Self.redSands
+            }
+            let view = Button {} label: { HStack(spacing: 1) { Text("Open"); Text("faded").opacity(0.4) } }
+                .buttonStyle(_MenuItemButtonStyle())
+            let drawn = ColorDepth.withCurrent(.basic16) {
+                _ = renderToBuffer(view, context: context)
+                return renderToBuffer(view, context: context)
+            }
+            let run = try #require(drawn.animatedCells.first, "the bar does not breathe")
+            let reversedFrame = run.frames[8]
+            let states = ColorDepth.withCurrent(.basic16) { cells(reversedFrame) }
+            // "Open", a space, then "faded".
+            try #require(states.count >= 10, "\(reversedFrame.debugDescription)")
+            let label = Set(states[0..<4].map(\.state.parameters))
+            let faded = Set(states[5..<10].map(\.state.parameters))
+            #expect(faded.isDisjoint(with: label), "\(reversedFrame.debugDescription)")
+        }
+    }
 }

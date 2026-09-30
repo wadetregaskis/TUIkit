@@ -91,4 +91,43 @@ struct ReversingRowBreathTests {
         let other = HighlightFill.reversingPulse(dim: .ansi(.cyan), bright: nil, ink: ink, field: field)
         #expect(other.stillFill == .fill(.ansi(.cyan)))
     }
+
+    /// A label faded below one half on a reversed frame of a list's cursor row is spent
+    /// against the reversal, as the still reversal spends it.
+    @Test("A faded label on a reversed frame of a list's cursor row is spent against the reversal")
+    func fadedLabelOnAReversedFrame() throws {
+        try TerminalColors.withCurrent(.unknown) {
+            let palette = try #require(PaletteRegistry.palette(withName: "Red Sands"))
+            let context = makeRenderContext(width: 24, height: 6) { environment, _ in environment.palette = palette }
+            let view = List(selection: .constant(Set([0]))) {
+                ForEach(0..<2, id: \.self) { index in
+                    HStack(spacing: 1) { Text("row \(index)"); Text("faded").opacity(0.4) }
+                }
+            }
+            let drawn = ColorDepth.withCurrent(.basic16) {
+                _ = renderToBuffer(view, context: context)
+                return renderToBuffer(view, context: context)
+            }
+            let run = try #require(drawn.animatedCells.first, "the cursor row does not breathe")
+            let reversedFrame = run.frames[8]
+            let states = ColorDepth.withCurrent(.basic16) { () -> [(Character, SGRState)] in
+                var state = SGRState()
+                var result: [(Character, SGRState)] = []
+                for segment in reversedFrame.ansiSegments() {
+                    switch segment {
+                    case .ansi(let sequence, true): state.apply(sequence)
+                    case .ansi: continue
+                    case .visible(let character): result.append((character, state))
+                    }
+                }
+                return result
+            }
+            let text = String(states.map(\.0))
+            let start = try #require(text.range(of: "faded")).lowerBound
+            let fadedIndex = text.distance(from: text.startIndex, to: start)
+            let label = Set(states[1..<6].map(\.1.parameters))
+            let faded = Set(states[fadedIndex..<fadedIndex + 5].map(\.1.parameters))
+            #expect(faded.isDisjoint(with: label), "\(reversedFrame.debugDescription)")
+        }
+    }
 }

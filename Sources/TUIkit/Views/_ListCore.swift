@@ -3686,8 +3686,13 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
             forNextStepOf: childRuns.map { ($0.clock, $0.frameTicks) })
         // Transposed to line-major, because that is how the runs are asked for:
         // one run per LINE, carrying that line at every point of the cycle.
-        // Each frame over its fill, or reversed (a 16-colour breath's other end).
-        let perStep = paints.map { $0.lines { lines(over: $0) } }
+        // Each frame over its fill, or reversed (a 16-colour breath's other end, or
+        // without colour, by weight) with the content's fades spent against it.
+        let perStep = paints.map { paint in
+            spentOnReversedFrame(
+                paint.lines { lines(over: $0) }, of: paint, row: row, badged: shouldRenderBadge, rowWidth: rowWidth,
+                palette: palette)
+        }
         let step = background.stepNow % max(1, perStep.count)
         // A breathing fill claims nothing and needs to: `accentFillPulse` spends a
         // translucent tint's alpha against the page at both ends (§29), so every
@@ -3944,6 +3949,27 @@ struct _ListCore<SelectionValue: Hashable & Sendable, Content: View, Footer: Vie
         return RenderedRow(
             lines: spent.lines, pulseFrames: nil, childRuns: spent.animatedCells.map { .placed($0) },
             claims: rendered.claims, contentClaims: [])
+    }
+
+    /// `drawn`, a frame of a breathing row, with the content's fades spent against it
+    /// where it is reversed, as ``spentOnReversal(_:of:row:badged:rowWidth:palette:)``
+    /// spends a still reversal's; a filled frame as it is, the content having spent
+    /// its fades over the fill itself.
+    ///
+    /// The row's OWN claims, not the content's: the content spent its fades against
+    /// the fill of the frame drawn now and kept none, and a reversed frame drops the
+    /// colours they were spent into anyway — the claims are all it needs.
+    private func spentOnReversedFrame(
+        _ drawn: [String], of paint: RowBackground.Paint, row: SelectableListRow<SelectionValue>, badged: Bool,
+        rowWidth: Int, palette: any Palette
+    ) -> [String] {
+        guard case .reversed(let ink, _, _) = paint else { return drawn }
+        let claims = row.buffer.opacityRegions
+        guard FrameBuffer.fadesOnWhatIsBehind(claims, runAlphas: []) else { return drawn }
+        var painted = FrameBuffer(lines: drawn)
+        painted.opacityRegions = cutToBadgedContent(claims, of: row, badged: badged, rowWidth: rowWidth)
+            .map { $0.shifted(byX: 1, y: 0) }
+        return painted.resolvingOpacity(onReversal: ink.opaqueSpelling, palette: palette).lines
     }
 
     /// The mark, the badge and the fill a row of `lines` lines owes, per line, from the

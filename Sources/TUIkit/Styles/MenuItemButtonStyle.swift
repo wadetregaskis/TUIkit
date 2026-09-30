@@ -231,11 +231,13 @@ private struct _MenuItemRowBar: View, Renderable, Layoutable {
             switch paint {
             case .fill(let colour):
                 return bar(under: label, lines: lines, in: colour, palette: palette, buildingRuns: buildingRuns)
-            case .reversed:
+            case .reversed(let ink, _, _):
                 var reversed = label
                 reversed.lines = lines.map(paint.painting)
                 if buildingRuns { reversed.paintRunGrounds { _, ground in paint.painting(ground) } }
-                return reversed
+                // The label's fades spent against the reversal, as the still reversal
+                // spends them: its field is the reversal's ink.
+                return reversed.resolvingOpacity(onReversal: ink.opaqueSpelling, palette: palette)
             }
         }
         var buffer = drawn(now, buildingRuns: true)
