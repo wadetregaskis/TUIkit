@@ -221,7 +221,7 @@ struct ValueHashPlanBuilder {
     func items(for type: Any.Type) -> Result<[Item], Bypass> {
         var items: [Item] = []
         do {
-            try describe(type, at: 0, path: { "\(type)" }, into: &items)
+            try describe(type, at: 0, path: .root(type), into: &items)
             return .success(items)
         } catch let bypass as Bypass {
             return .failure(bypass)
@@ -233,11 +233,9 @@ struct ValueHashPlanBuilder {
     /// Appends the parts of a value of `type` lying at `base` to `items`.
     ///
     /// `path` names where in the planned type this value lies, for a bypass's
-    /// reason, and is asked for only by one: it demangles a type's name and
-    /// reads its fields' names back from the runtime, work a plan that does
-    /// not bypass never needs.
+    /// reason — see ``PlanPath``.
     private func describe(
-        _ type: Any.Type, at base: Int, path: () -> String, into items: inout [Item]
+        _ type: Any.Type, at base: Int, path: PlanPath, into items: inout [Item]
     ) throws {
         let layout = Self.layout(of: type)
         guard layout.size > 0 else { return }
@@ -260,7 +258,7 @@ struct ValueHashPlanBuilder {
         }
         if type is any _AllBytesDefined.Type {
             guard kind == .enum, Self.isTrivial(type), !Self.isGeneric(type) else {
-                throw Bypass(reason: "\(path()): marked _AllBytesDefined, but not a trivial non-generic enum")
+                throw Bypass(reason: "\(path): marked _AllBytesDefined, but not a trivial non-generic enum")
             }
             items.append(.bytes(offset: base, count: layout.size, leaf: .other))
             return
@@ -271,7 +269,7 @@ struct ValueHashPlanBuilder {
     /// ``describe(_:at:path:into:)`` for a type that has not opted in to
     /// anything: by its kind alone.
     private func describe(
-        _ kind: RuntimeFields.Kind, _ type: Any.Type, at base: Int, size: Int, path: () -> String,
+        _ kind: RuntimeFields.Kind, _ type: Any.Type, at base: Int, size: Int, path: PlanPath,
         into items: inout [Item]
     ) throws {
         switch kind {
@@ -292,7 +290,7 @@ struct ValueHashPlanBuilder {
             items.append(.bytes(offset: base, count: size, leaf: .reference))
         case .metatype:
             throw Bypass(
-                reason: "\(path()): a metatype, \(type), which a struct may store in no bytes", layoutUnknown: true)
+                reason: "\(path): a metatype, \(type), which a struct may store in no bytes", layoutUnknown: true)
         case .existentialMetatype where size == MemoryLayout<UnsafeRawPointer>.size:
             // `Any.Type`, `AnyObject.Type`: a metatype with no witness tables,
             // one pointer — and so a metatype for the optional rule.
@@ -304,13 +302,13 @@ struct ValueHashPlanBuilder {
         case .enum where size <= 1:
             items.append(.bytes(offset: base, count: size, leaf: .smallEnum))
         case .enum:
-            throw Bypass(reason: "\(path()): a payload enum, \(type)")
+            throw Bypass(reason: "\(path): a payload enum, \(type)")
         case .existential:
             items.append(.step(.init(offset: base, action: .existential(ExistentialField(type, openers: openers)))))
         case .fixedArray:
             try describeFixedArray(type, at: base, size: size, path: path, into: &items)
         default:
-            throw Bypass(reason: "\(path()): a kind the walk does not know (\(kind))")
+            throw Bypass(reason: "\(path): a kind the walk does not know (\(kind))")
         }
     }
 
@@ -324,25 +322,25 @@ struct ValueHashPlanBuilder {
     /// An element read whole as bytes, with no padding after it, makes the whole
     /// array one run of bytes, whatever its count.
     private func describeFixedArray(
-        _ type: Any.Type, at base: Int, size: Int, path: () -> String, into items: inout [Item]
+        _ type: Any.Type, at base: Int, size: Int, path: PlanPath, into items: inout [Item]
     ) throws {
         guard let (count, element) = RuntimeFields.fixedArray(type) else {
-            throw Bypass(reason: "\(path()): a fixed-size array whose metadata does not match its layout")
+            throw Bypass(reason: "\(path): a fixed-size array whose metadata does not match its layout")
         }
         let layout = Self.layout(of: element)
         // Swift's stride: the size rounded up to the alignment, and never zero.
         let stride = max(1, (layout.size + layout.alignment - 1) / layout.alignment * layout.alignment)
         var first: [Item] = []
-        try describe(element, at: 0, path: { "\(path())[0]" }, into: &first)
+        try describe(element, at: 0, path: .element(path, 0), into: &first)
         if case .bytes(0, layout.size, let leaf)? = first.first, first.count == 1, layout.size == stride {
             items.append(.bytes(offset: base, count: size, leaf: leaf))
             return
         }
         guard count <= Self.fixedArrayElementLimit else {
-            throw Bypass(reason: "\(path()): a fixed-size array of \(count) elements that are not all bytes")
+            throw Bypass(reason: "\(path): a fixed-size array of \(count) elements that are not all bytes")
         }
         for index in 0..<count {
-            try describe(element, at: base + index * stride, path: { "\(path())[\(index)]" }, into: &items)
+            try describe(element, at: base + index * stride, path: .element(path, index), into: &items)
         }
     }
 
@@ -354,16 +352,16 @@ struct ValueHashPlanBuilder {
     /// — without a trace, so a gap exactly the shape of alignment padding may
     /// hold a field's bytes. There, any gap bypasses, padding or not.
     private func describeFields(
-        of type: Any.Type, at base: Int, size: Int, path: () -> String, into items: inout [Item]
+        of type: Any.Type, at base: Int, size: Int, path: PlanPath, into items: inout [Item]
     ) throws {
         let fields = listFields(type).sorted { $0.offset < $1.offset }
-        guard !fields.isEmpty else { throw Bypass(reason: "\(path()): no field metadata") }
+        guard !fields.isEmpty else { throw Bypass(reason: "\(path): no field metadata") }
         var end = 0
         // Asked only at a gap, and once: it prints the type's qualified name.
         var importedFromC: Bool?
         for field in fields {
             guard field.type != Void.self else {
-                throw Bypass(reason: "\(Self.path(path(), field)): storage reported as ()")
+                throw Bypass(reason: "\(PlanPath.field(path, field)): storage reported as ()")
             }
             let fieldLayout = Self.layout(of: field.type)
             // Nothing to read, and no byte of its own: where a layout is fixed
@@ -371,34 +369,29 @@ struct ValueHashPlanBuilder {
             // offset 0, whatever was declared before it.
             if fieldLayout.size == 0 { continue }
             guard field.offset >= end else {
-                throw Bypass(reason: "\(Self.path(path(), field)): overlaps the field before")
+                throw Bypass(reason: "\(PlanPath.field(path, field)): overlaps the field before")
             }
             if field.offset > end {
                 guard field.offset == Self.roundUp(end, to: fieldLayout.alignment) else {
-                    throw Bypass(reason: "\(Self.path(path(), field)): a gap before it that is not alignment padding")
+                    throw Bypass(reason: "\(PlanPath.field(path, field)): a gap before it that is not alignment padding")
                 }
                 if importedFromC == nil { importedFromC = Self.isImportedFromC(type) }
                 guard importedFromC == false else {
-                    throw Bypass(reason: "\(Self.path(path(), field)): a gap before it, in a struct imported from C")
+                    throw Bypass(reason: "\(PlanPath.field(path, field)): a gap before it, in a struct imported from C")
                 }
             }
             if field.isStrong {
-                try describe(field.type, at: base + field.offset, path: { Self.path(path(), field) }, into: &items)
+                try describe(field.type, at: base + field.offset, path: .field(path, field), into: &items)
             } else {
                 items.append(.bytes(offset: base + field.offset, count: fieldLayout.size, leaf: .other))
             }
             end = field.offset + fieldLayout.size
         }
-        guard end == size else { throw Bypass(reason: "\(path()): its fields end at \(end), not at \(size)") }
+        guard end == size else { throw Bypass(reason: "\(path): its fields end at \(end), not at \(size)") }
     }
 
     /// Where `field` lies, under `parent`'s path. A tuple's unlabelled
     /// elements are already named `.0`, `.1`, ….
-    private static func path(_ parent: String, _ field: RuntimeFields.Field) -> String {
-        let name = field.name
-        return name.hasPrefix(".") ? parent + name : "\(parent).\(name)"
-    }
-
     /// Whether `type` was imported from C: `__C` — the module Swift files
     /// every imported declaration under — leads its qualified name, as does
     /// `__C_Synthesized`, for the types the importer makes up.
@@ -409,15 +402,15 @@ struct ValueHashPlanBuilder {
     /// An optional: whole bytes where every value's are all written, else a
     /// typed step. See the type's rules.
     private func describeOptional(
-        _ type: Any.Type, at base: Int, size: Int, path: () -> String, into items: inout [Item]
+        _ type: Any.Type, at base: Int, size: Int, path: PlanPath, into items: inout [Item]
     ) throws {
         guard let wrapped = (type as? any _ElementTypesProviding.Type)?.elementTypes.first,
             let typed = type as? any _ValueHashing.Type
-        else { throw Bypass(reason: "\(path()): an optional the walk cannot open") }
+        else { throw Bypass(reason: "\(path): an optional the walk cannot open") }
         let wrappedSize = Self.layout(of: wrapped).size
         var payload: [Item] = []
         do {
-            try describe(wrapped, at: 0, path: { path() + "!" }, into: &payload)
+            try describe(wrapped, at: 0, path: .unwrapped(path), into: &payload)
             // A tag byte of its own, over a payload every byte of which is
             // defined: `nil` zero-fills the payload.
             if size == wrappedSize + 1, Self.coversWhole(payload, size: wrappedSize) {
@@ -477,5 +470,43 @@ struct ValueHashPlanBuilder {
     private static func isTrivial(_ type: Any.Type) -> Bool {
         func trivial<T>(_: T.Type) -> Bool { _isPOD(T.self) }
         return _openExistential(type, do: trivial)
+    }
+}
+
+/// Where in a planned type the walk is, named for a bypass's reason and only
+/// then: naming it demangles a type's name and reads its fields' names back from
+/// the runtime, work a plan that does not bypass never needs.
+///
+/// A value, not the closure it was. `describe` recurses through four sites — a
+/// struct's fields, an optional's payload, and a fixed-size array's first
+/// element and each element — and each passed a closure literal capturing the
+/// path above it. The optimizer specializes a function for a closure literal it
+/// is handed, and each specialized copy of this recursion held the same four
+/// literals to specialize again: once the fixed-size array added its two, a
+/// release build of TUIkitView ran the compiler past 6 GB in forty seconds and
+/// on into tens of GB (Swift 6.2.4, 2026-09-30; a debug build does not
+/// specialize, and never showed it). A value gives it nothing to specialize.
+private indirect enum PlanPath: CustomStringConvertible {
+    /// The planned type itself.
+    case root(Any.Type)
+    /// A stored field of the value at the path.
+    case field(Self, RuntimeFields.Field)
+    /// The payload of the optional at the path.
+    case unwrapped(Self)
+    /// An element of the fixed-size array at the path.
+    case element(Self, Int)
+
+    var description: String {
+        switch self {
+        case .root(let type):
+            "\(type)"
+        case .field(let parent, let field):
+            // A tuple's elements are named `.0`, `.1`, … already.
+            field.name.hasPrefix(".") ? "\(parent)\(field.name)" : "\(parent).\(field.name)"
+        case .unwrapped(let parent):
+            "\(parent)!"
+        case .element(let parent, let index):
+            "\(parent)[\(index)]"
+        }
     }
 }
