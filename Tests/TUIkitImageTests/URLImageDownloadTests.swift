@@ -153,28 +153,38 @@ private func withTarpit<T>(_ body: (Tarpit) async throws -> T) async throws -> T
 /// not release anything until the request timed out on its own.
 @Suite("URL image download")
 struct URLImageDownloadTests {
+    /// The request timeout the two timed tests load with: what a download
+    /// that was never abandoned, or a pool that stayed blocked, would read.
+    ///
+    /// Longer than the loader's default 30 s so that "waited it out" stands
+    /// well clear of what a busy test process costs on its own — see
+    /// ``promptly``. Only a failing run ever waits it out.
+    private static let stalledTimeout: TimeInterval = 120
+
     /// How long "promptly" is allowed to take, for the two tests that time a
     /// cancellation and an unrelated task against a stalled transfer.
     ///
-    /// Twenty seconds, which looks absurd next to the 0.3 s either takes on
-    /// an idle machine, and is chosen by what the tests discriminate rather
-    /// than by what they usually measure. Both distinguish "finished now"
-    /// from "waited out the loader's 30 s request timeout" — a cancelled
-    /// download that was never abandoned, a pool that stayed blocked until a
-    /// transfer ended — so the only number the bound has to stay clear of is
-    /// thirty. Everything below that is scheduling latency, and under a full
-    /// test run that latency is the suite's, not the loader's: the process is
-    /// running hundreds of other tasks, and a task that yields a hundred
-    /// times waits its turn a hundred times. Measured on CI at one commit,
-    /// the pool test took 6.2 s on the Linux 6.3 lane and 10.2 s on Linux
-    /// 6.2 against a 5 s bound — and neither pool was blocked, because a
-    /// blocked one would have read thirty.
-    private static let promptly: Duration = .seconds(20)
+    /// A minute, which looks absurd next to the 0.3 s either takes on an idle
+    /// machine, and is chosen by what the tests discriminate rather than by
+    /// what they usually measure. Both distinguish "finished now" from "waited
+    /// out the request timeout" (``stalledTimeout``) — a cancelled download
+    /// that was never abandoned, a pool that stayed blocked until a transfer
+    /// ended — so the bound only has to stay clear of that. Everything below it
+    /// is scheduling latency, and under a full test run that latency is the
+    /// suite's, not the loader's: these share a process, and so a cooperative
+    /// pool, with tests that hold a pool thread for half a minute without
+    /// yielding. On CI's macOS 26 · Swift 6.4 lane (2026-09-30) both tests
+    /// resumed at 25.42 s, within a millisecond of five gamut-walk tests
+    /// finishing beside them, against a bound of 20 s and a timeout of 30 —
+    /// too near to tell "the suite was busy" from "waited it out". Earlier,
+    /// the pool test took 6.2 s on Linux 6.3 and 10.2 s on Linux 6.2 against
+    /// a 5 s bound, and neither pool was blocked.
+    private static let promptly: Duration = .seconds(60)
 
-    /// Cancelling the task must abandon the download promptly. The timeout is
-    /// 30 s and the tarpit never replies, so pre-fix this could only finish by
-    /// waiting all of it out; the bound below is generous for "promptly" while
-    /// still being an order of magnitude short of the timeout.
+    /// Cancelling the task must abandon the download promptly. The tarpit
+    /// never replies, so pre-fix this could only finish by waiting out the
+    /// whole request timeout; the bound below is generous for "promptly" while
+    /// still well short of it.
     @Test("Cancellation abandons an in-flight download")
     func cancellationAbandonsDownload() async throws {
         try await withTarpit { tarpit in
@@ -190,7 +200,7 @@ struct URLImageDownloadTests {
             let task = Task<(cancelled: Bool, how: String), Never> {
                 defer { ended.set() }
                 do {
-                    _ = try await loader.loadImage(fromURL: url, timeout: 30)
+                    _ = try await loader.loadImage(fromURL: url, timeout: Self.stalledTimeout)
                     return (false, "the load returned an image")  // the tarpit cannot serve one
                 } catch is CancellationError {
                     return (true, "cancelled")
@@ -220,7 +230,7 @@ struct URLImageDownloadTests {
                 "\(outcome.how)"\(endedFirst ? ", on its own before the cancel — the tarpit did not hold it" : "")
                 """)
             // What this test discriminates is "gave up now" from "waited out
-            // the 30 s timeout", so the bound only has to sit clear of both —
+            // the request timeout", so the bound only has to sit clear of both —
             // see `Self.promptly`. One second was a bound the tests never
             // actually exercised (the tarpit was already closed, so nothing
             // was ever in flight to cancel); against a real stalled transfer
@@ -228,7 +238,7 @@ struct URLImageDownloadTests {
             // round-trip measured 2.8 s, and 5.5 s on another day.
             #expect(
                 elapsed < Self.promptly,
-                "cancelling must abandon the transfer, not wait out the 30 s timeout (took \(elapsed))"
+                "cancelling must abandon the transfer, not wait out the timeout (took \(elapsed))"
             )
         }
     }
@@ -243,7 +253,7 @@ struct URLImageDownloadTests {
             let url = tarpit.urlString
 
             let downloads = (0..<10).map { _ in
-                Task { try? await loader.loadImage(fromURL: url, timeout: 30) }
+                Task { try? await loader.loadImage(fromURL: url, timeout: Self.stalledTimeout) }
             }
             defer { for download in downloads { download.cancel() } }
 
@@ -271,12 +281,24 @@ struct URLImageDownloadTests {
 
             #expect(total == 100)
             // A starved pool frees only when a download ends, and the tarpit
-            // ends none before the 30 s request timeout — so "starved" reads
-            // as thirty seconds, and anything well short of that is a pool
+            // ends none before the request timeout — so "starved" reads as
+            // `Self.stalledTimeout`, and anything well short of that is a pool
             // that was never blocked. See `Self.promptly`.
             #expect(
                 elapsed < Self.promptly,
                 "ten stalled downloads must not starve the pool (took \(elapsed))")
+
+            // Cancelled, and finished, while the tarpit still holds their
+            // connections. Left to the `defer`, the cancels raced the tarpit
+            // closing those connections as the test returned, and on Linux a
+            // transfer that fails on its own between `URLSessionTask.cancel()`
+            // checking its state and reporting the cancellation traps inside
+            // FoundationNetworking ("Trying to access a behaviour for a task
+            // that in not in the registry": the Linux 6.4 lane, 2026-09-30,
+            // after both tests had passed; swift-corelibs-foundation#3296,
+            // open since 2019).
+            for download in downloads { download.cancel() }
+            for download in downloads { _ = await download.value }
         }
     }
 
