@@ -51,11 +51,14 @@ struct ASCIIRendererPerformanceTests {
 
     /// Multiples of a plain walk over the same pixels (``costMultiple(of:rounds:_:)``)
     /// above which a converter's walk has changed shape rather than merely got
-    /// slower: about eight times what each measures in a debug build (the shape
-    /// vectors ~15, braille ~1, steady to a few percent over repeated runs,
-    /// 2026-09-29).
-    private let shapeCeiling = 120.0
-    private let brailleCeiling = 10.0
+    /// slower. The multiple is steady on one machine and not across them: a debug
+    /// build measures the shape vectors at ~15 and braille at ~1 on an M-series Mac
+    /// VM, and CI's runners 135-194 and 10-13 (2026-09-29, macOS and Linux, arm64
+    /// and x86_64) — the plain walk is what costs differently there. So the ceilings
+    /// sit about five times over the highest seen on CI: a converter an order of
+    /// magnitude slower fails everywhere, and a slow or contended machine does not.
+    private let shapeCeiling = 1_000.0
+    private let brailleCeiling = 100.0
 
     /// The cells, with the SGR colour runs taken out. Both converters emit
     /// colour inline, so the raw `String` length counts escape bytes rather
@@ -87,8 +90,8 @@ struct ASCIIRendererPerformanceTests {
     /// A multiple, not a time: an absolute ceiling measured the machine, and a
     /// debug build under four test processes on a CI runner took 34 times this
     /// machine's time (1.36 s for ~40 ms, 2026-09-29) while the walk had not
-    /// changed at all. Whatever slows one of the two slows the other, taken in
-    /// turn and at their best.
+    /// changed at all. Contention slows the two alike, taken in turn and at their
+    /// best; what the ratio still varies with is the CPU (see the ceilings).
     private func costMultiple(of image: RGBAImage, rounds: Int = 5, _ body: () -> Void) -> Double {
         var bestBody = Double.infinity
         var bestWalk = Double.infinity
