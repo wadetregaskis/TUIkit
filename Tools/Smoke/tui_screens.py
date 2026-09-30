@@ -222,19 +222,21 @@ def main() -> int:
         if item > 0:
             for _ in range(item if args.from_top else 1):
                 ok = ok and send("down")
+        menu_shown = list(screen.display)
         ok = ok and send("enter") and pump(args.settle)
         capture(f"item{item:02}-enter", entered_page=True)
         for step, token in enumerate(t for t in args.per_item.split(",") if t):
             ok = ok and send(token)
             capture(f"item{item:02}-{step}-{token.replace('*', 'x')}",
                     entered_page=True)
-        # Esc, then nothing more until it has been read on its own: an app
-        # still busy with the page reads ESC and the next key together, and
-        # `ESC ESC [ A` is Alt+Up, not Esc then Up (see tui_walk.py).
-        before_back = list(screen.display)
+        # Esc, then nothing more until the menu is back: an app still busy
+        # with the page reads ESC and the next key together, and `ESC ESC [ B`
+        # is Alt+Down, not Esc then Down. Not merely until the screen changes —
+        # a blinking caret changes it whether the Esc was read or not (see
+        # tui_walk.py).
         ok = ok and send("esc")
         deadline = time.time() + 5.0
-        while ok and screen.display == before_back and time.time() < deadline:
+        while ok and list(screen.display) != menu_shown and time.time() < deadline:
             ok = pump(0.1)
         if args.from_top:
             for _ in range(item):

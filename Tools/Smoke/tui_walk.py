@@ -201,24 +201,30 @@ def main() -> int:
         # wedged app apart from the end of the menu: both leave the screen
         # unchanged after a Down, and only one of them still repaints here.
         before_open = snapshot()
+        menu_text = list(screen.display)
         ok = ok and send("enter") and pump(args.settle)
         opened = settled_change(before_open)
         for token in args.per_item.split(","):
             if token:
                 ok = ok and send(token)
-        # Esc, and the keys after it only once it has been read on its own. A
-        # lone ESC and a key sent after it are two keystrokes only if the app
-        # reads them apart; an app still busy with the page it is leaving reads
-        # them together, and `ESC ESC [ A` is Alt+Up, not Esc then Up. The fixed
-        # 0.3 s this pumped before was shorter than a debug build's slowest
-        # pages on CI's Linux runners: the Esc was swallowed on the Text Input
-        # page, the walk carried on inside the page, and reported "stopped
-        # painting at item 8" (2026-09-29, four lanes; reproduced here by
-        # writing ESC ESC [ A at once). Waited to a change of screen, as an
-        # Enter is, so the walk goes as fast as the app allows.
-        before_back = snapshot()
+        # Esc, and nothing more until the menu is back. A lone ESC and a key
+        # sent after it are two keystrokes only if the app reads them apart; an
+        # app still busy with the page it is leaving reads them together, and
+        # `ESC ESC [ B` is Alt+Down, not Esc then Down. A fixed 0.3 s was
+        # shorter than a debug build's slowest pages on CI's Linux runners
+        # (2026-09-29, four lanes; reproduced here by writing ESC ESC [ A at
+        # once). Waiting for the screen to CHANGE was not enough either: the
+        # Text Input page's caret blinks, so the screen changes whether the Esc
+        # was read or not, and item 8 failed the same way on the next push
+        # (2026-09-30, two lanes). What says the Esc was read is the menu's
+        # TEXT back on the screen — its text, because its cursor row breathes,
+        # so its colours seldom match any one earlier frame. Polled to the
+        # paint deadline, and carried on from if it never matches, since the
+        # next Enter's check still catches an app that stopped answering.
         ok = ok and send("esc")
-        ok = ok and (settled_change(before_back) or True)
+        end = time.time() + args.paint_timeout
+        while ok and list(screen.display) != menu_text and time.time() < end:
+            ok = pump(min(0.1, max(0.0, end - time.time())))
         if args.from_top:
             # Return the selection to the top for the next item's Down-walk.
             for _ in range(item):
