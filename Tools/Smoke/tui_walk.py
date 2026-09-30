@@ -127,7 +127,29 @@ def main() -> int:
             for y in range(screen.lines)
         )
 
-    def settled_change(before: tuple) -> bool:
+    def layout() -> tuple:
+        """What the screen shows, without the colours it is breathing through.
+
+        The text, and which rows are singled out: a row whose cells' fills
+        match no other row's is the highlighted one. A menu's cursor row
+        BREATHES — its fill steps between two colours every few frames — so a
+        full snapshot changes whether or not a Down moved anything, and read
+        that way the walk never found the bottom of the menu: it walked 40
+        "items" of the Example's 34, re-opening the last page six times. Which
+        row is singled out does not change while it breathes, and does when the
+        cursor moves.
+        """
+        signatures = [
+            frozenset((cell.bg, cell.reverse) for cell in (screen.buffer[y][x] for x in range(screen.columns)))
+            for y in range(screen.lines)
+        ]
+        counts = {}
+        for signature in signatures:
+            counts[signature] = counts.get(signature, 0) + 1
+        singled = tuple(y for y, signature in enumerate(signatures) if counts[signature] == 1)
+        return (tuple(screen.display), singled)
+
+    def settled_change(before: tuple, look=None) -> bool:
         """Whether the screen has changed since `before`, waiting to be sure.
 
         `send` pumps a fixed quarter second, which is plenty to deliver a
@@ -152,16 +174,17 @@ def main() -> int:
         change is the bottom of the menu, which pays the deadline once, at the
         end of the walk.
         """
+        look = look or snapshot
         end = time.time() + args.paint_timeout
         while True:
-            if snapshot() != before:
+            if look() != before:
                 return True
             if time.time() >= end:
                 return False
             # A dead child will never repaint, so stop looking rather than
             # burning the whole deadline — the caller's own `ok` reports it.
             if not pump(min(args.settle, end - time.time())):
-                return snapshot() != before
+                return look() != before
 
     if not pump(1.5):
         print("FAIL: app died before the menu appeared")
@@ -189,10 +212,10 @@ def main() -> int:
         downs = item if args.from_top else min(item, 1)
         moved = item == 0
         for index in range(downs):
-            before = snapshot()
+            before = layout()
             ok = ok and send("down")
             if index == downs - 1:
-                moved = settled_change(before)
+                moved = settled_change(before, look=layout)
 
         # Opening the page must repaint. That is worth asserting on every item
         # rather than trusting the process to be alive, because `alive()` is
