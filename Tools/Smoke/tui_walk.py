@@ -206,7 +206,19 @@ def main() -> int:
         for token in args.per_item.split(","):
             if token:
                 ok = ok and send(token)
-        ok = ok and send("esc") and pump(0.3)
+        # Esc, and the keys after it only once it has been read on its own. A
+        # lone ESC and a key sent after it are two keystrokes only if the app
+        # reads them apart; an app still busy with the page it is leaving reads
+        # them together, and `ESC ESC [ A` is Alt+Up, not Esc then Up. The fixed
+        # 0.3 s this pumped before was shorter than a debug build's slowest
+        # pages on CI's Linux runners: the Esc was swallowed on the Text Input
+        # page, the walk carried on inside the page, and reported "stopped
+        # painting at item 8" (2026-09-29, four lanes; reproduced here by
+        # writing ESC ESC [ A at once). Waited to a change of screen, as an
+        # Enter is, so the walk goes as fast as the app allows.
+        before_back = snapshot()
+        ok = ok and send("esc")
+        ok = ok and (settled_change(before_back) or True)
         if args.from_top:
             # Return the selection to the top for the next item's Down-walk.
             for _ in range(item):

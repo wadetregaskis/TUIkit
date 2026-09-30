@@ -228,7 +228,14 @@ def main() -> int:
             ok = ok and send(token)
             capture(f"item{item:02}-{step}-{token.replace('*', 'x')}",
                     entered_page=True)
-        ok = ok and send("esc") and pump(0.3)
+        # Esc, then nothing more until it has been read on its own: an app
+        # still busy with the page reads ESC and the next key together, and
+        # `ESC ESC [ A` is Alt+Up, not Esc then Up (see tui_walk.py).
+        before_back = list(screen.display)
+        ok = ok and send("esc")
+        deadline = time.time() + 5.0
+        while ok and screen.display == before_back and time.time() < deadline:
+            ok = pump(0.1)
         if args.from_top:
             for _ in range(item):
                 ok = ok and send("up")
