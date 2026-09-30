@@ -192,20 +192,36 @@ struct TimelineCollectionWidthTests {
     /// Drives `app` for a second inside the even minute and then into the odd
     /// one, and returns how often row 200 was built in that second, and the
     /// screen in the odd minute beside one drawn there from the start.
+    ///
+    /// A second the app's whole cache was cleared in is driven again, with a
+    /// fresh app: a clear drops the kept width with everything else, and row
+    /// 200 is rightly built again, but it is not this app that asked. Another
+    /// test in the process did — an `@AppStorage` or `@SceneStorage` write, or
+    /// a localization change, asks for a clear through the process-wide
+    /// `AppState.shared`, and whichever app draws next takes it. Once, on CI's
+    /// macOS 26 · Swift 6.4 lane (2026-09-30), `huggingList` counted two builds
+    /// of row 200 that no local run of this suite, alone or beside the rest of
+    /// its target, ever did.
     private func drive<A: App>(
         _ make: (RowBuilds) -> A, width: Int
     ) -> (widestBuiltInOneMinute: Int, later: [String], control: [String]) {
-        let builds = RowBuilds()
-        let app = HeadlessApp(make(builds), width: width, height: 16)
-        for tick in 0..<5 { frame(app, at: 10 + Double(tick) / 60) }
-        builds.reset()
-        for tick in 5..<65 { frame(app, at: 10 + Double(tick) / 60) }
-        let widestBuilt = builds.byRow[200] ?? 0
-        for tick in 0..<3 { frame(app, at: 70 + Double(tick) / 60) }
+        var attempt = 0
+        while true {
+            attempt += 1
+            let builds = RowBuilds()
+            let app = HeadlessApp(make(builds), width: width, height: 16)
+            for tick in 0..<5 { frame(app, at: 10 + Double(tick) / 60) }
+            builds.reset()
+            let clearsBefore = app.renderCache.stats.clears
+            for tick in 5..<65 { frame(app, at: 10 + Double(tick) / 60) }
+            let widestBuilt = builds.byRow[200] ?? 0
+            if app.renderCache.stats.clears != clearsBefore, attempt < 3 { continue }
+            for tick in 0..<3 { frame(app, at: 70 + Double(tick) / 60) }
 
-        let control = HeadlessApp(make(RowBuilds()), width: width, height: 16)
-        for tick in 0..<3 { frame(control, at: 70 + Double(tick) / 60) }
-        return (widestBuilt, app.screen, control.screen)
+            let control = HeadlessApp(make(RowBuilds()), width: width, height: 16)
+            for tick in 0..<3 { frame(control, at: 70 + Double(tick) / 60) }
+            return (widestBuilt, app.screen, control.screen)
+        }
     }
 
     /// Row 200 is off screen, so only the walk over every row builds it. Its
