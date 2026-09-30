@@ -289,6 +289,35 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         measureFixedByRendering(self, proposal: proposal, context: context)
     }
 
+    /// The active component's cell on its block — one description, used for
+    /// the frame drawn now and for every frame of the run that replays it.
+    ///
+    /// The ink is the opaque spelling; its alpha is claimed by `claimCell` below,
+    /// once, which is right for every frame because only the BLOCK breathes here
+    /// and `accentFillPulse` spends a faded accent at both ends, so no frame of
+    /// this run states a translucent colour of its own (§29.2, §68.4).
+    ///
+    /// Reversed, both sides are stated opaque beside the 7 and the cell claims
+    /// nothing at all, as every reversal does (§86, §89).
+    private static func activeCell(
+        _ text: String, on block: HighlightFill, underlined: Bool, palette: any Palette
+    ) -> String {
+        var style = TextStyle()
+        style.isUnderlined = underlined
+        switch block {
+        case .reversed(let ink, let field):
+            style.isInverted = true
+            style.foregroundColor = ink.opaqueSpelling
+            style.backgroundColor = field.opaqueSpelling
+        case .fill(let color), .pulse(_, let color):
+            style.backgroundColor = color
+            style.foregroundColor = palette.foreground.opaqueSpelling
+        case .reversingPulse:
+            return activeCell(text, on: block.stillFill, underlined: underlined, palette: palette)
+        }
+        return ANSIRenderer.render(text, with: style.resolved(with: palette))
+    }
+
     func renderToBuffer(context: RenderContext) -> FrameBuffer {
         let isDisabled = self.isDisabled || !context.environment.isEnabled
         let palette = context.environment.palette
@@ -379,32 +408,6 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
         let cycle = context.environment.selectionEmphasis.cycle(breathes)
         let (dimBlock, brightBlock) = palette.accentFillPulse()
 
-        /// The active component's cell on its block — one description, used for
-        /// the frame drawn now and for every frame of the run that replays it.
-        ///
-        /// The ink is the opaque spelling; its alpha is claimed by `claimCell` below,
-        /// once, which is right for every frame because only the BLOCK breathes here
-        /// and `accentFillPulse` spends a faded accent at both ends, so no frame of
-        /// this run states a translucent colour of its own (§29.2, §68.4).
-        ///
-        /// Reversed, both sides are stated opaque beside the 7 and the cell claims
-        /// nothing at all, as every reversal does (§86, §89).
-        func activeCell(_ text: String, on block: HighlightFill) -> String {
-            var style = TextStyle()
-            style.isUnderlined = !isDisabled
-            switch block {
-            case .reversed(let ink, let field):
-                style.isInverted = true
-                style.foregroundColor = ink.opaqueSpelling
-                style.backgroundColor = field.opaqueSpelling
-            case .fill(let color), .pulse(_, let color):
-                style.backgroundColor = color
-                style.foregroundColor = palette.foreground.opaqueSpelling
-            case .reversingPulse: return activeCell(text, on: block.stillFill)
-            }
-            return ANSIRenderer.render(text, with: style.resolved(with: palette))
-        }
-
         var line = ""
         var runs: [AnimatedCellRun] = []
         var claims: [OpacityRegion] = []
@@ -439,15 +442,16 @@ private struct _DatePickerCore: View, Renderable, Layoutable {
                 if breathes {
                     if let run = cycle.run(
                         dim: dimBlock, bright: brightBlock, offsetX: line.strippedLength, offsetY: 0,
-                        draw: { activeCell(cell.text, on: .fill($0)) })
+                        draw: { Self.activeCell(cell.text, on: .fill($0), underlined: !isDisabled, palette: palette) })
                     {
                         runs.append(run)
                     }
                     claimCell(cell.text, ink: palette.foreground)
-                    line += activeCell(
-                        cell.text, on: .fill(cycle.colorNow(dim: dimBlock, bright: brightBlock)))
+                    line += Self.activeCell(
+                        cell.text, on: .fill(cycle.colorNow(dim: dimBlock, bright: brightBlock)), underlined: !isDisabled,
+                        palette: palette)
                 } else {
-                    line += activeCell(cell.text, on: emphasis)
+                    line += Self.activeCell(cell.text, on: emphasis, underlined: !isDisabled, palette: palette)
                 }
                 continue
             } else {
