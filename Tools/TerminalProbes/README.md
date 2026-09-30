@@ -48,6 +48,14 @@ when unset), the visual/aspect probes print to the terminal.
   the mark for real DESTROYED the Image page, so `lrm+coloured` and `lrm+wide`
   were added for the two axes that block lacked. STILL OPEN — see
   Terminal-compatibility.md's "RTL characters as image PIXELS".
+- `breath_card.py` — how a host paints TUIkit's reversing row breaths: at 16
+  colours, a cursor row whose breath runs between a slot fill and reverse video
+  (the whole row the text's colour, every glyph on it the page's); without
+  colour, reversal on every frame and bold on the bright ones. The rows are the
+  bytes the framework emits (captured 2026-09-30, Red Sands on xterm's sixteen),
+  so it needs nothing built; `--animate` plays each breath at its 50 ms cadence.
+  **UNREAD**: launched on all four hosts 2026-09-30, but window capture was
+  unavailable to the session, so no host's painting is recorded yet.
 - `overhang_card.py` — does a chrome glyph's INK stay inside its cell? Each of
   the 29 `chrome_key`/`chrome_glyph` corpus rows is drawn in ONE cell between
   two flanks of solid magenta; ink on a flank is overhang, and which flank says

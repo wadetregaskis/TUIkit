@@ -2601,7 +2601,9 @@ fill. Of the shipped palettes: Violet on Apple's table, White and Red Sands on
 xterm's. A menu's bar, a drop-down's highlighted row, a date field's active
 component and a split view's active divider breathe the same way (the selected
 cursor row's breath, which on Red Sands reverses).
-What a host paints for it is what the card's rows A, B and D ask: UNMEASURED.
+What a host paints for it is what the card's rows A, B and D ask, and what
+`Tools/TerminalProbes/breath_card.py` shows with the exact frames: UNMEASURED
+(the card was launched on all four hosts 2026-09-30 and could not be captured).
 
 The trigger is those colours and never the terminal's silence: a palette of
 ordinary RGB roles keeps its tints on a host that answers nothing. The one other
