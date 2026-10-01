@@ -101,7 +101,14 @@ struct AutoRepeatTimerTests {
         var fires = 0
         let timer = Self.timer()
         timer.start { fires += 1 }
-        await Self.settle(ms: 5)
+        // A yield, not a sleep, for the reason given below: the timer's task is
+        // queued on the main actor ahead of this one, so a yield lets it fire
+        // the press and reach its sleep before the test goes on. It was a 5 ms
+        // sleep, and on a saturated runner that sleep's wake reached the main
+        // actor after the timer's 40 ms one — the app awake and nothing
+        // released, which is a hold, and the timer rightly repeated it:
+        // `(fires → 3) == 1` (2026-10-01, macOS 27 · Xcode 27).
+        await Task.yield()
         #expect(fires == 1, "the press acted")
 
         // Block the main actor the way a long render does: synchronously, with
