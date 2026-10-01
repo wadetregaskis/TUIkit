@@ -48,7 +48,7 @@ def main() -> int:
     parser.add_argument("--rows", type=int, default=42)
     parser.add_argument("--scale", type=int, default=0)
     parser.add_argument("--settle", type=float, default=1.0)
-    parser.add_argument("--paint-timeout", type=float, default=45.0,
+    parser.add_argument("--paint-timeout", type=float, default=10.0,
                         help="how long the app may take to act on a keystroke "
                              "before the walk calls it stuck (see settled_change); "
                              "only a failing walk, and the Down at the bottom of "
@@ -262,17 +262,16 @@ def main() -> int:
         # from the end of the menu: both leave the screen unchanged after a
         # Down, and only one of them still opens a page here.
         #
-        # The title row and nothing looser, and waited for to a generous
-        # deadline. On CI's slower Linux lanes a debug build falls seconds
-        # behind its input, and a walk that took ANY change of screen for the
-        # page opening (a breathing cursor row, the previous Esc landing late)
-        # and gave each step eight seconds drifted out of step with the app:
-        # it sent the next item's keys into a page it had not left, and said
-        # "Enter changed nothing" about an Enter the app acted on seconds later
-        # (2026-09-30, three lanes; reproduced here with every core busy and
-        # the app at background priority, where the Enter it gave up on opened
-        # its page five seconds after). The latencies are printed so a slow
-        # lane says how slow.
+        # The title row and nothing looser. A walk that took ANY change of
+        # screen for the page opening (a breathing cursor row, the previous Esc
+        # landing late) could drift out of step with the app — send the next
+        # item's keys into a page it had not left, and blame an Enter for what
+        # an Esc failed to do. It did exactly that on every Linux lane for three
+        # days (2026-09-29 to 10-01), reporting "Enter changed nothing" at the
+        # item AFTER the page the app had gone deaf on (a stdin source that
+        # cancelled itself; see `StdinArrivalNotifier.handleReadable`). The
+        # latencies are printed so a slow lane says how slow, and a deaf app is
+        # not mistaken for one: CI's answer in ~300 ms.
         showing = title()
         sent = time.time()
         ok = ok and send("enter")
@@ -288,7 +287,7 @@ def main() -> int:
         # reproduced here by writing ESC ESC [ A at once). What says the Esc
         # was read is the menu's title back on the title row — not any change
         # of screen, which a blinking caret makes whether or not the Esc was
-        # read (2026-09-30, two lanes).
+        # read.
         sent = time.time()
         ok = ok and send("esc")
         if menu_title is None:
