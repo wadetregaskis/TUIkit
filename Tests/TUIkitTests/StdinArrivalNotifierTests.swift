@@ -104,6 +104,57 @@ struct StdinArrivalNotifierTests {
             "an EOF descriptor kept waking the loop, so the wait never waited")
     }
 
+    /// A count of 0 from the source is not end of file when the bytes were
+    /// read before the count was taken: on Linux, libdispatch counts on its own
+    /// thread after `epoll` wakes it, while the run loop reads the descriptor.
+    /// That race cancelled the source, and the app heard no more keys unless
+    /// something animated — so every Linux CI lane's PTY walk went deaf on a
+    /// static page. No test can make libdispatch lose that race on cue, so
+    /// this hands the handler the 0 itself, on a descriptor that is open and
+    /// empty.
+    ///
+    /// Whether the source is still there, not how soon a key wakes the loop:
+    /// under the full suite the main actor can be held for tens of seconds, so
+    /// a time budget would test the machine.
+    @MainActor
+    @Test("A source told 0 bytes are ready, on a descriptor not at EOF, keeps watching it")
+    func zeroReadyBytesBeforeEOFKeepsTheSource() {
+        var fds: [Int32] = [-1, -1]
+        #expect(pipe(&fds) == 0)
+        defer { close(fds[0]) }  // the write end is closed below
+
+        let notifier = StdinArrivalNotifier()
+        notifier.start(descriptor: fds[0])
+        defer { notifier.stop() }
+
+        notifier.handleReadable(reportedBytes: 0)
+        #expect(notifier.isWatching, "the source was cancelled, so no key would wake the loop again")
+
+        close(fds[1])
+        notifier.handleReadable(reportedBytes: 0)
+        #expect(!notifier.isWatching, "at end of file the source must go, or it fires forever")
+    }
+
+    @Test("End of input is a descriptor that is readable with nothing to read")
+    func endOfInputIsAskedOfTheDescriptor() throws {
+        var fds: [Int32] = [-1, -1]
+        #expect(pipe(&fds) == 0)
+        defer { close(fds[0]) }
+
+        #expect(!StdinArrivalNotifier.isAtEndOfInput(fds[0]), "open and empty: the bytes were taken, more may come")
+        var byte: UInt8 = 0x61
+        #expect(write(fds[1], &byte, 1) == 1)
+        #expect(!StdinArrivalNotifier.isAtEndOfInput(fds[0]), "a byte waiting")
+        #expect(read(fds[0], &byte, 1) == 1)
+        close(fds[1])
+        #expect(StdinArrivalNotifier.isAtEndOfInput(fds[0]), "the writer is gone and nothing is left")
+
+        let null = open("/dev/null", O_RDONLY)
+        try #require(null >= 0)
+        defer { close(null) }
+        #expect(StdinArrivalNotifier.isAtEndOfInput(null), "stdin redirected from /dev/null")
+    }
+
     @MainActor
     @Test("stop() is safe to call with no waiter and is idempotent")
     func stopIsSafeWithoutWaiter() {

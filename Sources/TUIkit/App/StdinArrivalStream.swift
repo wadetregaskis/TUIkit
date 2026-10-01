@@ -93,6 +93,13 @@ final class StdinArrivalNotifier {
     /// hasn't been called.
     private var source: (any DispatchSourceRead)?
 
+    /// The descriptor ``source`` watches: stdin, except under test.
+    private var descriptor: Int32 = STDIN_FILENO
+
+    /// Whether a source is watching the descriptor — false before ``start(descriptor:)``,
+    /// after ``stop()``, and once the descriptor reached end of file.
+    var isWatching: Bool { source != nil }
+
     /// A wake delivered while no waiter was suspended. The next
     /// ``waitForArrival(timeoutNanoseconds:)`` returns immediately and clears
     /// it, so a render-request that lands between the loop's check and its
@@ -111,6 +118,7 @@ final class StdinArrivalNotifier {
     ///   otherwise unobservable without a live TTY. The same seam, for the same
     ///   reason, as `Terminal.readSource`.
     func start(descriptor: Int32 = STDIN_FILENO) {
+        self.descriptor = descriptor
         let src = DispatchSource.makeReadSource(
             fileDescriptor: descriptor,
             queue: .main
@@ -161,14 +169,58 @@ final class StdinArrivalNotifier {
     /// waiter suspended at that moment is bounded by its own timeout. A TTY does
     /// not reach this — in raw mode Ctrl-D is the byte 0x04, not end of file —
     /// so nothing cancels the source out from under a live terminal.
+    ///
+    /// The source's own count of ready bytes cannot say which it is. On Linux
+    /// that count is an `ioctl` libdispatch makes on its own thread after
+    /// `epoll` wakes it, while the run loop reads the same descriptor on the
+    /// main actor — and a hang-up reaches the handler as 0 too. A keystroke the
+    /// loop has already read by the time of the `ioctl` comes to the handler
+    /// as "0 bytes ready", which this used to take for end of file: the source
+    /// was cancelled, and from then on the app heard a key only when something
+    /// else woke the loop. On a screen with nothing animating that is never —
+    /// every Linux CI lane's PTY walk went deaf on such a page, a different
+    /// page from run to run, and no macOS lane ever did (2026-09-29 to
+    /// 10-01). So a 0 is a question for ``isAtEndOfInput(_:)``, which asks the
+    /// descriptor itself.
     private func handleReadable() {
-        // `data` on a read source is the byte count the kernel says is ready.
-        if source?.data == 0 {
+        guard let source else { return }
+        handleReadable(reportedBytes: source.data)
+    }
+
+    /// The decision ``handleReadable()`` makes for a count of `reportedBytes`
+    /// ready. Internal so a test can hand it the 0 a race produces, which no
+    /// test can make libdispatch produce on cue.
+    func handleReadable(reportedBytes: UInt) {
+        if reportedBytes == 0, Self.isAtEndOfInput(descriptor) {
             source?.cancel()
             source = nil
             return
         }
+        // Waking when the bytes were in fact already read costs one pass of the
+        // loop that finds nothing to do, against missing a keystroke.
         wake()
+    }
+
+    /// Whether `descriptor` is at end of file: readable, with nothing to read.
+    ///
+    /// A descriptor that is not readable at all is not at end of file — its
+    /// bytes were taken by someone else (the race ``handleReadable()``
+    /// describes), and more may come. One that is readable but cannot say
+    /// how much it holds (`/dev/null`, which answers no `FIONREAD`) is taken
+    /// to be at the end, since a descriptor stdin can sensibly be that never
+    /// counts its bytes is not one a person types into.
+    nonisolated static func isAtEndOfInput(_ descriptor: Int32) -> Bool {
+        var probe = pollfd(fd: descriptor, events: Int16(POLLIN), revents: 0)
+        guard poll(&probe, 1, 0) == 1 else { return false }
+        var available: Int32 = 0
+        #if canImport(Glibc) || canImport(Musl)
+            let result = ioctl(descriptor, UInt(FIONREAD), &available)
+        #else
+            // Darwin's `FIONREAD` is `_IOR('f', 127, int)`, a function-like
+            // macro Swift does not import; this is its value.
+            let result = ioctl(descriptor, 0x4004_667F, &available)
+        #endif
+        return result != 0 || available == 0
     }
 
     /// Tears the dispatch source down. Safe to call multiple
