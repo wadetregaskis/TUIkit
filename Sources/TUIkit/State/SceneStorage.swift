@@ -84,28 +84,21 @@ public struct SceneStorage<Value: Codable> {
     /// The current value.
     public var wrappedValue: Value {
         get {
-            storage.value(forKey: key) ?? defaultValue
+            StorageKeyObservation.stored.access(key)
+            return storage.value(forKey: key) ?? defaultValue
         }
         nonmutating set {
             storage.setValue(newValue, forKey: key)
-            // Not `setNeedsRender()`: another pass is not enough. The render
-            // memo keys a cached subtree on identity + view value + proposal,
-            // and this wrapper is in none of the three — it is not `Equatable`,
-            // so a view reading it inline cannot carry it in the value the memo
-            // compares, and a `ForEach` row's element does not change when a
-            // preference does. The pass hit the cache and served the buffer
-            // drawn under the OLD value. Not even the rescue that saves the
-            // equivalent `@State`: `clearAffected(by:)` needs a view identity to
-            // walk from, and a store write carries none.
-            //
-            // So it is the whole cache, and that IS a cost worth knowing: this
-            // is the framework's only per-user-action `clearAll()` — an
-            // `@Observable` mutation scopes to an identity, and the nearest
-            // neighbour, `LocalizationService.register`, runs at startup. The
-            // flag coalesces a frame's writes into one clear, so a keystroke
-            // into a stored field pays it once; a `Slider` bound straight to
-            // `$storage` pays it on every drag tick.
-            AppState.shared.setNeedsRenderWithCacheClear()
+            // Observed per key, as an `@Observable` property is: every view
+            // that read this key — in its body, or through a control's
+            // `Binding` under a kept result — is invalidated at its own
+            // identity, and nothing that did not read it is touched. See
+            // `StorageKeyObservation`, which says why this used to clear the
+            // whole render cache on every write. The frame is still asked
+            // for: a read no scope observed (an unkept control drawn every
+            // frame) needs one to show the new value.
+            StorageKeyObservation.stored.changed(key)
+            AppState.shared.setNeedsRender()
         }
     }
 

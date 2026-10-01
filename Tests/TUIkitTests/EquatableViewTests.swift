@@ -187,20 +187,15 @@ struct EquatableViewTests {
 
         flag.wrappedValue = "on"
 
-        // ONE read of the flag, asserted, and the clear driven from that same
-        // read — exactly what `RenderLoop` does at the top of every frame.
-        //
-        // Asserted rather than `if`-ed because the flag lives on the shared
-        // `AppState` and `LocalizationServiceTests` consumes it too, from a
-        // suite that is neither `@MainActor` nor `.serialized`. If that steal
-        // ever wins the race, this expectation names it; the string check below
-        // would have blamed the memo instead.
-        let requestedClear = AppState.shared.consumeNeedsCacheClear()
-        #expect(requestedClear)
-        if requestedClear { cache.clearAll() }
+        // The label's body read the key under observation, so the write queued
+        // an invalidation at its identity (`StorageKeyObservation`); the next
+        // pass drains it, as `RenderLoop` begins every frame. Not a whole-cache
+        // clear: that was a process-wide flag, which another suite could take
+        // before this one read it.
+        cache.beginRenderPass()
 
         // The view value is unchanged — `==` compares only `id` — so without the
-        // clear the lookup hits and this still reads "off".
+        // invalidation the lookup hits and this still reads "off".
         let second = renderToBuffer(
             EquatableView(content: StoredLabel(id: 1, flag: flag)), context: context)
         #expect(second.lines[0].stripped == "on")

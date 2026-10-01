@@ -196,12 +196,13 @@ struct TimelineCollectionWidthTests {
     /// A second the app's whole cache was cleared in is driven again, with a
     /// fresh app: a clear drops the kept width with everything else, and row
     /// 200 is rightly built again, but it is not this app that asked. Another
-    /// test in the process did — an `@AppStorage` or `@SceneStorage` write, or
-    /// a localization change, asks for a clear through the process-wide
-    /// `AppState.shared`, and whichever app draws next takes it. Once, on CI's
-    /// macOS 26 · Swift 6.4 lane (2026-09-30), `huggingList` counted two builds
-    /// of row 200 that no local run of this suite, alone or beside the rest of
-    /// its target, ever did.
+    /// test in the process did — a localization change asks for a clear
+    /// through the process-wide `AppState.shared`, and whichever app draws next
+    /// takes it. Once, on CI's macOS 26 · Swift 6.4 lane (2026-09-30),
+    /// `huggingList` counted two builds of row 200 that no local run of this
+    /// suite, alone or beside the rest of its target, ever did; the request was
+    /// then an `@AppStorage` or `@SceneStorage` write's, which no longer clears
+    /// anything (`StorageWriteScopeTests`).
     private func drive<A: App>(
         _ make: (RowBuilds) -> A, width: Int
     ) -> (widestBuiltInOneMinute: Int, later: [String], control: [String]) {

@@ -133,10 +133,13 @@ extension AppState {
 
     /// Marks state as changed and requests a full cache clear on next render.
     ///
-    /// Called by `withObservationTracking` when an `@Observable` property
-    /// changes. Unlike ``setNeedsRender()``, this also sets a flag that tells
-    /// the render loop to clear the entire render cache, ensuring cached
-    /// `EquatableView` subtrees re-render with the new model data.
+    /// For a change nothing can scope to the views it affects: a language
+    /// change, which may alter every string, and an observed change drawn with
+    /// no render cache to scope it to. An `@Observable` property and an
+    /// `@AppStorage` or `@SceneStorage` key are observed where they are read,
+    /// and invalidate only those views. Unlike ``setNeedsRender()``, this also
+    /// sets a flag that tells the render loop to clear the entire render cache —
+    /// a process-wide flag, which the next app to draw takes.
     ///
     /// Thread-safe: can be called from any thread.
     public func setNeedsRenderWithCacheClear() {
