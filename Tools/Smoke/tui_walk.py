@@ -48,9 +48,11 @@ def main() -> int:
     parser.add_argument("--rows", type=int, default=42)
     parser.add_argument("--scale", type=int, default=0)
     parser.add_argument("--settle", type=float, default=1.0)
-    parser.add_argument("--paint-timeout", type=float, default=8.0,
-                        help="how long to keep looking for a repaint before "
-                             "calling the screen unchanged (see settled_change)")
+    parser.add_argument("--paint-timeout", type=float, default=45.0,
+                        help="how long the app may take to act on a keystroke "
+                             "before the walk calls it stuck (see settled_change); "
+                             "only a failing walk, and the Down at the bottom of "
+                             "the menu, ever waits it out")
     args = parser.parse_args()
 
     screen = pyte.Screen(args.cols, args.rows)
@@ -191,6 +193,41 @@ def main() -> int:
         dump_screen()
         return 1
 
+    def title() -> str:
+        """The title row: the menu's own while the menu shows, a page's while
+        one does — what says which of the two the app is showing."""
+        return screen.display[1]
+
+    def waited(condition, since: float) -> tuple:
+        """Polls `condition` to the paint deadline: whether it came true, and
+        how long after `since` (the keystroke) it had."""
+        start = since
+        end = time.time() + args.paint_timeout
+        while not condition():
+            if time.time() >= end or not pump(min(0.05, end - time.time())):
+                return condition(), time.time() - start
+        return True, time.time() - start
+
+    def steady_title() -> str:
+        """The title row once it has held still for 0.3 s (to the paint
+        deadline): a frame can reach the terminal split across reads, and a
+        slow app's title row read mid-frame is half of one."""
+        end = time.time() + args.paint_timeout
+        seen = title()
+        while time.time() < end:
+            if not pump(0.3):
+                break
+            if title() == seen:
+                break
+            seen = title()
+        return seen
+
+    # The menu's title row, learned on the first return from a page rather
+    # than read before the first Enter: until something redraws them, the
+    # first rows hold the graphics probe's reply, which pyte draws as text —
+    # and under load the app may not have redrawn them for seconds.
+    menu_title = None
+
     walked = 0
     for item in range(args.count):
         ok = True
@@ -217,37 +254,48 @@ def main() -> int:
             if index == downs - 1:
                 moved = settled_change(before, look=layout)
 
-        # Opening the page must repaint. That is worth asserting on every item
-        # rather than trusting the process to be alive, because `alive()` is
-        # true of an app that has wedged and stopped drawing — the whole
-        # hang/livelock class used to walk green. It is also what tells a
-        # wedged app apart from the end of the menu: both leave the screen
-        # unchanged after a Down, and only one of them still repaints here.
-        before_open = snapshot()
-        menu_text = list(screen.display)
-        ok = ok and send("enter") and pump(args.settle)
-        opened = settled_change(before_open)
+        # Opening the page must show the page — its title on the title row,
+        # where the menu's was. That is worth asserting on every item rather
+        # than trusting the process to be alive, because `alive()` is true of
+        # an app that has wedged and stopped drawing — the whole hang/livelock
+        # class used to walk green. It is also what tells a wedged app apart
+        # from the end of the menu: both leave the screen unchanged after a
+        # Down, and only one of them still opens a page here.
+        #
+        # The title row and nothing looser, and waited for to a generous
+        # deadline. On CI's slower Linux lanes a debug build falls seconds
+        # behind its input, and a walk that took ANY change of screen for the
+        # page opening (a breathing cursor row, the previous Esc landing late)
+        # and gave each step eight seconds drifted out of step with the app:
+        # it sent the next item's keys into a page it had not left, and said
+        # "Enter changed nothing" about an Enter the app acted on seconds later
+        # (2026-09-30, three lanes; reproduced here with every core busy and
+        # the app at background priority, where the Enter it gave up on opened
+        # its page five seconds after). The latencies are printed so a slow
+        # lane says how slow.
+        showing = title()
+        sent = time.time()
+        ok = ok and send("enter")
+        opened, open_latency = waited(lambda: title() != showing, since=sent)
+        page_title = steady_title()
         for token in args.per_item.split(","):
             if token:
                 ok = ok and send(token)
         # Esc, and nothing more until the menu is back. A lone ESC and a key
         # sent after it are two keystrokes only if the app reads them apart; an
         # app still busy with the page it is leaving reads them together, and
-        # `ESC ESC [ B` is Alt+Down, not Esc then Down. A fixed 0.3 s was
-        # shorter than a debug build's slowest pages on CI's Linux runners
-        # (2026-09-29, four lanes; reproduced here by writing ESC ESC [ A at
-        # once). Waiting for the screen to CHANGE was not enough either: the
-        # Text Input page's caret blinks, so the screen changes whether the Esc
-        # was read or not, and item 8 failed the same way on the next push
-        # (2026-09-30, two lanes). What says the Esc was read is the menu's
-        # TEXT back on the screen — its text, because its cursor row breathes,
-        # so its colours seldom match any one earlier frame. Polled to the
-        # paint deadline, and carried on from if it never matches, since the
-        # next Enter's check still catches an app that stopped answering.
+        # `ESC ESC [ B` is Alt+Down, not Esc then Down (2026-09-29, four lanes;
+        # reproduced here by writing ESC ESC [ A at once). What says the Esc
+        # was read is the menu's title back on the title row — not any change
+        # of screen, which a blinking caret makes whether or not the Esc was
+        # read (2026-09-30, two lanes).
+        sent = time.time()
         ok = ok and send("esc")
-        end = time.time() + args.paint_timeout
-        while ok and list(screen.display) != menu_text and time.time() < end:
-            ok = pump(min(0.1, max(0.0, end - time.time())))
+        if menu_title is None:
+            back, back_latency = waited(lambda: title() != page_title, since=sent)
+            menu_title = steady_title()
+        else:
+            back, back_latency = waited(lambda: title() == menu_title, since=sent)
         if args.from_top:
             # Return the selection to the top for the next item's Down-walk.
             for _ in range(item):
@@ -257,7 +305,11 @@ def main() -> int:
             dump_screen()
             return 1
         if not opened:
-            print(f"FAIL: app stopped painting at item {item} — Enter changed nothing")
+            print(f"FAIL: app stopped painting at item {item} — Enter showed no page in {open_latency:.1f}s")
+            dump_screen()
+            return 1
+        if not back:
+            print(f"FAIL: Esc did not return to the menu from item {item} in {back_latency:.1f}s")
             dump_screen()
             return 1
         if not moved:
@@ -266,10 +318,10 @@ def main() -> int:
             # last row: this visit re-opened the previous page and is not a
             # new item. Worth the couple of seconds it cost — re-opening it is
             # what proved the app was still painting rather than wedged.
-            print(f"reached the end of the menu after {walked} items")
+            print(f"reached the end of the menu after {walked} items", flush=True)
             break
         walked += 1
-        print(f"ok item {item}")
+        print(f"ok item {item}  (opened in {open_latency * 1000:.0f} ms, back in {back_latency * 1000:.0f} ms)", flush=True)
 
     os.write(fd, b"q")
     pump(0.3)
