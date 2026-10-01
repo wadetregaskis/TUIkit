@@ -130,6 +130,24 @@ struct SettingsView: View {
 }
 ```
 
+### What a write redraws
+
+A view that read a stored value — in its `body`, or through a control bound to
+`$username` — is redrawn when the value changes, and nothing else is: a write is
+observed like a change to an `@Observable` property, through the key's
+``StoredKey``. That holds for a write made through the store itself
+(`StorageDefaults.backend.setValue(_:forKey:)`) as much as for one through the
+wrapper.
+
+### Your own store
+
+Any ``StorageBackend`` can stand behind `@AppStorage(_:store:)`. A store implements
+four primitives — read an entry, store, remove, synchronize — and hands back the
+key's ``StoredKey`` from each, the same one every time; the methods everyone else
+calls (`value(forKey:)`, `setValue(_:forKey:)`, `removeValue(forKey:)`) do the
+observation around them. Keep each key's `StoredKey` beside its value, so a read
+— which is on the render path — finds both in one lookup.
+
 ### When a save fails
 
 SwiftUI's `@AppStorage` is backed by `UserDefaults`, which for practical purposes

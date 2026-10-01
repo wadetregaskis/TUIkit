@@ -18,9 +18,9 @@ import Testing
 /// way to be sure. That cost every write a cold frame (a `Slider` bound to
 /// `$storage` paid it per drag tick), and in a test process the clear was a
 /// flag the next frame took, whichever app drew it — so one test's write cold-
-/// started another test's app. A read is now an Observation access to its key
-/// (`StorageKeyObservation`), caught by the body that made it or by the kept
-/// result around the control that read it through a `Binding`.
+/// started another test's app. A read is now an Observation access to the
+/// store's ``StoredKey`` for the key, caught by the body that made it or by the
+/// kept result around the control that read it through a `Binding`.
 @MainActor
 @Suite("A storage write invalidates what read the key, not the whole cache")
 struct StorageWriteScopeTests {
@@ -112,6 +112,42 @@ struct StorageWriteScopeTests {
         #expect(after.contains("■ stored"), "a toggle bound to the key kept the old state:\n\(after)")
         #expect(counter.renders == siblingRenders, "a kept view that read nothing was drawn again")
         #expect(app.renderCache.stats.clears == clears, "the write cleared the whole cache")
+    }
+
+    /// The observation is the store's, not the property wrapper's: a write or
+    /// a removal made straight through the store reaches the same readers.
+    @Test("A write or removal made through the store itself redraws the views that read the key")
+    func storeWritesReachReaders() {
+        let (store, counter) = (MockStorageBackend(), Counter())
+        let key = "scope.direct"
+        let app = HeadlessApp(Page(store: store, key: key, counter: counter), width: 30, height: 10)
+        var frame: Int64 = 1_000_000_000
+        _ = Self.draw(app, &frame)
+
+        store.setValue(true, forKey: key)
+        let written = Self.draw(app, &frame)
+        #expect(written.contains("flag true") && written.contains("■ stored"), "\(written)")
+
+        store.removeValue(forKey: key)
+        let removed = Self.draw(app, &frame)
+        #expect(removed.contains("flag false") && removed.contains("□ stored"), "the default after a removal:\n\(removed)")
+    }
+
+    /// Each store has its own keys: the same name in another store is another
+    /// key, and a write to it reaches nothing that read this one.
+    @Test("A write to the same key name in another store redraws nothing here")
+    func storesKeepTheirOwnKeys() {
+        let (store, elsewhere, counter) = (MockStorageBackend(), MockStorageBackend(), Counter())
+        let key = "scope.shared-name"
+        let app = HeadlessApp(Page(store: store, key: key, counter: counter), width: 30, height: 10)
+        var frame: Int64 = 1_000_000_000
+        _ = Self.draw(app, &frame)
+        let stats = app.renderCache.stats
+
+        elsewhere.setValue(true, forKey: key)
+        let after = Self.draw(app, &frame)
+        #expect(after.contains("flag false"), "\(after)")
+        #expect(app.renderCache.stats.misses == stats.misses, "a write to another store's key redrew this app")
     }
 
     @Test("A write in one app neither clears nor redraws another app that never read the key")

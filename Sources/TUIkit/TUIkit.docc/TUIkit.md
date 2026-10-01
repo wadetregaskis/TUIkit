@@ -353,3 +353,4 @@ struct MyApp: App {
 
 - ``AppStorage``
 - ``StorageBackend``
+- ``StoredKey``

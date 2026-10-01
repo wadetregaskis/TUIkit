@@ -6,23 +6,6 @@
 
 import Foundation
 
-// MARK: - Storage Backend Protocol
-
-/// Protocol for persistent storage backends.
-public protocol StorageBackend: Sendable {
-    /// Retrieves a value for the given key.
-    func value<T: Codable>(forKey key: String) -> T?
-
-    /// Stores a value for the given key.
-    func setValue<T: Codable>(_ value: T, forKey key: String)
-
-    /// Removes the value for the given key.
-    func removeValue(forKey key: String)
-
-    /// Synchronizes changes to disk.
-    func synchronize()
-}
-
 // MARK: - Process Name Sanitization
 
 /// Sanitizes a process name for safe use as a file system path component.
@@ -105,8 +88,11 @@ public final class JSONFileStorage: StorageBackend, @unchecked Sendable {
     /// The file URL for the storage file.
     private let fileURL: URL
 
-    /// In-memory cache of stored values.
-    private var cache: [String: Data] = [:]
+    /// Every key this store has read, loaded or written, guarded by `lock`:
+    /// its persisted bytes, the value they last decoded to, and its
+    /// ``StoredKey``. A key read and never stored keeps an entry with no bytes,
+    /// so the readers waiting on its `StoredKey` hear of the first write.
+    private var entries: [String: StoredEntry] = [:]
 
     /// The keys THIS instance has written or removed, guarded by `lock`.
     ///
@@ -119,7 +105,7 @@ public final class JSONFileStorage: StorageBackend, @unchecked Sendable {
     /// contested.
     private var dirtyKeys: Set<String> = []
 
-    /// Lock for thread safety. Guards `cache` and `savePending` — and nothing
+    /// Lock for thread safety. Guards `entries` and `savePending` — and nothing
     /// slow: disk writes snapshot under the lock and write outside it.
     private let lock = NSLock()
 
@@ -175,39 +161,32 @@ public final class JSONFileStorage: StorageBackend, @unchecked Sendable {
 // MARK: - Public API
 
 extension JSONFileStorage {
-    /// The value stored for `key`, decoded from the in-memory cache, or `nil`
-    /// when absent or undecodable.
+    /// The value stored for `key` as `T`, or `nil` when absent or
+    /// undecodable, with the key's ``StoredKey``.
     ///
-    /// Served from the cache the file was loaded into at init, never from
-    /// disk, because this is read on the render path. A decode failure is
-    /// silent for the reason the whole family shares: falling back to the
-    /// caller's default is ``AppStorage``'s defined behaviour, not an error.
-    public func value<T: Codable>(forKey key: String) -> T? {
+    /// Served from memory, never from disk, because this is read on the
+    /// render path: the value the bytes last decoded to when it is a `T`, else
+    /// decoded from the bytes the file was loaded into at init (see
+    /// `StoredEntry`). A decode failure is silent for the reason the whole
+    /// family shares: falling back to the caller's default is ``AppStorage``'s
+    /// defined behaviour, not an error — and reporting it would fire every
+    /// frame for as long as the value stayed in the file. See
+    /// ``StorageDiagnostics``.
+    public func entry<T: Codable>(forKey key: String, as type: T.Type) -> (value: T?, key: StoredKey) {
         lock.lock()
         defer { lock.unlock() }
-
-        guard let data = cache[key] else { return nil }
-
-        do {
-            return try JSONDecoder().decode(T.self, from: data)
-        } catch {
-            // Deliberately NOT reported: falling back to the default value is
-            // this API's defined behaviour, it happens legitimately whenever a
-            // stored value predates a type change, and this sits on the
-            // per-frame read path — reporting would fire every frame for as
-            // long as the value stayed in the file. See ``StorageDiagnostics``.
-            return nil
-        }
+        let entry = entryLocked(key)
+        return (entry.value(as: T.self), entry.key)
     }
 
     /// Stores `value` for `key` and schedules a write.
     ///
-    /// The cache is updated synchronously — a read straight after a write sees
-    /// the new value — while the file is written on a serial queue, so a
-    /// per-keystroke setting does not put file I/O in the frame. Encode
+    /// The value in memory is updated synchronously — a read straight after a
+    /// write sees the new value — while the file is written on a serial queue,
+    /// so a per-keystroke setting does not put file I/O in the frame. Encode
     /// failures report through ``StorageDiagnostics``; see
     /// ``synchronize()`` for the flush that makes a pending write durable.
-    public func setValue<T: Codable>(_ value: T, forKey key: String) {
+    public func store<T: Codable>(_ value: T, forKey key: String) -> StoredKey {
         let data: Data
         do {
             data = try JSONEncoder().encode(value)
@@ -221,26 +200,32 @@ extension JSONFileStorage {
             // after its own unlock for the same reason.
             StorageDiagnostics.report(
                 StorageFailure(operation: .encode, key: key, path: fileURL.path, underlying: error))
-            return
+            lock.lock()
+            defer { lock.unlock() }
+            return entryLocked(key).key
         }
 
         lock.lock()
         defer { lock.unlock() }
 
-        cache[key] = data
+        let entry = entryLocked(key)
+        entry.set(value, encoded: data)
         dirtyKeys.insert(key)
         saveToDiskAsync()
+        return entry.key
     }
 
     /// Removes any value stored for `key`, scheduling the write as
-    /// ``setValue(_:forKey:)`` does.
-    public func removeValue(forKey key: String) {
+    /// ``store(_:forKey:)`` does.
+    public func remove(forKey key: String) -> StoredKey? {
         lock.lock()
         defer { lock.unlock() }
 
-        cache.removeValue(forKey: key)
+        let entry = entries[key]
+        entry?.clear()
         dirtyKeys.insert(key)
         saveToDiskAsync()
+        return entry?.key
     }
 
     /// Blocks until everything written so far is on disk.
@@ -264,6 +249,14 @@ extension JSONFileStorage {
 // MARK: - Private Helpers
 
 extension JSONFileStorage {
+    /// The entry for `key`, made empty if there is none (caller holds `lock`).
+    fileprivate func entryLocked(_ key: String) -> StoredEntry {
+        if let entry = entries[key] { return entry }
+        let entry = StoredEntry()
+        entries[key] = entry
+        return entry
+    }
+
     fileprivate func loadFromDisk() {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
 
@@ -273,7 +266,7 @@ extension JSONFileStorage {
                 // Convert base64 strings back to Data
                 for (key, base64String) in decoded {
                     if let valueData = Data(base64Encoded: base64String) {
-                        cache[key] = valueData
+                        entries[key] = StoredEntry(data: valueData)
                     }
                 }
             }
@@ -304,16 +297,15 @@ extension JSONFileStorage {
         #endif
     }
 
-    /// Runs only on `saveQueue`. Snapshots the cache under the lock, then
-    /// serialises and writes OUTSIDE it — the old detached save iterated
-    /// `cache` with no lock at all, racing `setValue`'s mutation on the main
-    /// thread (a CoW dictionary read overlapping a mutation of the same
-    /// reference).
+    /// Runs only on `saveQueue`. Snapshots this instance's changes under the
+    /// lock, then serialises and writes OUTSIDE it — the old detached save
+    /// iterated the cache with no lock at all, racing `setValue`'s mutation on
+    /// the main thread (a CoW dictionary read overlapping a mutation of the
+    /// same reference).
     fileprivate func flushToDisk() {
         lock.lock()
         savePending = false
-        let snapshot = cache
-        let dirty = dirtyKeys
+        let changed = dirtyKeys.map { ($0, entries[$0]?.data) }
         lock.unlock()
 
         // Start from what is on disk NOW — another instance may have written
@@ -327,8 +319,8 @@ extension JSONFileStorage {
         {
             serializable = onDisk
         }
-        for key in dirty {
-            serializable[key] = snapshot[key]?.base64EncodedString()
+        for (key, data) in changed {
+            serializable[key] = data?.base64EncodedString()
         }
 
         do {
@@ -468,21 +460,16 @@ public struct AppStorage<Value: Codable> {
     /// The current value.
     public var wrappedValue: Value {
         get {
-            StorageKeyObservation.stored.access(key)
-            return storage.value(forKey: key) ?? defaultValue
+            storage.value(forKey: key) ?? defaultValue
         }
         nonmutating set {
+            // Observed per key, as an `@Observable` property is: the store's
+            // `setValue` announces the change through the key's `StoredKey`,
+            // which invalidates every view that read the key — in its body, or
+            // through a control's `Binding` under a kept result — and nothing
+            // else, and asks for a frame. See `StoredKey` for why this used to
+            // clear the whole render cache on every write.
             storage.setValue(newValue, forKey: key)
-            // Observed per key, as an `@Observable` property is: every view
-            // that read this key — in its body, or through a control's
-            // `Binding` under a kept result — is invalidated at its own
-            // identity, and nothing that did not read it is touched. See
-            // `StorageKeyObservation`, which says why this used to clear the
-            // whole render cache on every write. The frame is still asked
-            // for: a read no scope observed (an unkept control drawn every
-            // frame) needs one to show the new value.
-            StorageKeyObservation.stored.changed(key)
-            AppState.shared.setNeedsRender()
         }
     }
 

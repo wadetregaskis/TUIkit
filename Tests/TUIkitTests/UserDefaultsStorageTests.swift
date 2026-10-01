@@ -49,6 +49,12 @@ struct UserDefaultsStorageTests {
     /// report lands between the write and the read — so the one test that
     /// asserts its own report is the latest runs in an exit test.
     private static func withStorage(_ body: (UserDefaultsStorage, String) -> Void) {
+        withSuite { suite, key in body(UserDefaultsStorage(suiteName: suite), key) }
+    }
+
+    /// ``withStorage(_:)``'s suite and key, for a test that opens the suite
+    /// more than once.
+    private static func withSuite(_ body: (String, String) -> Void) {
         #if canImport(Darwin)
         // On Apple platforms a suite named by an absolute path keeps its file
         // at that path (`<path>.plist`), not in ~/Library/Preferences — so the
@@ -79,8 +85,29 @@ struct UserDefaultsStorageTests {
             try? FileManager.default.removeItem(at: directory)
             #endif
         }
-        body(storage, key)
+        body(suite, key)
     }
+
+    #if canImport(Darwin)
+    /// A read keeps the value its bytes decoded to, so the bytes themselves
+    /// must be read every time: another process — or here, another store on
+    /// the same suite — may have written new ones, and a kept value served
+    /// past them would be a stale setting. Apple platforms only: elsewhere a
+    /// suite is a JSON file each store loads once, and two stores on one
+    /// never saw each other's writes.
+    @Test("Bytes another writer put in the suite are read, not the value kept from before")
+    func anotherWritersBytesAreRead() {
+        Self.withSuite { suite, key in
+            let (storage, other) = (UserDefaultsStorage(suiteName: suite), UserDefaultsStorage(suiteName: suite))
+            storage.setValue(1, forKey: key)
+            #expect(storage.value(forKey: key) == Optional(1))
+            other.setValue(2, forKey: key)
+            #expect(storage.value(forKey: key) == Optional(2), "the kept 1 was served over the new bytes")
+            other.removeValue(forKey: key)
+            #expect(storage.value(forKey: key) == Int?.none, "the kept 2 was served after a removal")
+        }
+    }
+    #endif
 
     @Test("A Codable value round-trips through the backend")
     func roundTrip() {

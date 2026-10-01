@@ -84,21 +84,16 @@ public struct SceneStorage<Value: Codable> {
     /// The current value.
     public var wrappedValue: Value {
         get {
-            StorageKeyObservation.stored.access(key)
-            return storage.value(forKey: key) ?? defaultValue
+            storage.value(forKey: key) ?? defaultValue
         }
         nonmutating set {
+            // Observed per key, as an `@Observable` property is: the store's
+            // `setValue` announces the change through the key's `StoredKey`,
+            // which invalidates every view that read the key — in its body, or
+            // through a control's `Binding` under a kept result — and nothing
+            // else, and asks for a frame. See `StoredKey` for why this used to
+            // clear the whole render cache on every write.
             storage.setValue(newValue, forKey: key)
-            // Observed per key, as an `@Observable` property is: every view
-            // that read this key — in its body, or through a control's
-            // `Binding` under a kept result — is invalidated at its own
-            // identity, and nothing that did not read it is touched. See
-            // `StorageKeyObservation`, which says why this used to clear the
-            // whole render cache on every write. The frame is still asked
-            // for: a read no scope observed (an unkept control drawn every
-            // frame) needs one to show the new value.
-            StorageKeyObservation.stored.changed(key)
-            AppState.shared.setNeedsRender()
         }
     }
 

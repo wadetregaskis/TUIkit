@@ -18,30 +18,44 @@ final class MockStorageBackend: StorageBackend, @unchecked Sendable {
     private let lock = NSLock()
     private var store: [String: Data] = [:]
 
+    /// One ``StoredKey`` per key asked about, as a custom store keeps them:
+    /// handed back with every read and write of the key.
+    private var keys: [String: StoredKey] = [:]
+
     /// Number of times ``synchronize()`` has been called.
     private(set) var synchronizeCallCount = 0
 
     init() {}
 
-    func value<T: Codable>(forKey key: String) -> T? {
+    func entry<T: Codable>(forKey key: String, as type: T.Type) -> (value: T?, key: StoredKey) {
         lock.lock()
         defer { lock.unlock() }
-        guard let data = store[key] else { return nil }
-        return try? JSONDecoder().decode(T.self, from: data)
+        let value = store[key].flatMap { try? JSONDecoder().decode(T.self, from: $0) }
+        return (value, storedKey(key))
     }
 
-    func setValue<T: Codable>(_ value: T, forKey key: String) {
+    func store<T: Codable>(_ value: T, forKey key: String) -> StoredKey {
         lock.lock()
         defer { lock.unlock() }
         if let data = try? JSONEncoder().encode(value) {
             store[key] = data
         }
+        return storedKey(key)
     }
 
-    func removeValue(forKey key: String) {
+    func remove(forKey key: String) -> StoredKey? {
         lock.lock()
         defer { lock.unlock() }
         store.removeValue(forKey: key)
+        return keys[key]
+    }
+
+    /// The key's ``StoredKey``, made on first use (caller holds `lock`).
+    private func storedKey(_ key: String) -> StoredKey {
+        if let stored = keys[key] { return stored }
+        let stored = StoredKey()
+        keys[key] = stored
+        return stored
     }
 
     func synchronize() {

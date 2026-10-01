@@ -16,6 +16,14 @@ import Foundation
         /// The underlying UserDefaults.
         private let defaults: UserDefaults
 
+        /// Every key this store has read or written, guarded by `lock`: the
+        /// bytes last seen for it, the value they decoded to, and its
+        /// ``StoredKey``.
+        private var entries: [String: StoredEntry] = [:]
+
+        /// Guards `entries`.
+        private let lock = NSLock()
+
         /// Creates a UserDefaults storage with standard defaults.
         public init() {
             self.defaults = .standard
@@ -30,8 +38,12 @@ import Foundation
     // MARK: - Public API
 
     extension UserDefaultsStorage {
-        /// The value stored for `key`, JSON-decoded, or `nil` when absent or
-        /// undecodable.
+        /// The value stored for `key` as `T`, or `nil` when absent or
+        /// undecodable, with the key's ``StoredKey``.
+        ///
+        /// The bytes are read from `UserDefaults` every time — another process
+        /// may have written them — but decoded only when they are not the bytes
+        /// the kept value came from (see `StoredEntry`).
         ///
         /// A decode failure is deliberately silent: reading a key whose stored
         /// shape no longer matches `T` — a type that gained a field between
@@ -39,18 +51,14 @@ import Foundation
         /// ``AppStorage``'s defined behaviour rather than an error condition.
         /// This runs on the render path, so it also must not report per frame.
         /// Write failures, which are genuinely lossy, DO report (see
-        /// ``setValue(_:forKey:)``).
-        public func value<T: Codable>(forKey key: String) -> T? {
-            guard let data = defaults.data(forKey: key) else { return nil }
-
-            do {
-                return try JSONDecoder().decode(T.self, from: data)
-            } catch {
-                // Not reported — see the matching note in `JSONFileStorage`:
-                // the default-value fallback is defined behaviour and this is a
-                // per-frame read path.
-                return nil
-            }
+        /// ``store(_:forKey:)``).
+        public func entry<T: Codable>(forKey key: String, as type: T.Type) -> (value: T?, key: StoredKey) {
+            let data = defaults.data(forKey: key)
+            lock.lock()
+            defer { lock.unlock() }
+            let entry = entryLocked(key)
+            entry.reload(data)
+            return (entry.value(as: T.self), entry.key)
         }
 
         /// Stores `value` for `key`, JSON-encoded.
@@ -58,20 +66,43 @@ import Foundation
         /// An encode failure is reported through ``StorageDiagnostics``,
         /// unlike the read path: a value that cannot be written is data the
         /// user expected to keep, so it is worth surfacing.
-        public func setValue<T: Codable>(_ value: T, forKey key: String) {
+        public func store<T: Codable>(_ value: T, forKey key: String) -> StoredKey {
+            let data: Data
             do {
-                let data = try JSONEncoder().encode(value)
-                defaults.set(data, forKey: key)
+                data = try JSONEncoder().encode(value)
             } catch {
                 StorageDiagnostics.report(
                     StorageFailure(operation: .encode, key: key, underlying: error))
+                lock.lock()
+                defer { lock.unlock() }
+                return entryLocked(key).key
             }
+            defaults.set(data, forKey: key)
+            lock.lock()
+            defer { lock.unlock() }
+            let entry = entryLocked(key)
+            entry.set(value, encoded: data)
+            return entry.key
         }
 
         /// Removes any value stored for `key`. A key that was never set is
         /// not an error.
-        public func removeValue(forKey key: String) {
+        public func remove(forKey key: String) -> StoredKey? {
             defaults.removeObject(forKey: key)
+            lock.lock()
+            defer { lock.unlock() }
+            let entry = entries[key]
+            entry?.clear()
+            return entry?.key
+        }
+
+        /// The entry for `key`, made empty if there is none (caller holds
+        /// `lock`).
+        private func entryLocked(_ key: String) -> StoredEntry {
+            if let entry = entries[key] { return entry }
+            let entry = StoredEntry()
+            entries[key] = entry
+            return entry
         }
 
         /// Asks `UserDefaults` to flush pending writes.
@@ -116,20 +147,20 @@ import Foundation
     // MARK: - Public API
 
     extension UserDefaultsStorage {
-        /// The value stored for `key`, from the JSON file standing in for
-        /// `UserDefaults` on this platform.
-        public func value<T: Codable>(forKey key: String) -> T? {
-            storage.value(forKey: key)
+        /// The value stored for `key` as `T`, from the JSON file standing in
+        /// for `UserDefaults` on this platform, with the key's ``StoredKey``.
+        public func entry<T: Codable>(forKey key: String, as type: T.Type) -> (value: T?, key: StoredKey) {
+            storage.entry(forKey: key, as: T.self)
         }
 
         /// Stores `value` for `key` in the backing file.
-        public func setValue<T: Codable>(_ value: T, forKey key: String) {
-            storage.setValue(value, forKey: key)
+        public func store<T: Codable>(_ value: T, forKey key: String) -> StoredKey {
+            storage.store(value, forKey: key)
         }
 
         /// Removes any value stored for `key`.
-        public func removeValue(forKey key: String) {
-            storage.removeValue(forKey: key)
+        public func remove(forKey key: String) -> StoredKey? {
+            storage.remove(forKey: key)
         }
 
         /// Flushes pending writes to the backing file.

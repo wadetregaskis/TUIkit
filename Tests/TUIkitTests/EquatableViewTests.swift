@@ -188,7 +188,7 @@ struct EquatableViewTests {
         flag.wrappedValue = "on"
 
         // The label's body read the key under observation, so the write queued
-        // an invalidation at its identity (`StorageKeyObservation`); the next
+        // an invalidation at its identity (the key's `StoredKey`); the next
         // pass drains it, as `RenderLoop` begins every frame. Not a whole-cache
         // clear: that was a process-wide flag, which another suite could take
         // before this one read it.
